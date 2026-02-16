@@ -6,7 +6,7 @@ Star Mercs is a tabletop wargame built as a game system for Foundry VTT. The goa
 
 ## Version
 
-**Current Version: 0.0.1**
+**Current Version: 0.0.2**
 
 - Increment the **patch** number (the last digit) with each update (e.g., 0.0.1 -> 0.0.2 -> 0.0.3).
 - Do **not** roll to 0.1.0, 0.2.0, etc. unless explicitly instructed.
@@ -20,6 +20,12 @@ Always consult the following resources when building and modifying this system:
    https://foundryvtt.com/api/index.html
 3. **D&D 5e System** - A fully functional Foundry game system that serves as a real-world implementation reference:
    https://github.com/foundryvtt/dnd5e
+
+## Map & Movement
+
+- The game uses a **hex grid** as its map. All map scenes in Foundry should be configured with a hex grid overlay.
+- **All movement values, weapon ranges, ability distances, and any other spatial measurements are expressed in number of hexes.**
+- All map interactions (token movement, range calculations, area effects, line of sight, etc.) must be designed and implemented with Foundry's hex map overlay in mind.
 
 ## Development Guidelines
 
