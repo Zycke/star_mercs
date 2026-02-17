@@ -8,6 +8,8 @@ import { STARMERCS } from "./module/config.mjs";
 import * as dataModels from "./module/data/_module.mjs";
 import * as documents from "./module/documents/_module.mjs";
 import * as sheets from "./module/sheets/_module.mjs";
+import * as combat from "./module/combat.mjs";
+import * as dice from "./module/dice.mjs";
 import { preloadHandlebarsTemplates, registerHandlebarsHelpers } from "./module/helpers.mjs";
 
 /* ============================================ */
@@ -17,10 +19,12 @@ import { preloadHandlebarsTemplates, registerHandlebarsHelpers } from "./module/
 Hooks.once("init", () => {
   console.log("Star Mercs | Initializing Star Mercs Game System");
 
-  // Expose system classes on the game object
+  // Expose system classes and utilities on the game object
   game.starmercs = {
     StarMercsActor: documents.StarMercsActor,
-    StarMercsItem: documents.StarMercsItem
+    StarMercsItem: documents.StarMercsItem,
+    combat,
+    dice
   };
 
   // Assign system configuration object

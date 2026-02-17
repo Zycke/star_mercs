@@ -132,13 +132,24 @@ export default class StarMercsUnitSheet extends ActorSheet {
 
   /**
    * Roll a weapon attack using the actor's rollAttack method.
+   * If the user has a token targeted, use it as the attack target.
    * @param {Event} event
    */
   async _onWeaponRoll(event) {
     event.preventDefault();
     const li = event.currentTarget.closest(".item");
     const item = this.actor.items.get(li.dataset.itemId);
-    if (item) return this.actor.rollAttack(item);
+    if (!item) return;
+
+    // Get the first targeted token's actor (if any)
+    const targets = game.user.targets;
+    let target = null;
+    if (targets.size > 0) {
+      const targetToken = targets.first();
+      target = targetToken.actor;
+    }
+
+    return this.actor.rollAttack(item, target);
   }
 
   /**

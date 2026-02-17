@@ -75,5 +75,16 @@
   "STARMERCS.Terrain.Lake": "Lake",
   "STARMERCS.Terrain.Ocean": "Ocean",
   "STARMERCS.Terrain.UrbanDense": "Urban (Dense)",
-  "STARMERCS.Terrain.UrbanLight": "Urban (Light)"
+  "STARMERCS.Terrain.UrbanLight": "Urban (Light)",
+
+  "STARMERCS.Combat.CriticalHit": "Critical Hit",
+  "STARMERCS.Combat.Hit": "Hit",
+  "STARMERCS.Combat.PartialSuccess": "Partial Success",
+  "STARMERCS.Combat.Miss": "Miss",
+  "STARMERCS.Combat.CriticalMiss": "Critical Miss",
+  "STARMERCS.Combat.Destroyed": "DESTROYED",
+  "STARMERCS.Combat.Routed": "ROUTED",
+
+  "STARMERCS.SkillCheck": "Skill Check",
+  "STARMERCS.OpposedCheck": "Opposed Skill Check"
 }

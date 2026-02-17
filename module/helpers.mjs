@@ -34,12 +34,16 @@ export function registerHandlebarsHelpers() {
  */
 export async function preloadHandlebarsTemplates() {
   const templatePaths = [
+    // Actor sheet partials
     "systems/star-mercs/templates/actors/parts/unit-attributes.hbs",
     "systems/star-mercs/templates/actors/parts/unit-combat.hbs",
     "systems/star-mercs/templates/actors/parts/unit-weapons.hbs",
     "systems/star-mercs/templates/actors/parts/unit-traits.hbs",
     "systems/star-mercs/templates/actors/parts/unit-orders.hbs",
-    "systems/star-mercs/templates/actors/parts/unit-supply.hbs"
+    "systems/star-mercs/templates/actors/parts/unit-supply.hbs",
+    // Chat card templates
+    "systems/star-mercs/templates/chat/attack-result.hbs",
+    "systems/star-mercs/templates/chat/skill-check.hbs"
   ];
   return loadTemplates(templatePaths);
 }

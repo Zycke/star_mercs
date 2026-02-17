@@ -524,3 +524,344 @@
   font-size: 11px;
   text-transform: capitalize;
 }
+
+/* ============================= */
+/*  Chat Cards                   */
+/* ============================= */
+
+.star-mercs.chat-card {
+  background: var(--sm-bg-dark);
+  color: var(--sm-text);
+  border: 1px solid var(--sm-border);
+  border-radius: var(--sm-radius-lg);
+  padding: 8px;
+  font-family: "Roboto", "Segoe UI", Tahoma, sans-serif;
+  font-size: 13px;
+}
+
+/* --- Attack Result Card --- */
+
+.star-mercs.chat-card .attack-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--sm-border);
+  margin-bottom: 6px;
+}
+
+.star-mercs.chat-card .attack-header.invalid {
+  border-bottom-color: var(--sm-danger);
+}
+
+.star-mercs.chat-card .weapon-label {
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.star-mercs.chat-card .attack-type-badge {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-weight: 600;
+}
+
+.star-mercs.chat-card .attack-type-badge.soft {
+  background: #3a6b35;
+  color: #c8e6c9;
+}
+
+.star-mercs.chat-card .attack-type-badge.hard {
+  background: #5a3a2e;
+  color: #f0c8a0;
+}
+
+.star-mercs.chat-card .attack-type-badge.antiAir {
+  background: #2e3a5a;
+  color: #a0c0f0;
+}
+
+.star-mercs.chat-card .attack-invalid {
+  color: var(--sm-danger-light);
+  font-style: italic;
+  padding: 4px 0;
+}
+
+.star-mercs.chat-card .attack-invalid i {
+  margin-right: 4px;
+}
+
+.star-mercs.chat-card .combatants {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: var(--sm-text-muted);
+}
+
+.star-mercs.chat-card .combatants .attacker-name {
+  color: var(--sm-primary-light);
+  font-weight: 600;
+}
+
+.star-mercs.chat-card .combatants .target-name {
+  color: var(--sm-danger-light);
+  font-weight: 600;
+}
+
+.star-mercs.chat-card .combatants i {
+  color: var(--sm-text-dim);
+  font-size: 10px;
+}
+
+/* Roll result */
+
+.star-mercs.chat-card .roll-result {
+  background: var(--sm-bg-medium);
+  border: 1px solid var(--sm-border);
+  border-radius: var(--sm-radius);
+  padding: 6px 8px;
+  margin-bottom: 6px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.star-mercs.chat-card .roll-display {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.star-mercs.chat-card .die-result {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--sm-accent);
+  min-width: 28px;
+  text-align: center;
+}
+
+.star-mercs.chat-card .accuracy-info {
+  font-size: 12px;
+  color: var(--sm-text-muted);
+}
+
+.star-mercs.chat-card .accuracy-breakdown {
+  font-size: 10px;
+  color: var(--sm-text-dim);
+}
+
+.star-mercs.chat-card .hit-label {
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 12px;
+  letter-spacing: 0.5px;
+}
+
+.star-mercs.chat-card .hit-label.critical_hit {
+  color: #ffd700;
+}
+
+.star-mercs.chat-card .hit-label.hit {
+  color: #66bb6a;
+}
+
+.star-mercs.chat-card .hit-label.partial {
+  color: #ffb74d;
+}
+
+.star-mercs.chat-card .hit-label.miss {
+  color: var(--sm-text-dim);
+}
+
+.star-mercs.chat-card .hit-label.critical_miss {
+  color: var(--sm-danger-light);
+}
+
+/* Damage section */
+
+.star-mercs.chat-card .damage-section {
+  margin-bottom: 6px;
+}
+
+.star-mercs.chat-card .damage-total {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.star-mercs.chat-card .damage-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--sm-danger-light);
+}
+
+.star-mercs.chat-card .damage-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  color: var(--sm-text-muted);
+}
+
+.star-mercs.chat-card .damage-breakdown {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 3px;
+}
+
+.star-mercs.chat-card .damage-breakdown span {
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--sm-bg-light);
+  color: var(--sm-text-muted);
+}
+
+.star-mercs.chat-card .damage-breakdown .positive {
+  color: #66bb6a;
+}
+
+.star-mercs.chat-card .damage-breakdown .negative {
+  color: var(--sm-danger-light);
+}
+
+/* Target status */
+
+.star-mercs.chat-card .target-status {
+  border-top: 1px solid var(--sm-border);
+  padding-top: 4px;
+  margin-top: 4px;
+}
+
+.star-mercs.chat-card .status-alert {
+  font-weight: 700;
+  text-align: center;
+  padding: 4px;
+  border-radius: var(--sm-radius);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-size: 12px;
+}
+
+.star-mercs.chat-card .status-alert.destroyed {
+  background: #111;
+  color: var(--sm-danger-light);
+  border: 1px solid var(--sm-danger);
+}
+
+.star-mercs.chat-card .status-alert.routed {
+  background: var(--sm-danger);
+  color: #fff;
+}
+
+.star-mercs.chat-card .status-update {
+  font-size: 11px;
+  color: var(--sm-text-muted);
+  text-align: center;
+}
+
+.star-mercs.chat-card .readiness-loss {
+  color: var(--sm-danger-light);
+}
+
+/* --- Opposed Skill Check Card --- */
+
+.star-mercs.chat-card .opposed-header h4 {
+  margin: 0 0 6px 0;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--sm-primary-light);
+  border-bottom: 1px solid var(--sm-border);
+  padding-bottom: 4px;
+}
+
+.star-mercs.chat-card .opposed-rolls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.star-mercs.chat-card .opposed-side {
+  flex: 1;
+  background: var(--sm-bg-medium);
+  border: 1px solid var(--sm-border);
+  border-radius: var(--sm-radius);
+  padding: 6px;
+  text-align: center;
+}
+
+.star-mercs.chat-card .side-name {
+  display: block;
+  font-weight: 700;
+  font-size: 13px;
+  margin-bottom: 2px;
+}
+
+.star-mercs.chat-card .side-rating {
+  display: block;
+  font-size: 10px;
+  color: var(--sm-text-dim);
+  text-transform: capitalize;
+  margin-bottom: 4px;
+}
+
+.star-mercs.chat-card .side-roll {
+  display: flex;
+  justify-content: center;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.star-mercs.chat-card .side-roll .die-result {
+  font-size: 18px;
+}
+
+.star-mercs.chat-card .side-roll .roll-bonus {
+  font-size: 11px;
+  color: var(--sm-text-muted);
+}
+
+.star-mercs.chat-card .side-roll .roll-total {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--sm-accent);
+}
+
+.star-mercs.chat-card .opposed-vs {
+  font-weight: 700;
+  color: var(--sm-text-dim);
+  font-size: 12px;
+}
+
+.star-mercs.chat-card .opposed-result {
+  text-align: center;
+  padding: 4px;
+  border-radius: var(--sm-radius);
+  background: var(--sm-bg-medium);
+  border: 1px solid var(--sm-border);
+}
+
+.star-mercs.chat-card .opposed-result .result-label {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--sm-accent);
+}
+
+.star-mercs.chat-card .opposed-result.critical .result-label {
+  color: #ffd700;
+}
+
+.star-mercs.chat-card .opposed-result.tie .result-label {
+  color: var(--sm-text-muted);
+}
+
+.star-mercs.chat-card .opposed-result .result-margin {
+  font-size: 11px;
+  color: var(--sm-text-dim);
+  margin-left: 4px;
+}
