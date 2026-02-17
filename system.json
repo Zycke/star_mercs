@@ -2,7 +2,7 @@
   "id": "star-mercs",
   "title": "Star Mercs",
   "description": "A hex-based tactical wargame system for Foundry VTT.",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "compatibility": {
     "minimum": "12.331",
     "verified": "12"

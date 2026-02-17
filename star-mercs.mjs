@@ -11,6 +11,7 @@ import * as sheets from "./module/sheets/_module.mjs";
 import * as combat from "./module/combat.mjs";
 import * as dice from "./module/dice.mjs";
 import { preloadHandlebarsTemplates, registerHandlebarsHelpers } from "./module/helpers.mjs";
+import TargetingArrowLayer from "./module/canvas/targeting-layer.mjs";
 
 /* ============================================ */
 /*  Foundry VTT Initialization                  */
@@ -76,6 +77,19 @@ Hooks.once("init", () => {
   // --- Handlebars Setup ---
   registerHandlebarsHelpers();
   preloadHandlebarsTemplates();
+
+  // --- Client Settings ---
+  game.settings.register("star-mercs", "showTargetingArrows", {
+    name: "STARMERCS.Settings.ShowTargetingArrows",
+    hint: "STARMERCS.Settings.ShowTargetingArrowsHint",
+    scope: "client",
+    config: false,
+    type: Boolean,
+    default: true,
+    onChange: () => {
+      game.starmercs?.targetingArrowLayer?.drawArrows();
+    }
+  });
 });
 
 /* ============================================ */
@@ -84,4 +98,59 @@ Hooks.once("init", () => {
 
 Hooks.once("ready", () => {
   console.log("Star Mercs | System Ready");
+});
+
+/* ============================================ */
+/*  Canvas & Targeting Arrow Hooks              */
+/* ============================================ */
+
+/**
+ * When the canvas is ready, create the targeting arrow layer
+ * and add it to the interface group.
+ */
+Hooks.on("canvasReady", () => {
+  const layer = new TargetingArrowLayer();
+  game.starmercs.targetingArrowLayer = layer;
+  canvas.interface.addChild(layer);
+  layer.drawArrows();
+});
+
+/** Redraw arrows when a token is visually refreshed (position change, etc.). */
+Hooks.on("refreshToken", () => {
+  game.starmercs?.targetingArrowLayer?.drawArrows();
+});
+
+/** Redraw arrows when an embedded weapon item is updated. */
+Hooks.on("updateItem", (item, changes) => {
+  if (item.type !== "weapon") return;
+  if (foundry.utils.hasProperty(changes, "system.targetId")
+      || foundry.utils.hasProperty(changes, "system.attackType")) {
+    game.starmercs?.targetingArrowLayer?.drawArrows();
+  }
+});
+
+/** Redraw arrows when a weapon is created or deleted. */
+Hooks.on("createItem", (item) => {
+  if (item.type === "weapon") game.starmercs?.targetingArrowLayer?.drawArrows();
+});
+
+Hooks.on("deleteItem", (item) => {
+  if (item.type === "weapon") game.starmercs?.targetingArrowLayer?.drawArrows();
+});
+
+/** Add the targeting arrows toggle button to the scene controls. */
+Hooks.on("getSceneControlButtons", (controls) => {
+  const tokenControls = controls.find(c => c.name === "token");
+  if (!tokenControls) return;
+
+  tokenControls.tools.push({
+    name: "targetingArrows",
+    title: "STARMERCS.Controls.TargetingArrows",
+    icon: "fas fa-location-arrow",
+    toggle: true,
+    active: game.settings.get("star-mercs", "showTargetingArrows"),
+    onClick: (toggled) => {
+      game.settings.set("star-mercs", "showTargetingArrows", toggled);
+    }
+  });
 });

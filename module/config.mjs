@@ -217,6 +217,16 @@ STARMERCS.terrain = {
 };
 
 /**
+ * Arrow colors for the targeting overlay, keyed by weapon attack type.
+ * Values are hex color numbers for PIXI.Graphics.
+ */
+STARMERCS.arrowColors = {
+  soft: 0xFFFF00,     // Yellow
+  hard: 0xFF3333,     // Red
+  antiAir: 0x9933FF   // Purple
+};
+
+/**
  * Trait activation modes.
  */
 STARMERCS.traitModes = {

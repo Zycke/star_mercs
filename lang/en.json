@@ -94,5 +94,9 @@
   "STARMERCS.ClearAllTargets": "Clear All Targets",
   "STARMERCS.FireAll": "Fire All",
   "STARMERCS.FireAllTargeted": "Fire All Targeted Weapons",
-  "STARMERCS.NoTargetsAssigned": "No weapons have assigned targets."
+  "STARMERCS.NoTargetsAssigned": "No weapons have assigned targets.",
+
+  "STARMERCS.Settings.ShowTargetingArrows": "Show Targeting Arrows",
+  "STARMERCS.Settings.ShowTargetingArrowsHint": "Display colored arrows on the canvas from units to their weapon targets.",
+  "STARMERCS.Controls.TargetingArrows": "Toggle Targeting Arrows"
 }
