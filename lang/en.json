@@ -2,6 +2,11 @@
   "STARMERCS.SystemName": "Star Mercs",
   "STARMERCS.NewItem": "New {type}",
 
+  "TYPES.Actor.unit": "Unit",
+  "TYPES.Item.weapon": "Weapon",
+  "TYPES.Item.trait": "Trait",
+  "TYPES.Item.order": "Order",
+
   "STARMERCS.SheetLabels.Unit": "Star Mercs Unit Sheet",
   "STARMERCS.SheetLabels.Weapon": "Star Mercs Weapon Sheet",
   "STARMERCS.SheetLabels.Trait": "Star Mercs Trait Sheet",
