@@ -77,8 +77,8 @@ export default class StarMercsUnitSheet extends ActorSheet {
 
         const targetId = item.system.targetId;
         if (targetId) {
-          const targetActor = game.actors.get(targetId);
-          weaponData.targetName = targetActor?.name ?? "Unknown";
+          const targetToken = canvas?.tokens?.get(targetId);
+          weaponData.targetName = targetToken?.name ?? "Unknown";
           weaponData.targetId = targetId;
           hasTargetedWeapons = true;
         }
@@ -174,7 +174,8 @@ export default class StarMercsUnitSheet extends ActorSheet {
     let target = null;
     const storedTargetId = item.system.targetId;
     if (storedTargetId) {
-      target = game.actors.get(storedTargetId);
+      const targetToken = canvas?.tokens?.get(storedTargetId);
+      target = targetToken?.actor;
     } else {
       const targets = game.user.targets;
       if (targets.size > 0) {
@@ -202,13 +203,12 @@ export default class StarMercsUnitSheet extends ActorSheet {
     }
 
     const targetToken = targets.first();
-    const targetActor = targetToken.actor;
-    if (!targetActor) {
+    if (!targetToken.actor) {
       ui.notifications.warn("Target token has no associated actor.");
       return;
     }
 
-    await item.update({ "system.targetId": targetActor.id });
+    await item.update({ "system.targetId": targetToken.id });
   }
 
   /**

@@ -109,6 +109,12 @@ Hooks.once("ready", () => {
  * and add it to the interface group.
  */
 Hooks.on("canvasReady", () => {
+  // Clean up the previous layer to prevent accumulation across scene changes
+  const previousLayer = game.starmercs.targetingArrowLayer;
+  if (previousLayer) {
+    previousLayer.destroy({ children: true });
+  }
+
   const layer = new TargetingArrowLayer();
   game.starmercs.targetingArrowLayer = layer;
   canvas.interface.addChild(layer);
@@ -118,6 +124,13 @@ Hooks.on("canvasReady", () => {
 /** Redraw arrows when a token is visually refreshed (position change, etc.). */
 Hooks.on("refreshToken", () => {
   game.starmercs?.targetingArrowLayer?.drawArrows();
+});
+
+/** Redraw arrows when a token's position changes (v12 has no moveToken hook). */
+Hooks.on("updateToken", (tokenDoc, changes) => {
+  if ("x" in changes || "y" in changes || "elevation" in changes) {
+    game.starmercs?.targetingArrowLayer?.drawArrows();
+  }
 });
 
 /** Redraw arrows when an embedded weapon item is updated. */
