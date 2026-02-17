@@ -16,7 +16,7 @@ Star Mercs is a tabletop wargame built as a game system for Foundry VTT. The goa
 Always consult the following resources when building and modifying this system:
 
 1. **Context7 Library** - Always reference the Context7 MCP library for up-to-date documentation and code patterns.
-2. **Foundry VTT API** - The official API documentation is the primary technical reference:
+2. **Foundry VTT API (v13)** - The official API documentation is the primary technical reference. Always use the **v13** docs (v12 is outdated):
    https://foundryvtt.com/api/index.html
 3. **D&D 5e System** - A fully functional Foundry game system that serves as a real-world implementation reference:
    https://github.com/foundryvtt/dnd5e

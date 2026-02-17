@@ -160,6 +160,7 @@ Hooks.on("getSceneControlButtons", (controls) => {
     name: "targetingArrows",
     title: "STARMERCS.Controls.TargetingArrows",
     icon: "fas fa-location-arrow",
+    visible: true,
     toggle: true,
     active: game.settings.get("star-mercs", "showTargetingArrows"),
     onClick: (toggled) => {
