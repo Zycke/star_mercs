@@ -1,0 +1,102 @@
+{
+  "STARMERCS.SystemName": "Star Mercs",
+  "STARMERCS.NewItem": "New {type}",
+
+  "STARMERCS.SheetLabels.Unit": "Star Mercs Unit Sheet",
+  "STARMERCS.SheetLabels.Weapon": "Star Mercs Weapon Sheet",
+  "STARMERCS.SheetLabels.Trait": "Star Mercs Trait Sheet",
+  "STARMERCS.SheetLabels.Order": "Star Mercs Order Sheet",
+
+  "STARMERCS.Tab.Attributes": "Attributes",
+  "STARMERCS.Tab.Combat": "Combat",
+  "STARMERCS.Tab.Logistics": "Logistics",
+
+  "STARMERCS.Rating": "Rating",
+  "STARMERCS.RatingBonus": "Rating Bonus",
+  "STARMERCS.Rating.Green": "Green",
+  "STARMERCS.Rating.Trained": "Trained",
+  "STARMERCS.Rating.Experienced": "Experienced",
+  "STARMERCS.Rating.Veteran": "Veteran",
+  "STARMERCS.Rating.Elite": "Elite",
+
+  "STARMERCS.Strength": "Strength",
+  "STARMERCS.Readiness": "Readiness",
+  "STARMERCS.Speed": "Speed",
+  "STARMERCS.Sensors": "Sensors",
+  "STARMERCS.Signature": "Signature",
+  "STARMERCS.EWAR": "EWAR",
+  "STARMERCS.Comms": "Comms",
+  "STARMERCS.CurrentOrder": "Current Order",
+  "STARMERCS.Notes": "Notes",
+
+  "STARMERCS.Supply": "Supply",
+  "STARMERCS.SupplyCapacity": "Supply Capacity",
+  "STARMERCS.SupplyUsage": "Supply Usage",
+  "STARMERCS.SupplyCurrent": "Current Supply",
+  "STARMERCS.SupplyModifier": "Supply Modifier",
+  "STARMERCS.ReadinessCost": "Readiness Cost",
+  "STARMERCS.RequiredTrait": "Required Trait",
+
+  "STARMERCS.Weapons": "Weapons",
+  "STARMERCS.Traits": "Traits",
+  "STARMERCS.Orders": "Orders",
+
+  "STARMERCS.AttackType": "Attack Type",
+  "STARMERCS.AttackType.Soft": "Soft Attack",
+  "STARMERCS.AttackType.Hard": "Hard Attack",
+  "STARMERCS.AttackType.AntiAir": "Anti-Air",
+
+  "STARMERCS.Accuracy": "Accuracy",
+  "STARMERCS.Damage": "Damage",
+  "STARMERCS.Range": "Range",
+  "STARMERCS.Description": "Description",
+
+  "STARMERCS.TraitValue": "Value [X]",
+  "STARMERCS.TraitMode": "Mode",
+  "STARMERCS.TraitMode.Passive": "Passive",
+  "STARMERCS.TraitMode.Active": "Active",
+  "STARMERCS.TraitMode.Conditional": "Conditional",
+
+  "STARMERCS.OrderCategory": "Category",
+  "STARMERCS.OrderCategory.Standard": "Standard",
+  "STARMERCS.OrderCategory.Special": "Special",
+
+  "STARMERCS.Phase.Preparation": "Preparation",
+  "STARMERCS.Phase.Orders": "Orders",
+  "STARMERCS.Phase.Tactical": "Tactical",
+  "STARMERCS.Phase.Consolidation": "Consolidation",
+
+  "STARMERCS.Terrain.Forest": "Forest",
+  "STARMERCS.Terrain.Plain": "Plain",
+  "STARMERCS.Terrain.Hill": "Hill",
+  "STARMERCS.Terrain.Mountain": "Mountain",
+  "STARMERCS.Terrain.Swamp": "Swamp",
+  "STARMERCS.Terrain.River": "River",
+  "STARMERCS.Terrain.Lake": "Lake",
+  "STARMERCS.Terrain.Ocean": "Ocean",
+  "STARMERCS.Terrain.UrbanDense": "Urban (Dense)",
+  "STARMERCS.Terrain.UrbanLight": "Urban (Light)",
+
+  "STARMERCS.Combat.CriticalHit": "Critical Hit",
+  "STARMERCS.Combat.Hit": "Hit",
+  "STARMERCS.Combat.PartialSuccess": "Partial Success",
+  "STARMERCS.Combat.Miss": "Miss",
+  "STARMERCS.Combat.CriticalMiss": "Critical Miss",
+  "STARMERCS.Combat.Destroyed": "DESTROYED",
+  "STARMERCS.Combat.Routed": "ROUTED",
+
+  "STARMERCS.SkillCheck": "Skill Check",
+  "STARMERCS.OpposedCheck": "Opposed Skill Check",
+
+  "STARMERCS.Target": "Target",
+  "STARMERCS.AssignTarget": "Assign Target",
+  "STARMERCS.ClearTarget": "Clear Target",
+  "STARMERCS.ClearAllTargets": "Clear All Targets",
+  "STARMERCS.FireAll": "Fire All",
+  "STARMERCS.FireAllTargeted": "Fire All Targeted Weapons",
+  "STARMERCS.NoTargetsAssigned": "No weapons have assigned targets.",
+
+  "STARMERCS.Settings.ShowTargetingArrows": "Show Targeting Arrows",
+  "STARMERCS.Settings.ShowTargetingArrowsHint": "Display colored arrows on the canvas from units to their weapon targets.",
+  "STARMERCS.Controls.TargetingArrows": "Toggle Targeting Arrows"
+}

@@ -1,0 +1,968 @@
+/* ============================================ */
+/*  Star Mercs — Foundry VTT Game System CSS    */
+/*  Military sci-fi themed stylesheet           */
+/* ============================================ */
+
+/* ============================= */
+/*  CSS Custom Properties        */
+/* ============================= */
+
+:root {
+  --sm-primary: #2d5a27;
+  --sm-primary-light: #4a7c59;
+  --sm-primary-dark: #1a3d17;
+  --sm-accent: #c9a227;
+  --sm-accent-light: #ddb94a;
+  --sm-danger: #a83232;
+  --sm-danger-light: #cc4444;
+
+  --sm-bg-dark: #1a1a2e;
+  --sm-bg-medium: #16213e;
+  --sm-bg-light: #1f2f4d;
+  --sm-bg-input: #0d1a30;
+
+  --sm-text: #e0e0e0;
+  --sm-text-muted: #999;
+  --sm-text-dim: #666;
+  --sm-border: #3a3a5a;
+  --sm-border-light: #4a4a6a;
+
+  --sm-radius: 4px;
+  --sm-radius-lg: 6px;
+}
+
+/* ============================= */
+/*  Base Sheet Styles            */
+/* ============================= */
+
+.star-mercs.sheet {
+  background: var(--sm-bg-dark);
+  color: var(--sm-text);
+  font-family: "Roboto", "Segoe UI", Tahoma, sans-serif;
+  border: 1px solid var(--sm-border);
+}
+
+.star-mercs.sheet input,
+.star-mercs.sheet select,
+.star-mercs.sheet textarea {
+  background: var(--sm-bg-input);
+  color: var(--sm-text);
+  border: 1px solid var(--sm-border);
+  border-radius: var(--sm-radius);
+  padding: 4px 8px;
+  font-size: 13px;
+}
+
+.star-mercs.sheet input:focus,
+.star-mercs.sheet select:focus,
+.star-mercs.sheet textarea:focus {
+  border-color: var(--sm-accent);
+  outline: none;
+  box-shadow: 0 0 3px rgba(201, 162, 39, 0.3);
+}
+
+.star-mercs.sheet input[type="number"] {
+  width: 50px;
+  text-align: center;
+}
+
+.star-mercs.sheet label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--sm-text-muted);
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+/* ============================= */
+/*  Sheet Header                 */
+/* ============================= */
+
+.star-mercs .sheet-header {
+  display: flex;
+  gap: 12px;
+  padding: 8px 10px;
+  background: linear-gradient(135deg, var(--sm-bg-medium), var(--sm-bg-dark));
+  border-bottom: 2px solid var(--sm-primary);
+}
+
+.star-mercs .profile-img {
+  border: 2px solid var(--sm-primary);
+  border-radius: var(--sm-radius);
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.star-mercs .header-fields {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+}
+
+.star-mercs .unit-name input,
+.star-mercs .item-name input {
+  font-size: 20px;
+  font-weight: 700;
+  background: transparent;
+  border: none;
+  color: var(--sm-text);
+  padding: 0;
+  width: 100%;
+  border-bottom: 1px solid transparent;
+}
+
+.star-mercs .unit-name input:focus,
+.star-mercs .item-name input:focus {
+  border-bottom: 1px solid var(--sm-accent);
+  box-shadow: none;
+}
+
+.star-mercs .header-row {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.star-mercs .field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.star-mercs .derived-value {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--sm-accent);
+}
+
+/* ============================= */
+/*  Status Warnings              */
+/* ============================= */
+
+.star-mercs .status-warning {
+  padding: 6px 12px;
+  text-align: center;
+  font-weight: 700;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.star-mercs .status-warning.routed {
+  background: var(--sm-danger);
+  color: #fff;
+}
+
+.star-mercs .status-warning.destroyed {
+  background: #111;
+  color: var(--sm-danger-light);
+  border: 1px solid var(--sm-danger);
+}
+
+/* ============================= */
+/*  Tabs                         */
+/* ============================= */
+
+.star-mercs .sheet-tabs {
+  display: flex;
+  border-bottom: 2px solid var(--sm-border);
+  background: var(--sm-bg-medium);
+  padding: 0;
+}
+
+.star-mercs .sheet-tabs .item {
+  padding: 8px 16px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--sm-text-muted);
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.star-mercs .sheet-tabs .item:hover {
+  color: var(--sm-text);
+}
+
+.star-mercs .sheet-tabs .item.active {
+  color: var(--sm-accent);
+  border-bottom-color: var(--sm-accent);
+}
+
+/* ============================= */
+/*  Sheet Body                   */
+/* ============================= */
+
+.star-mercs .sheet-body {
+  padding: 10px;
+  overflow-y: auto;
+}
+
+.star-mercs .sheet-body .tab {
+  display: none;
+}
+
+.star-mercs .sheet-body .tab.active {
+  display: block;
+}
+
+.star-mercs .sheet-body h3 {
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--sm-primary-light);
+  border-bottom: 1px solid var(--sm-border);
+  padding-bottom: 4px;
+  margin: 0 0 8px 0;
+}
+
+/* ============================= */
+/*  Attributes Grid              */
+/* ============================= */
+
+.star-mercs .attributes-grid,
+.star-mercs .supply-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.star-mercs .attribute-block {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px;
+  background: var(--sm-bg-medium);
+  border: 1px solid var(--sm-border);
+  border-radius: var(--sm-radius);
+}
+
+.star-mercs .resource-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.star-mercs .resource-bar .sep {
+  color: var(--sm-text-muted);
+  font-weight: 700;
+}
+
+.star-mercs .input-with-suffix {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.star-mercs .suffix {
+  font-size: 11px;
+  color: var(--sm-text-dim);
+}
+
+.star-mercs .penalty {
+  font-size: 11px;
+  color: var(--sm-danger-light);
+  font-weight: 600;
+}
+
+/* ============================= */
+/*  Combat Status Grid           */
+/* ============================= */
+
+.star-mercs .combat-status-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.star-mercs .status-block {
+  padding: 6px 8px;
+  background: var(--sm-bg-medium);
+  border: 1px solid var(--sm-border);
+  border-radius: var(--sm-radius);
+}
+
+.star-mercs .status-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--sm-text);
+}
+
+/* ============================= */
+/*  Item Lists                   */
+/* ============================= */
+
+.star-mercs .items-section {
+  margin-bottom: 16px;
+}
+
+.star-mercs .items-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.star-mercs .items-header h3 {
+  flex: 1;
+}
+
+.star-mercs .items-header .item-create {
+  color: var(--sm-primary-light);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 6px;
+  border-radius: var(--sm-radius);
+  transition: color 0.15s, background 0.15s;
+}
+
+.star-mercs .items-header .item-create:hover {
+  color: var(--sm-accent);
+  background: var(--sm-bg-light);
+}
+
+.star-mercs .item-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.star-mercs .item-list-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--sm-text-dim);
+  border-bottom: 1px solid var(--sm-border);
+}
+
+.star-mercs .item-list .item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-bottom: 1px solid rgba(58, 58, 90, 0.4);
+  transition: background 0.1s;
+}
+
+.star-mercs .item-list .item:hover {
+  background: var(--sm-bg-light);
+}
+
+.star-mercs .item-list .item .item-name {
+  flex: 2;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.star-mercs .item-list .item .item-name img {
+  border: 1px solid var(--sm-border);
+  border-radius: 2px;
+}
+
+.star-mercs .item-list .item .item-detail {
+  flex: 1;
+  font-size: 12px;
+  color: var(--sm-text-muted);
+  text-align: center;
+}
+
+.star-mercs .item-list .item .item-controls,
+.star-mercs .item-list-header .item-controls-header {
+  flex: 0 0 80px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.star-mercs .item-controls a {
+  color: var(--sm-text-dim);
+  cursor: pointer;
+  font-size: 12px;
+  transition: color 0.15s;
+}
+
+.star-mercs .item-controls a:hover {
+  color: var(--sm-accent);
+}
+
+.star-mercs .item-controls .item-delete:hover {
+  color: var(--sm-danger-light);
+}
+
+.star-mercs .clickable {
+  cursor: pointer;
+}
+
+.star-mercs .clickable:hover {
+  color: var(--sm-accent-light);
+}
+
+.star-mercs .trait-bracket {
+  color: var(--sm-accent);
+  font-weight: 700;
+}
+
+.star-mercs .empty-list {
+  font-size: 12px;
+  color: var(--sm-text-dim);
+  font-style: italic;
+  padding: 8px;
+  text-align: center;
+}
+
+/* ============================= */
+/*  Weapon Targeting UI          */
+/* ============================= */
+
+.star-mercs .weapons-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.star-mercs .weapons-header-actions a {
+  cursor: pointer;
+  font-size: 12px;
+  transition: color 0.15s, background 0.15s;
+  padding: 2px 6px;
+  border-radius: var(--sm-radius);
+}
+
+.star-mercs .fire-all-weapons {
+  color: var(--sm-danger-light);
+  font-weight: 600;
+}
+
+.star-mercs .fire-all-weapons:hover {
+  color: #fff;
+  background: var(--sm-danger);
+}
+
+.star-mercs .clear-all-targets {
+  color: var(--sm-text-muted);
+}
+
+.star-mercs .clear-all-targets:hover {
+  color: var(--sm-text);
+  background: var(--sm-bg-light);
+}
+
+.star-mercs .weapons-section .item-controls,
+.star-mercs .weapons-section .item-controls-header {
+  flex: 0 0 110px;
+}
+
+.star-mercs .item-list .item.has-target {
+  border-left: 2px solid var(--sm-danger-light);
+}
+
+.star-mercs .weapon-target-name {
+  color: var(--sm-danger-light);
+  font-weight: 600;
+  font-size: 11px;
+  max-width: 80px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-block;
+}
+
+.star-mercs .weapon-target-none {
+  color: var(--sm-text-dim);
+}
+
+.star-mercs .item-controls .weapon-assign-target {
+  color: var(--sm-text-dim);
+}
+
+.star-mercs .item-controls .weapon-assign-target:hover {
+  color: var(--sm-danger-light);
+}
+
+.star-mercs .item-controls .weapon-clear-target:hover {
+  color: var(--sm-danger-light);
+}
+
+/* --- Fire All Summary Chat Card --- */
+
+.star-mercs.chat-card.fire-all-summary {
+  border-left: 3px solid var(--sm-danger-light);
+}
+
+.star-mercs.chat-card .summary-header {
+  font-size: 13px;
+  margin-bottom: 4px;
+  color: var(--sm-text);
+}
+
+.star-mercs.chat-card .summary-header i {
+  color: var(--sm-danger-light);
+  margin-right: 4px;
+}
+
+.star-mercs.chat-card .summary-damage {
+  font-size: 14px;
+  margin-bottom: 6px;
+  color: var(--sm-text-muted);
+}
+
+.star-mercs.chat-card .summary-damage strong {
+  color: var(--sm-danger-light);
+  font-size: 16px;
+}
+
+/* ============================= */
+/*  Item Sheet Styles            */
+/* ============================= */
+
+.star-mercs.item .sheet-header {
+  align-items: center;
+}
+
+.star-mercs.item .sheet-header .profile-img {
+  height: 48px;
+  width: 48px;
+}
+
+.star-mercs.item .sheet-body {
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.star-mercs .form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.star-mercs .form-row {
+  display: flex;
+  gap: 10px;
+}
+
+.star-mercs .form-row .form-group {
+  flex: 1;
+}
+
+.star-mercs .attack-summary {
+  background: var(--sm-bg-medium);
+  padding: 6px 10px;
+  border-radius: var(--sm-radius);
+  border: 1px solid var(--sm-border);
+}
+
+.star-mercs .attack-summary .derived-value {
+  font-size: 18px;
+}
+
+.star-mercs .checkbox-group label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  text-transform: none;
+  cursor: pointer;
+}
+
+.star-mercs .checkbox-group input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--sm-primary);
+}
+
+.star-mercs .description-field {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.star-mercs .description-field .editor {
+  flex: 1;
+  min-height: 100px;
+}
+
+.star-mercs textarea {
+  resize: vertical;
+  min-height: 60px;
+}
+
+/* ============================= */
+/*  Supply Section               */
+/* ============================= */
+
+.star-mercs .notes-section {
+  margin-top: 16px;
+}
+
+.star-mercs .notes-section textarea {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* ============================= */
+/*  Trait List (compact)         */
+/* ============================= */
+
+.star-mercs .trait-list .trait-item {
+  display: flex;
+  align-items: center;
+}
+
+.star-mercs .trait-list .trait-mode {
+  font-size: 11px;
+  text-transform: capitalize;
+}
+
+/* ============================= */
+/*  Chat Cards                   */
+/* ============================= */
+
+.star-mercs.chat-card {
+  background: var(--sm-bg-dark);
+  color: var(--sm-text);
+  border: 1px solid var(--sm-border);
+  border-radius: var(--sm-radius-lg);
+  padding: 8px;
+  font-family: "Roboto", "Segoe UI", Tahoma, sans-serif;
+  font-size: 13px;
+}
+
+/* --- Attack Result Card --- */
+
+.star-mercs.chat-card .attack-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--sm-border);
+  margin-bottom: 6px;
+}
+
+.star-mercs.chat-card .attack-header.invalid {
+  border-bottom-color: var(--sm-danger);
+}
+
+.star-mercs.chat-card .weapon-label {
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.star-mercs.chat-card .attack-type-badge {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-weight: 600;
+}
+
+.star-mercs.chat-card .attack-type-badge.soft {
+  background: #3a6b35;
+  color: #c8e6c9;
+}
+
+.star-mercs.chat-card .attack-type-badge.hard {
+  background: #5a3a2e;
+  color: #f0c8a0;
+}
+
+.star-mercs.chat-card .attack-type-badge.antiAir {
+  background: #2e3a5a;
+  color: #a0c0f0;
+}
+
+.star-mercs.chat-card .attack-invalid {
+  color: var(--sm-danger-light);
+  font-style: italic;
+  padding: 4px 0;
+}
+
+.star-mercs.chat-card .attack-invalid i {
+  margin-right: 4px;
+}
+
+.star-mercs.chat-card .combatants {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: var(--sm-text-muted);
+}
+
+.star-mercs.chat-card .combatants .attacker-name {
+  color: var(--sm-primary-light);
+  font-weight: 600;
+}
+
+.star-mercs.chat-card .combatants .target-name {
+  color: var(--sm-danger-light);
+  font-weight: 600;
+}
+
+.star-mercs.chat-card .combatants i {
+  color: var(--sm-text-dim);
+  font-size: 10px;
+}
+
+/* Roll result */
+
+.star-mercs.chat-card .roll-result {
+  background: var(--sm-bg-medium);
+  border: 1px solid var(--sm-border);
+  border-radius: var(--sm-radius);
+  padding: 6px 8px;
+  margin-bottom: 6px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.star-mercs.chat-card .roll-display {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.star-mercs.chat-card .die-result {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--sm-accent);
+  min-width: 28px;
+  text-align: center;
+}
+
+.star-mercs.chat-card .accuracy-info {
+  font-size: 12px;
+  color: var(--sm-text-muted);
+}
+
+.star-mercs.chat-card .accuracy-breakdown {
+  font-size: 10px;
+  color: var(--sm-text-dim);
+}
+
+.star-mercs.chat-card .hit-label {
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 12px;
+  letter-spacing: 0.5px;
+}
+
+.star-mercs.chat-card .hit-label.critical_hit {
+  color: #ffd700;
+}
+
+.star-mercs.chat-card .hit-label.hit {
+  color: #66bb6a;
+}
+
+.star-mercs.chat-card .hit-label.partial {
+  color: #ffb74d;
+}
+
+.star-mercs.chat-card .hit-label.miss {
+  color: var(--sm-text-dim);
+}
+
+.star-mercs.chat-card .hit-label.critical_miss {
+  color: var(--sm-danger-light);
+}
+
+/* Damage section */
+
+.star-mercs.chat-card .damage-section {
+  margin-bottom: 6px;
+}
+
+.star-mercs.chat-card .damage-total {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.star-mercs.chat-card .damage-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--sm-danger-light);
+}
+
+.star-mercs.chat-card .damage-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  color: var(--sm-text-muted);
+}
+
+.star-mercs.chat-card .damage-breakdown {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 3px;
+}
+
+.star-mercs.chat-card .damage-breakdown span {
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--sm-bg-light);
+  color: var(--sm-text-muted);
+}
+
+.star-mercs.chat-card .damage-breakdown .positive {
+  color: #66bb6a;
+}
+
+.star-mercs.chat-card .damage-breakdown .negative {
+  color: var(--sm-danger-light);
+}
+
+/* Target status */
+
+.star-mercs.chat-card .target-status {
+  border-top: 1px solid var(--sm-border);
+  padding-top: 4px;
+  margin-top: 4px;
+}
+
+.star-mercs.chat-card .status-alert {
+  font-weight: 700;
+  text-align: center;
+  padding: 4px;
+  border-radius: var(--sm-radius);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-size: 12px;
+}
+
+.star-mercs.chat-card .status-alert.destroyed {
+  background: #111;
+  color: var(--sm-danger-light);
+  border: 1px solid var(--sm-danger);
+}
+
+.star-mercs.chat-card .status-alert.routed {
+  background: var(--sm-danger);
+  color: #fff;
+}
+
+.star-mercs.chat-card .status-update {
+  font-size: 11px;
+  color: var(--sm-text-muted);
+  text-align: center;
+}
+
+.star-mercs.chat-card .readiness-loss {
+  color: var(--sm-danger-light);
+}
+
+/* --- Opposed Skill Check Card --- */
+
+.star-mercs.chat-card .opposed-header h4 {
+  margin: 0 0 6px 0;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--sm-primary-light);
+  border-bottom: 1px solid var(--sm-border);
+  padding-bottom: 4px;
+}
+
+.star-mercs.chat-card .opposed-rolls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.star-mercs.chat-card .opposed-side {
+  flex: 1;
+  background: var(--sm-bg-medium);
+  border: 1px solid var(--sm-border);
+  border-radius: var(--sm-radius);
+  padding: 6px;
+  text-align: center;
+}
+
+.star-mercs.chat-card .side-name {
+  display: block;
+  font-weight: 700;
+  font-size: 13px;
+  margin-bottom: 2px;
+}
+
+.star-mercs.chat-card .side-rating {
+  display: block;
+  font-size: 10px;
+  color: var(--sm-text-dim);
+  text-transform: capitalize;
+  margin-bottom: 4px;
+}
+
+.star-mercs.chat-card .side-roll {
+  display: flex;
+  justify-content: center;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.star-mercs.chat-card .side-roll .die-result {
+  font-size: 18px;
+}
+
+.star-mercs.chat-card .side-roll .roll-bonus {
+  font-size: 11px;
+  color: var(--sm-text-muted);
+}
+
+.star-mercs.chat-card .side-roll .roll-total {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--sm-accent);
+}
+
+.star-mercs.chat-card .opposed-vs {
+  font-weight: 700;
+  color: var(--sm-text-dim);
+  font-size: 12px;
+}
+
+.star-mercs.chat-card .opposed-result {
+  text-align: center;
+  padding: 4px;
+  border-radius: var(--sm-radius);
+  background: var(--sm-bg-medium);
+  border: 1px solid var(--sm-border);
+}
+
+.star-mercs.chat-card .opposed-result .result-label {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--sm-accent);
+}
+
+.star-mercs.chat-card .opposed-result.critical .result-label {
+  color: #ffd700;
+}
+
+.star-mercs.chat-card .opposed-result.tie .result-label {
+  color: var(--sm-text-muted);
+}
+
+.star-mercs.chat-card .opposed-result .result-margin {
+  font-size: 11px;
+  color: var(--sm-text-dim);
+  margin-left: 4px;
+}

@@ -1,0 +1,40 @@
+<div class="items-section orders-section">
+  <div class="items-header">
+    <h3>{{localize "STARMERCS.Orders"}}</h3>
+    <a class="item-create" data-type="order" title="Add Order">
+      <i class="fas fa-plus"></i>
+    </a>
+  </div>
+
+  {{#if orders.length}}
+    <ol class="item-list">
+      <li class="item-list-header">
+        <span class="item-name">Name</span>
+        <span class="item-detail">Category</span>
+        <span class="item-detail">Supply</span>
+        <span class="item-detail">Readiness</span>
+        <span class="item-controls-header">Actions</span>
+      </li>
+      {{#each orders as |order|}}
+      <li class="item" data-item-id="{{order._id}}">
+        <span class="item-name clickable item-chat" title="Post to Chat">
+          <img src="{{order.img}}" width="24" height="24"/>
+          {{order.name}}
+        </span>
+        <span class="item-detail">{{order.system.category}}</span>
+        <span class="item-detail">{{order.system.supplyModifier}}</span>
+        <span class="item-detail">
+          {{#if order.system.readinessCost}}{{order.system.readinessCost}}{{else}}—{{/if}}
+        </span>
+        <span class="item-controls">
+          <a class="item-chat" title="Post to Chat"><i class="fas fa-comment"></i></a>
+          <a class="item-edit" title="Edit"><i class="fas fa-edit"></i></a>
+          <a class="item-delete" title="Delete"><i class="fas fa-trash"></i></a>
+        </span>
+      </li>
+      {{/each}}
+    </ol>
+  {{else}}
+    <p class="empty-list">No orders. Click + to add one.</p>
+  {{/if}}
+</div>

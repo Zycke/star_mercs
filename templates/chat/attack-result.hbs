@@ -1,0 +1,87 @@
+<div class="star-mercs chat-card attack-result">
+
+  {{!-- Invalid attack --}}
+  {{#if invalid}}
+    <div class="attack-header invalid">
+      <span class="weapon-label">{{weaponName}} ({{attackString}})</span>
+      <span class="attack-type-badge {{attackType}}">{{attackType}}</span>
+    </div>
+    <div class="attack-invalid">
+      <i class="fas fa-ban"></i> {{invalidReason}}
+    </div>
+
+  {{else}}
+
+    {{!-- Attack header --}}
+    <div class="attack-header">
+      <span class="weapon-label">{{weaponName}} ({{attackString}})</span>
+      <span class="attack-type-badge {{attackType}}">{{attackType}}</span>
+    </div>
+
+    {{!-- Attacker / Target --}}
+    <div class="combatants">
+      <span class="attacker-name">{{attackerName}}</span>
+      {{#if targetName}}
+        <i class="fas fa-crosshairs"></i>
+        <span class="target-name">{{targetName}}</span>
+      {{/if}}
+    </div>
+
+    {{!-- Roll result --}}
+    <div class="roll-result {{hitType}}">
+      <div class="roll-display">
+        <span class="die-result">{{roll}}</span>
+        <span class="accuracy-info">
+          vs {{accuracyEffective}}+
+          {{#if hasAccuracyMods}}
+            <span class="accuracy-breakdown">(base {{accuracyBase}}{{#if readinessMod}} +{{readinessMod}} readiness{{/if}}{{#if ewarMod}} +{{ewarMod}} EWAR{{/if}})</span>
+          {{/if}}
+        </span>
+      </div>
+      <div class="hit-label {{hitType}}">{{hitLabel}}</div>
+    </div>
+
+    {{!-- Damage (if hit) --}}
+    {{#if isHit}}
+      <div class="damage-section">
+        <div class="damage-total">
+          <span class="damage-value">{{damage}}</span>
+          <span class="damage-label">damage</span>
+        </div>
+        {{#if hasDamageModifiers}}
+          <div class="damage-breakdown">
+            <span class="base-damage">Base: {{damageBase}}</span>
+            {{#each damageModifiers}}
+              <span class="modifier {{#if (gt this.value 0)}}positive{{else}}negative{{/if}}">
+                {{this.label}}: {{#if (gt this.value 0)}}+{{/if}}{{this.value}}
+              </span>
+            {{/each}}
+          </div>
+        {{/if}}
+      </div>
+
+      {{!-- Target status after damage --}}
+      {{#if targetName}}
+        <div class="target-status">
+          {{#if targetDestroyed}}
+            <div class="status-alert destroyed">
+              <i class="fas fa-skull-crossbones"></i> {{targetName}} DESTROYED
+            </div>
+          {{else if targetRouted}}
+            <div class="status-alert routed">
+              <i class="fas fa-running"></i> {{targetName}} ROUTED
+            </div>
+          {{else}}
+            <div class="status-update">
+              {{targetName}}: STR {{targetNewStrength}} | RDY {{targetNewReadiness}}
+              {{#if readinessLost}}
+                <span class="readiness-loss">(-{{readinessLost}} readiness)</span>
+              {{/if}}
+            </div>
+          {{/if}}
+        </div>
+      {{/if}}
+    {{/if}}
+
+  {{/if}}
+</div>

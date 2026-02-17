@@ -1,0 +1,37 @@
+<form class="{{cssClass}} star-mercs sheet item trait" autocomplete="off">
+  <header class="sheet-header">
+    <img class="profile-img" src="{{item.img}}" data-edit="img"
+         title="{{item.name}}" height="48" width="48"/>
+    <h1 class="item-name">
+      <input name="name" type="text" value="{{item.name}}" placeholder="Trait Name"/>
+    </h1>
+    {{#if system.traitValue}}
+      <span class="trait-bracket">[{{system.traitValue}}]</span>
+    {{/if}}
+  </header>
+
+  <section class="sheet-body">
+    <div class="form-row">
+      <div class="form-group">
+        <label>{{localize "STARMERCS.TraitValue"}}</label>
+        <div class="input-with-suffix">
+          <input type="number" name="system.traitValue" value="{{system.traitValue}}"
+                 min="0"/>
+          <span class="suffix">[X]</span>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>{{localize "STARMERCS.TraitMode"}}</label>
+        <select name="system.passive">
+          {{selectOptions modeChoices selected=system.passive}}
+        </select>
+      </div>
+    </div>
+
+    <div class="form-group description-field">
+      <label>{{localize "STARMERCS.Description"}}</label>
+      {{editor enrichedDescription target="system.description" button=true editable=editable}}
+    </div>
+  </section>
+</form>

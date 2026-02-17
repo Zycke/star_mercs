@@ -1,0 +1,40 @@
+<div class="star-mercs chat-card skill-check">
+  <div class="opposed-header">
+    <h4>Opposed Skill Check</h4>
+  </div>
+
+  <div class="opposed-rolls">
+    <div class="opposed-side attacker-side">
+      <span class="side-name">{{attackerName}}</span>
+      <span class="side-rating">{{attackerRating}} (+{{attackerBonus}})</span>
+      <div class="side-roll">
+        <span class="die-result">{{attackerRoll}}</span>
+        <span class="roll-bonus">+ {{attackerBonus}}</span>
+        <span class="roll-total">= {{attackerTotal}}</span>
+      </div>
+    </div>
+
+    <div class="opposed-vs">VS</div>
+
+    <div class="opposed-side defender-side">
+      <span class="side-name">{{defenderName}}</span>
+      <span class="side-rating">{{defenderRating}} (+{{defenderBonus}})</span>
+      <div class="side-roll">
+        <span class="die-result">{{defenderRoll}}</span>
+        <span class="roll-bonus">+ {{defenderBonus}}</span>
+        <span class="roll-total">= {{defenderTotal}}</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="opposed-result {{#if isTie}}tie{{else}}{{#if isCritical}}critical{{/if}}{{/if}}">
+    {{#if isTie}}
+      <span class="result-label">Tied!</span>
+    {{else}}
+      <span class="result-label">
+        {{winnerName}} wins{{critText}}
+      </span>
+      <span class="result-margin">(by {{difference}})</span>
+    {{/if}}
+  </div>
+</div>
