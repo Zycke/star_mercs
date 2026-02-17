@@ -6,7 +6,7 @@ Star Mercs is a tabletop wargame built as a game system for Foundry VTT. The goa
 
 ## Version
 
-**Current Version: 0.0.6**
+**Current Version: 0.0.7**
 
 - Increment the **patch** number (the last digit) with each update (e.g., 0.0.1 -> 0.0.2 -> 0.0.3).
 - Do **not** roll to 0.1.0, 0.2.0, etc. unless explicitly instructed.
