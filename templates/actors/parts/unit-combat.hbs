@@ -1,0 +1,35 @@
+<div class="combat-status-section">
+  <h3>Combat Status</h3>
+  <div class="combat-status-grid">
+
+    <div class="status-block">
+      <label>Current Order</label>
+      <span class="status-value">{{#if system.currentOrder}}{{system.currentOrder}}{{else}}None{{/if}}</span>
+    </div>
+
+    <div class="status-block">
+      <label>Casualty Penalty</label>
+      <span class="status-value {{#if derived.casualtyPenalty}}penalty{{/if}}">
+        {{#if derived.casualtyPenalty}}-{{derived.casualtyPenalty}} to damage{{else}}None{{/if}}
+      </span>
+    </div>
+
+    <div class="status-block">
+      <label>Readiness Effects</label>
+      <div>
+        {{#if derived.readinessPenalty.accuracy}}
+          <span class="penalty">Accuracy: +1 to hit numbers</span>
+        {{/if}}
+        {{#if derived.readinessPenalty.damage}}
+          <span class="penalty">Damage: -1 to all damage</span>
+        {{/if}}
+        {{#unless derived.readinessPenalty.accuracy}}
+          {{#unless derived.readinessPenalty.damage}}
+            <span class="status-value">No penalties</span>
+          {{/unless}}
+        {{/unless}}
+      </div>
+    </div>
+
+  </div>
+</div>

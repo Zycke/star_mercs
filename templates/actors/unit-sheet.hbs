@@ -1,0 +1,63 @@
+<form class="{{cssClass}} star-mercs sheet actor unit" autocomplete="off">
+
+  {{!-- Header: Unit Name, Image, Rating --}}
+  <header class="sheet-header">
+    <img class="profile-img" src="{{actor.img}}" data-edit="img"
+         title="{{actor.name}}" height="100" width="100"/>
+    <div class="header-fields">
+      <h1 class="unit-name">
+        <input name="name" type="text" value="{{actor.name}}" placeholder="Unit Name"/>
+      </h1>
+      <div class="header-row">
+        <div class="field-group">
+          <label>{{localize "STARMERCS.Rating"}}</label>
+          <select name="system.rating">
+            {{selectOptions ratingChoices selected=system.rating}}
+          </select>
+        </div>
+        <div class="field-group">
+          <label>{{localize "STARMERCS.RatingBonus"}}</label>
+          <span class="derived-value">+{{derived.ratingBonus}}</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  {{!-- Status Warnings --}}
+  {{#if derived.isRouted}}
+    <div class="status-warning routed">ROUTED — Unit removed from play</div>
+  {{/if}}
+  {{#if derived.isDestroyed}}
+    <div class="status-warning destroyed">DESTROYED — Unit eliminated</div>
+  {{/if}}
+
+  {{!-- Navigation Tabs --}}
+  <nav class="sheet-tabs tabs" data-group="primary">
+    <a class="item" data-tab="attributes">{{localize "STARMERCS.Tab.Attributes"}}</a>
+    <a class="item" data-tab="combat">{{localize "STARMERCS.Tab.Combat"}}</a>
+    <a class="item" data-tab="logistics">{{localize "STARMERCS.Tab.Logistics"}}</a>
+  </nav>
+
+  {{!-- Sheet Body --}}
+  <section class="sheet-body">
+
+    {{!-- Attributes Tab --}}
+    <div class="tab" data-group="primary" data-tab="attributes">
+      {{> "systems/star-mercs/templates/actors/parts/unit-attributes.hbs"}}
+      {{> "systems/star-mercs/templates/actors/parts/unit-traits.hbs"}}
+    </div>
+
+    {{!-- Combat Tab --}}
+    <div class="tab" data-group="primary" data-tab="combat">
+      {{> "systems/star-mercs/templates/actors/parts/unit-combat.hbs"}}
+      {{> "systems/star-mercs/templates/actors/parts/unit-weapons.hbs"}}
+      {{> "systems/star-mercs/templates/actors/parts/unit-orders.hbs"}}
+    </div>
+
+    {{!-- Logistics Tab --}}
+    <div class="tab" data-group="primary" data-tab="logistics">
+      {{> "systems/star-mercs/templates/actors/parts/unit-supply.hbs"}}
+    </div>
+
+  </section>
+</form>

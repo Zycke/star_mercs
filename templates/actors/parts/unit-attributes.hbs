@@ -1,0 +1,78 @@
+<div class="attributes-section">
+  <h3>Unit Attributes</h3>
+  <div class="attributes-grid">
+
+    {{!-- Strength --}}
+    <div class="attribute-block">
+      <label>{{localize "STARMERCS.Strength"}}</label>
+      <div class="resource-bar">
+        <input type="number" name="system.strength.value"
+               value="{{system.strength.value}}" min="0" max="{{system.strength.max}}"/>
+        <span class="sep">/</span>
+        <input type="number" name="system.strength.max"
+               value="{{system.strength.max}}" min="1"/>
+      </div>
+      {{#if derived.casualtyPenalty}}
+        <span class="penalty">-{{derived.casualtyPenalty}} damage (casualties)</span>
+      {{/if}}
+    </div>
+
+    {{!-- Readiness --}}
+    <div class="attribute-block">
+      <label>{{localize "STARMERCS.Readiness"}}</label>
+      <div class="resource-bar">
+        <input type="number" name="system.readiness.value"
+               value="{{system.readiness.value}}" min="0" max="10"/>
+        <span class="sep">/</span>
+        <input type="number" name="system.readiness.max"
+               value="{{system.readiness.max}}" min="0" max="10"/>
+      </div>
+      {{#if derived.readinessPenalty.accuracy}}
+        <span class="penalty">+1 accuracy needed</span>
+      {{/if}}
+      {{#if derived.readinessPenalty.damage}}
+        <span class="penalty">-1 damage</span>
+      {{/if}}
+    </div>
+
+    {{!-- Speed --}}
+    <div class="attribute-block">
+      <label>{{localize "STARMERCS.Speed"}}</label>
+      <div class="input-with-suffix">
+        <input type="number" name="system.speed" value="{{system.speed}}" min="0"/>
+        <span class="suffix">hexes</span>
+      </div>
+    </div>
+
+    {{!-- Sensors --}}
+    <div class="attribute-block">
+      <label>{{localize "STARMERCS.Sensors"}}</label>
+      <div class="input-with-suffix">
+        <input type="number" name="system.sensors" value="{{system.sensors}}" min="0"/>
+        <span class="suffix">hexes</span>
+      </div>
+    </div>
+
+    {{!-- Signature --}}
+    <div class="attribute-block">
+      <label>{{localize "STARMERCS.Signature"}}</label>
+      <input type="number" name="system.signature" value="{{system.signature}}"/>
+    </div>
+
+    {{!-- EWAR --}}
+    <div class="attribute-block">
+      <label>{{localize "STARMERCS.EWAR"}}</label>
+      <input type="number" name="system.ewar" value="{{system.ewar}}" min="0"/>
+    </div>
+
+    {{!-- Comms --}}
+    <div class="attribute-block">
+      <label>{{localize "STARMERCS.Comms"}}</label>
+      <div class="input-with-suffix">
+        <input type="number" name="system.comms" value="{{system.comms}}" min="0"/>
+        <span class="suffix">hexes</span>
+      </div>
+    </div>
+
+  </div>
+</div>

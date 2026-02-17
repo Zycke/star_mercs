@@ -1,0 +1,31 @@
+<div class="supply-section">
+  <h3>{{localize "STARMERCS.Supply"}}</h3>
+  <div class="supply-grid">
+
+    <div class="attribute-block">
+      <label>{{localize "STARMERCS.SupplyCurrent"}}</label>
+      <div class="resource-bar">
+        <input type="number" name="system.supply.current"
+               value="{{system.supply.current}}" min="0" max="{{system.supply.capacity}}"/>
+        <span class="sep">/</span>
+        <input type="number" name="system.supply.capacity"
+               value="{{system.supply.capacity}}" min="0"/>
+      </div>
+    </div>
+
+    <div class="attribute-block">
+      <label>{{localize "STARMERCS.SupplyUsage"}}</label>
+      <div class="input-with-suffix">
+        <input type="number" name="system.supply.usage"
+               value="{{system.supply.usage}}" min="0"/>
+        <span class="suffix">per turn</span>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="notes-section">
+    <h3>{{localize "STARMERCS.Notes"}}</h3>
+    <textarea name="system.notes" rows="6" placeholder="Unit notes...">{{system.notes}}</textarea>
+  </div>
+</div>

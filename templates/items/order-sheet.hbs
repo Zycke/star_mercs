@@ -1,0 +1,62 @@
+<form class="{{cssClass}} star-mercs sheet item order" autocomplete="off">
+  <header class="sheet-header">
+    <img class="profile-img" src="{{item.img}}" data-edit="img"
+         title="{{item.name}}" height="48" width="48"/>
+    <h1 class="item-name">
+      <input name="name" type="text" value="{{item.name}}" placeholder="Order Name"/>
+    </h1>
+  </header>
+
+  <section class="sheet-body">
+    <div class="form-row">
+      <div class="form-group">
+        <label>{{localize "STARMERCS.OrderCategory"}}</label>
+        <select name="system.category">
+          {{selectOptions categoryChoices selected=system.category}}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>{{localize "STARMERCS.SupplyModifier"}}</label>
+        <input type="text" name="system.supplyModifier" value="{{system.supplyModifier}}"
+               placeholder="e.g., 2x"/>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>{{localize "STARMERCS.ReadinessCost"}}</label>
+        <input type="number" name="system.readinessCost" value="{{system.readinessCost}}"/>
+      </div>
+
+      <div class="form-group">
+        <label>{{localize "STARMERCS.RequiredTrait"}}</label>
+        <input type="text" name="system.requiredTrait" value="{{system.requiredTrait}}"
+               placeholder="None"/>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group checkbox-group">
+        <label>
+          <input type="checkbox" name="system.allowsMovement"
+                 {{checked system.allowsMovement}}/>
+          Allows Movement
+        </label>
+      </div>
+
+      <div class="form-group checkbox-group">
+        <label>
+          <input type="checkbox" name="system.allowsAttack"
+                 {{checked system.allowsAttack}}/>
+          Allows Attack
+        </label>
+      </div>
+    </div>
+
+    <div class="form-group description-field">
+      <label>{{localize "STARMERCS.Description"}}</label>
+      {{editor enrichedDescription target="system.description" button=true editable=editable}}
+    </div>
+  </section>
+</form>

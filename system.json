@@ -1,0 +1,43 @@
+{
+  "id": "star-mercs",
+  "title": "Star Mercs",
+  "description": "A hex-based tactical wargame system for Foundry VTT.",
+  "version": "0.0.3",
+  "compatibility": {
+    "minimum": "12.331",
+    "verified": "12"
+  },
+  "authors": [
+    {
+      "name": "Star Mercs Team"
+    }
+  ],
+  "esmodules": ["star-mercs.mjs"],
+  "styles": ["star-mercs.css"],
+  "languages": [
+    {
+      "lang": "en",
+      "name": "English",
+      "path": "lang/en.json"
+    }
+  ],
+  "socket": false,
+  "gridDistance": 5,
+  "gridUnits": "km",
+  "primaryTokenAttribute": "strength",
+  "secondaryTokenAttribute": "readiness",
+  "documentTypes": {
+    "Actor": {
+      "unit": {}
+    },
+    "Item": {
+      "weapon": {},
+      "trait": {
+        "htmlFields": ["description"]
+      },
+      "order": {
+        "htmlFields": ["description"]
+      }
+    }
+  }
+}
