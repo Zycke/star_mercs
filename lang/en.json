@@ -86,5 +86,13 @@
   "STARMERCS.Combat.Routed": "ROUTED",
 
   "STARMERCS.SkillCheck": "Skill Check",
-  "STARMERCS.OpposedCheck": "Opposed Skill Check"
+  "STARMERCS.OpposedCheck": "Opposed Skill Check",
+
+  "STARMERCS.Target": "Target",
+  "STARMERCS.AssignTarget": "Assign Target",
+  "STARMERCS.ClearTarget": "Clear Target",
+  "STARMERCS.ClearAllTargets": "Clear All Targets",
+  "STARMERCS.FireAll": "Fire All",
+  "STARMERCS.FireAllTargeted": "Fire All Targeted Weapons",
+  "STARMERCS.NoTargetsAssigned": "No weapons have assigned targets."
 }

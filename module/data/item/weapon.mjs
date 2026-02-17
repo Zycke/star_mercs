@@ -40,7 +40,10 @@ export default class WeaponData extends foundry.abstract.TypeDataModel {
       }),
 
       // Description / notes
-      description: new StringField({ required: false, initial: "" })
+      description: new StringField({ required: false, initial: "" }),
+
+      // Assigned target actor ID for pre-planned attacks
+      targetId: new StringField({ required: false, initial: "" })
     };
   }
 

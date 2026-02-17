@@ -237,6 +237,185 @@ export default class StarMercsActor extends Actor {
   }
 
   /* ---------------------------------------- */
+  /*  Combat: Fire All Targeted Weapons       */
+  /* ---------------------------------------- */
+
+  /**
+   * Fire all weapons that have assigned targets simultaneously.
+   *
+   * Simultaneous resolution per the rules:
+   * 1. All attacks are rolled and damage calculated.
+   * 2. All damage is applied after all rolls are resolved.
+   * 3. Weapon targets are cleared after firing.
+   *
+   * @returns {Promise<void>}
+   */
+  async rollAllAttacks() {
+    // Collect weapons with assigned targets
+    const targetedWeapons = [];
+    for (const item of this.items) {
+      if (item.type === "weapon" && item.system.targetId) {
+        const target = game.actors.get(item.system.targetId);
+        if (target) {
+          targetedWeapons.push({ weapon: item, target });
+        }
+      }
+    }
+
+    if (targetedWeapons.length === 0) {
+      ui.notifications.warn("No weapons have assigned targets.");
+      return;
+    }
+
+    // Phase 1: Resolve all attacks (roll dice + calculate damage, no application yet)
+    const results = [];
+    for (const { weapon, target } of targetedWeapons) {
+      const result = await resolveAttack(weapon, this, target);
+      results.push(result);
+    }
+
+    // Phase 2: Group damage by target for simultaneous application
+    const damageByTarget = new Map();
+    for (const result of results) {
+      if (result.valid && result.hitResult.hit && result.damage) {
+        const targetId = result.target.id;
+        if (!damageByTarget.has(targetId)) {
+          damageByTarget.set(targetId, {
+            target: result.target,
+            totalDamage: 0,
+            hitDamages: []
+          });
+        }
+        const entry = damageByTarget.get(targetId);
+        entry.totalDamage += result.damage.final;
+        entry.hitDamages.push(result.damage.final);
+      }
+    }
+
+    // Apply accumulated damage to each target (simultaneous resolution)
+    const damageResults = new Map();
+    for (const [targetId, { target, totalDamage, hitDamages }] of damageByTarget) {
+      const maxStrength = target.system.strength.max;
+      const threshold = maxStrength * 0.25;
+      let totalReadinessLoss = 0;
+      for (const dmg of hitDamages) {
+        totalReadinessLoss += dmg > threshold ? 2 : 1;
+      }
+
+      const newStrength = Math.max(0, target.system.strength.value - totalDamage);
+      const newReadiness = Math.max(0, target.system.readiness.value - totalReadinessLoss);
+
+      await target.update({
+        "system.strength.value": newStrength,
+        "system.readiness.value": newReadiness
+      });
+
+      damageResults.set(targetId, {
+        newStrength,
+        newReadiness,
+        readinessLost: totalReadinessLoss,
+        destroyed: newStrength <= 0,
+        routed: newStrength > 0 && newReadiness <= 0
+      });
+    }
+
+    // Phase 3: Post individual attack results to chat
+    for (const result of results) {
+      if (!result.valid) {
+        await ChatMessage.create({
+          content: await renderTemplate(
+            "systems/star-mercs/templates/chat/attack-result.hbs",
+            {
+              attackerName: this.name,
+              targetName: result.target.name,
+              weaponName: result.weapon.name,
+              attackString: result.weapon.system.attackString,
+              attackType: result.weapon.system.attackType,
+              invalid: true,
+              invalidReason: result.reason
+            }
+          ),
+          speaker: ChatMessage.getSpeaker({ actor: this })
+        });
+        continue;
+      }
+
+      const templateData = {
+        attackerName: this.name,
+        targetName: result.target.name,
+        weaponName: result.weapon.name,
+        attackString: result.weapon.system.attackString,
+        attackType: result.weapon.system.attackType,
+        invalid: false,
+        roll: result.roll.total,
+        accuracyBase: result.accuracy.base,
+        accuracyEffective: result.accuracy.effective,
+        ewarMod: result.accuracy.ewarMod,
+        readinessMod: result.accuracy.readinessMod,
+        hasAccuracyMods: result.accuracy.ewarMod > 0 || result.accuracy.readinessMod > 0,
+        hitType: result.hitResult.type,
+        hitLabel: HIT_LABELS[result.hitResult.type],
+        isHit: result.hitResult.hit,
+        isCriticalHit: result.hitResult.type === "critical_hit",
+        isCriticalMiss: result.hitResult.type === "critical_miss",
+        isPartial: result.hitResult.type === "partial",
+        damage: result.damage?.final ?? 0,
+        damageBase: result.damage?.base ?? 0,
+        damageModifiers: result.damage?.modifiers ?? [],
+        hasDamageModifiers: (result.damage?.modifiers?.length ?? 0) > 0,
+        targetDestroyed: false,
+        targetRouted: false,
+        targetNewStrength: null,
+        targetNewReadiness: null,
+        readinessLost: 0
+      };
+
+      await ChatMessage.create({
+        content: await renderTemplate(
+          "systems/star-mercs/templates/chat/attack-result.hbs",
+          templateData
+        ),
+        speaker: ChatMessage.getSpeaker({ actor: this }),
+        rolls: [result.roll]
+      });
+    }
+
+    // Phase 4: Post damage summary for each target that took hits
+    for (const [targetId, dmgResult] of damageResults) {
+      const entry = damageByTarget.get(targetId);
+      if (!entry) continue;
+      const target = entry.target;
+
+      let statusHtml = `<div class="star-mercs chat-card fire-all-summary">`;
+      statusHtml += `<div class="summary-header"><i class="fas fa-crosshairs"></i> <strong>${this.name}</strong> &rarr; <strong>${target.name}</strong></div>`;
+      statusHtml += `<div class="summary-damage">Total Damage: <strong>${entry.totalDamage}</strong> (${entry.hitDamages.length} hit${entry.hitDamages.length > 1 ? "s" : ""})</div>`;
+
+      if (dmgResult.destroyed) {
+        statusHtml += `<div class="status-alert destroyed"><i class="fas fa-skull-crossbones"></i> ${target.name} DESTROYED</div>`;
+      } else if (dmgResult.routed) {
+        statusHtml += `<div class="status-alert routed"><i class="fas fa-running"></i> ${target.name} ROUTED</div>`;
+      } else {
+        statusHtml += `<div class="status-update">${target.name}: STR ${dmgResult.newStrength} | RDY ${dmgResult.newReadiness} <span class="readiness-loss">(-${dmgResult.readinessLost} readiness)</span></div>`;
+      }
+      statusHtml += `</div>`;
+
+      await ChatMessage.create({
+        content: statusHtml,
+        speaker: ChatMessage.getSpeaker({ actor: this })
+      });
+    }
+
+    // Phase 5: Clear all weapon targets after firing
+    const clearUpdates = [];
+    for (const { weapon } of targetedWeapons) {
+      clearUpdates.push({ _id: weapon.id, "system.targetId": "" });
+    }
+    if (clearUpdates.length > 0) {
+      await this.updateEmbeddedDocuments("Item", clearUpdates);
+    }
+  }
+
+  /* ---------------------------------------- */
   /*  Combat: Damage Application              */
   /* ---------------------------------------- */
 

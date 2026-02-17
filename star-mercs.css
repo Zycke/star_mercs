@@ -422,6 +422,107 @@
 }
 
 /* ============================= */
+/*  Weapon Targeting UI          */
+/* ============================= */
+
+.star-mercs .weapons-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.star-mercs .weapons-header-actions a {
+  cursor: pointer;
+  font-size: 12px;
+  transition: color 0.15s, background 0.15s;
+  padding: 2px 6px;
+  border-radius: var(--sm-radius);
+}
+
+.star-mercs .fire-all-weapons {
+  color: var(--sm-danger-light);
+  font-weight: 600;
+}
+
+.star-mercs .fire-all-weapons:hover {
+  color: #fff;
+  background: var(--sm-danger);
+}
+
+.star-mercs .clear-all-targets {
+  color: var(--sm-text-muted);
+}
+
+.star-mercs .clear-all-targets:hover {
+  color: var(--sm-text);
+  background: var(--sm-bg-light);
+}
+
+.star-mercs .weapons-section .item-controls,
+.star-mercs .weapons-section .item-controls-header {
+  flex: 0 0 110px;
+}
+
+.star-mercs .item-list .item.has-target {
+  border-left: 2px solid var(--sm-danger-light);
+}
+
+.star-mercs .weapon-target-name {
+  color: var(--sm-danger-light);
+  font-weight: 600;
+  font-size: 11px;
+  max-width: 80px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-block;
+}
+
+.star-mercs .weapon-target-none {
+  color: var(--sm-text-dim);
+}
+
+.star-mercs .item-controls .weapon-assign-target {
+  color: var(--sm-text-dim);
+}
+
+.star-mercs .item-controls .weapon-assign-target:hover {
+  color: var(--sm-danger-light);
+}
+
+.star-mercs .item-controls .weapon-clear-target:hover {
+  color: var(--sm-danger-light);
+}
+
+/* --- Fire All Summary Chat Card --- */
+
+.star-mercs.chat-card.fire-all-summary {
+  border-left: 3px solid var(--sm-danger-light);
+}
+
+.star-mercs.chat-card .summary-header {
+  font-size: 13px;
+  margin-bottom: 4px;
+  color: var(--sm-text);
+}
+
+.star-mercs.chat-card .summary-header i {
+  color: var(--sm-danger-light);
+  margin-right: 4px;
+}
+
+.star-mercs.chat-card .summary-damage {
+  font-size: 14px;
+  margin-bottom: 6px;
+  color: var(--sm-text-muted);
+}
+
+.star-mercs.chat-card .summary-damage strong {
+  color: var(--sm-danger-light);
+  font-size: 16px;
+}
+
+/* ============================= */
 /*  Item Sheet Styles            */
 /* ============================= */
 

@@ -8,7 +8,7 @@ export default class StarMercsUnitSheet extends ActorSheet {
     return foundry.utils.mergeObject(super.defaultOptions, {
       classes: ["star-mercs", "sheet", "actor", "unit"],
       template: "systems/star-mercs/templates/actors/unit-sheet.hbs",
-      width: 680,
+      width: 720,
       height: 720,
       tabs: [{ navSelector: ".sheet-tabs", contentSelector: ".sheet-body", initial: "attributes" }],
       dragDrop: [{ dragSelector: ".item-list .item", dropSelector: null }]
@@ -54,22 +54,46 @@ export default class StarMercsUnitSheet extends ActorSheet {
 
   /**
    * Categorize embedded items into typed arrays for the template.
+   * Resolves weapon targetIds to actor names for display.
    * @param {object} context - The template rendering context.
    */
   _prepareItems(context) {
     const weapons = [];
     const traits = [];
     const orders = [];
+    let hasTargetedWeapons = false;
 
     for (const item of this.actor.items) {
-      if (item.type === "weapon") weapons.push(item);
-      else if (item.type === "trait") traits.push(item);
-      else if (item.type === "order") orders.push(item);
+      if (item.type === "weapon") {
+        // Build weapon display data with resolved target name
+        const weaponData = {
+          _id: item.id,
+          img: item.img,
+          name: item.name,
+          system: item.system,
+          targetName: null,
+          targetId: null
+        };
+
+        const targetId = item.system.targetId;
+        if (targetId) {
+          const targetActor = game.actors.get(targetId);
+          weaponData.targetName = targetActor?.name ?? "Unknown";
+          weaponData.targetId = targetId;
+          hasTargetedWeapons = true;
+        }
+        weapons.push(weaponData);
+      } else if (item.type === "trait") {
+        traits.push(item);
+      } else if (item.type === "order") {
+        orders.push(item);
+      }
     }
 
     context.weapons = weapons;
     context.traits = traits;
     context.orders = orders;
+    context.hasTargetedWeapons = hasTargetedWeapons;
   }
 
   /* ---------------------------------------- */
@@ -87,17 +111,27 @@ export default class StarMercsUnitSheet extends ActorSheet {
     html.on("click", ".item-edit", this._onItemEdit.bind(this));
     html.on("click", ".item-delete", this._onItemDelete.bind(this));
 
-    // Weapon attack roll
+    // Weapon attack roll (single weapon)
     html.on("click", ".weapon-roll", this._onWeaponRoll.bind(this));
+
+    // Weapon targeting
+    html.on("click", ".weapon-assign-target", this._onAssignTarget.bind(this));
+    html.on("click", ".weapon-clear-target", this._onClearTarget.bind(this));
+
+    // Fire all targeted weapons
+    html.on("click", ".fire-all-weapons", this._onFireAll.bind(this));
+
+    // Clear all weapon targets
+    html.on("click", ".clear-all-targets", this._onClearAllTargets.bind(this));
 
     // Post item to chat
     html.on("click", ".item-chat", this._onItemChat.bind(this));
   }
 
-  /**
-   * Create a new embedded item.
-   * @param {Event} event
-   */
+  /* ---------------------------------------- */
+  /*  Item CRUD Handlers                      */
+  /* ---------------------------------------- */
+
   async _onItemCreate(event) {
     event.preventDefault();
     const type = event.currentTarget.dataset.type;
@@ -108,10 +142,6 @@ export default class StarMercsUnitSheet extends ActorSheet {
     return this.actor.createEmbeddedDocuments("Item", [itemData]);
   }
 
-  /**
-   * Open an embedded item's sheet for editing.
-   * @param {Event} event
-   */
   _onItemEdit(event) {
     event.preventDefault();
     const li = event.currentTarget.closest(".item");
@@ -119,10 +149,6 @@ export default class StarMercsUnitSheet extends ActorSheet {
     item?.sheet.render(true);
   }
 
-  /**
-   * Delete an embedded item.
-   * @param {Event} event
-   */
   async _onItemDelete(event) {
     event.preventDefault();
     const li = event.currentTarget.closest(".item");
@@ -130,10 +156,13 @@ export default class StarMercsUnitSheet extends ActorSheet {
     return this.actor.deleteEmbeddedDocuments("Item", [itemId]);
   }
 
+  /* ---------------------------------------- */
+  /*  Weapon Attack Handlers                  */
+  /* ---------------------------------------- */
+
   /**
-   * Roll a weapon attack using the actor's rollAttack method.
-   * If the user has a token targeted, use it as the attack target.
-   * @param {Event} event
+   * Roll a single weapon attack.
+   * Uses the weapon's stored target if set, otherwise falls back to Foundry's targeting.
    */
   async _onWeaponRoll(event) {
     event.preventDefault();
@@ -141,21 +170,88 @@ export default class StarMercsUnitSheet extends ActorSheet {
     const item = this.actor.items.get(li.dataset.itemId);
     if (!item) return;
 
-    // Get the first targeted token's actor (if any)
-    const targets = game.user.targets;
+    // Prefer the weapon's stored target; fall back to Foundry targeting
     let target = null;
-    if (targets.size > 0) {
-      const targetToken = targets.first();
-      target = targetToken.actor;
+    const storedTargetId = item.system.targetId;
+    if (storedTargetId) {
+      target = game.actors.get(storedTargetId);
+    } else {
+      const targets = game.user.targets;
+      if (targets.size > 0) {
+        target = targets.first().actor;
+      }
     }
 
     return this.actor.rollAttack(item, target);
   }
 
   /**
-   * Post an item's details to chat.
-   * @param {Event} event
+   * Assign the currently targeted Foundry token as this weapon's target.
    */
+  async _onAssignTarget(event) {
+    event.preventDefault();
+    const li = event.currentTarget.closest(".item");
+    const itemId = li.dataset.itemId;
+    const item = this.actor.items.get(itemId);
+    if (!item) return;
+
+    const targets = game.user.targets;
+    if (targets.size === 0) {
+      ui.notifications.warn("Select a target token first (click a token while holding the target key).");
+      return;
+    }
+
+    const targetToken = targets.first();
+    const targetActor = targetToken.actor;
+    if (!targetActor) {
+      ui.notifications.warn("Target token has no associated actor.");
+      return;
+    }
+
+    await item.update({ "system.targetId": targetActor.id });
+  }
+
+  /**
+   * Clear a single weapon's assigned target.
+   */
+  async _onClearTarget(event) {
+    event.preventDefault();
+    const li = event.currentTarget.closest(".item");
+    const itemId = li.dataset.itemId;
+    const item = this.actor.items.get(itemId);
+    if (!item) return;
+
+    await item.update({ "system.targetId": "" });
+  }
+
+  /**
+   * Fire all weapons that have assigned targets simultaneously.
+   */
+  async _onFireAll(event) {
+    event.preventDefault();
+    return this.actor.rollAllAttacks();
+  }
+
+  /**
+   * Clear all weapon targets at once.
+   */
+  async _onClearAllTargets(event) {
+    event.preventDefault();
+    const updates = [];
+    for (const item of this.actor.items) {
+      if (item.type === "weapon" && item.system.targetId) {
+        updates.push({ _id: item.id, "system.targetId": "" });
+      }
+    }
+    if (updates.length > 0) {
+      await this.actor.updateEmbeddedDocuments("Item", updates);
+    }
+  }
+
+  /* ---------------------------------------- */
+  /*  Chat Handlers                           */
+  /* ---------------------------------------- */
+
   async _onItemChat(event) {
     event.preventDefault();
     const li = event.currentTarget.closest(".item");
