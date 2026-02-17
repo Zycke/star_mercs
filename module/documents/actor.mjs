@@ -251,13 +251,13 @@ export default class StarMercsActor extends Actor {
    * @returns {Promise<void>}
    */
   async rollAllAttacks() {
-    // Collect weapons with assigned targets
+    // Collect weapons with assigned targets (targetId stores token IDs)
     const targetedWeapons = [];
     for (const item of this.items) {
       if (item.type === "weapon" && item.system.targetId) {
-        const target = game.actors.get(item.system.targetId);
-        if (target) {
-          targetedWeapons.push({ weapon: item, target });
+        const targetToken = canvas?.tokens?.get(item.system.targetId);
+        if (targetToken?.actor) {
+          targetedWeapons.push({ weapon: item, target: targetToken.actor, targetToken });
         }
       }
     }
@@ -269,24 +269,27 @@ export default class StarMercsActor extends Actor {
 
     // Phase 1: Resolve all attacks (roll dice + calculate damage, no application yet)
     const results = [];
-    for (const { weapon, target } of targetedWeapons) {
+    for (const { weapon, target, targetToken } of targetedWeapons) {
       const result = await resolveAttack(weapon, this, target);
+      result.targetTokenId = targetToken.id;
+      result.targetTokenName = targetToken.name;
       results.push(result);
     }
 
-    // Phase 2: Group damage by target for simultaneous application
+    // Phase 2: Group damage by target token for simultaneous application
     const damageByTarget = new Map();
     for (const result of results) {
       if (result.valid && result.hitResult.hit && result.damage) {
-        const targetId = result.target.id;
-        if (!damageByTarget.has(targetId)) {
-          damageByTarget.set(targetId, {
+        const tokenId = result.targetTokenId;
+        if (!damageByTarget.has(tokenId)) {
+          damageByTarget.set(tokenId, {
             target: result.target,
+            targetName: result.targetTokenName,
             totalDamage: 0,
             hitDamages: []
           });
         }
-        const entry = damageByTarget.get(targetId);
+        const entry = damageByTarget.get(tokenId);
         entry.totalDamage += result.damage.final;
         entry.hitDamages.push(result.damage.final);
       }
@@ -327,7 +330,7 @@ export default class StarMercsActor extends Actor {
             "systems/star-mercs/templates/chat/attack-result.hbs",
             {
               attackerName: this.name,
-              targetName: result.target.name,
+              targetName: result.targetTokenName,
               weaponName: result.weapon.name,
               attackString: result.weapon.system.attackString,
               attackType: result.weapon.system.attackType,
@@ -342,7 +345,7 @@ export default class StarMercsActor extends Actor {
 
       const templateData = {
         attackerName: this.name,
-        targetName: result.target.name,
+        targetName: result.targetTokenName,
         weaponName: result.weapon.name,
         attackString: result.weapon.system.attackString,
         attackType: result.weapon.system.attackType,
@@ -381,21 +384,21 @@ export default class StarMercsActor extends Actor {
     }
 
     // Phase 4: Post damage summary for each target that took hits
-    for (const [targetId, dmgResult] of damageResults) {
-      const entry = damageByTarget.get(targetId);
+    for (const [tokenId, dmgResult] of damageResults) {
+      const entry = damageByTarget.get(tokenId);
       if (!entry) continue;
-      const target = entry.target;
+      const targetName = entry.targetName;
 
       let statusHtml = `<div class="star-mercs chat-card fire-all-summary">`;
-      statusHtml += `<div class="summary-header"><i class="fas fa-crosshairs"></i> <strong>${this.name}</strong> &rarr; <strong>${target.name}</strong></div>`;
+      statusHtml += `<div class="summary-header"><i class="fas fa-crosshairs"></i> <strong>${this.name}</strong> &rarr; <strong>${targetName}</strong></div>`;
       statusHtml += `<div class="summary-damage">Total Damage: <strong>${entry.totalDamage}</strong> (${entry.hitDamages.length} hit${entry.hitDamages.length > 1 ? "s" : ""})</div>`;
 
       if (dmgResult.destroyed) {
-        statusHtml += `<div class="status-alert destroyed"><i class="fas fa-skull-crossbones"></i> ${target.name} DESTROYED</div>`;
+        statusHtml += `<div class="status-alert destroyed"><i class="fas fa-skull-crossbones"></i> ${targetName} DESTROYED</div>`;
       } else if (dmgResult.routed) {
-        statusHtml += `<div class="status-alert routed"><i class="fas fa-running"></i> ${target.name} ROUTED</div>`;
+        statusHtml += `<div class="status-alert routed"><i class="fas fa-running"></i> ${targetName} ROUTED</div>`;
       } else {
-        statusHtml += `<div class="status-update">${target.name}: STR ${dmgResult.newStrength} | RDY ${dmgResult.newReadiness} <span class="readiness-loss">(-${dmgResult.readinessLost} readiness)</span></div>`;
+        statusHtml += `<div class="status-update">${targetName}: STR ${dmgResult.newStrength} | RDY ${dmgResult.newReadiness} <span class="readiness-loss">(-${dmgResult.readinessLost} readiness)</span></div>`;
       }
       statusHtml += `</div>`;
 

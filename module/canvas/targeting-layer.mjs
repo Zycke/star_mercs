@@ -84,13 +84,8 @@ export default class TargetingArrowLayer extends PIXI.Container {
       }
 
       for (const [targetId, weapons] of weaponsByTarget) {
-        const targetActor = game.actors.get(targetId);
-        if (!targetActor) continue;
-
-        // Find target token on the current scene
-        const targetTokens = targetActor.getActiveTokens();
-        if (targetTokens.length === 0) continue;
-        const targetToken = targetTokens[0];
+        const targetToken = canvas.tokens.get(targetId);
+        if (!targetToken) continue;
 
         // Compute perpendicular offsets for multiple arrows to same target
         const count = weapons.length;
