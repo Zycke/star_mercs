@@ -966,3 +966,118 @@
   color: var(--sm-text-dim);
   margin-left: 4px;
 }
+
+/* ============================= */
+/*  Phase Indicator              */
+/* ============================= */
+
+.star-mercs .phase-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  margin-bottom: 10px;
+  border-radius: var(--sm-radius);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-size: 12px;
+}
+
+.star-mercs .phase-indicator i {
+  font-size: 14px;
+}
+
+.star-mercs .phase-indicator.phase-preparation {
+  background: #2a3a1a;
+  border: 1px solid #4a6a2a;
+  color: #8cc63f;
+}
+
+.star-mercs .phase-indicator.phase-orders {
+  background: #1a2a3a;
+  border: 1px solid #2a4a6a;
+  color: #4ac6ff;
+}
+
+.star-mercs .phase-indicator.phase-tactical {
+  background: #3a1a1a;
+  border: 1px solid #6a2a2a;
+  color: #ff6644;
+}
+
+.star-mercs .phase-indicator.phase-consolidation {
+  background: #2a2a1a;
+  border: 1px solid #5a5a2a;
+  color: #c9a227;
+}
+
+/* Order dropdown in Orders phase */
+.star-mercs .order-select {
+  width: 100%;
+  font-size: 13px;
+}
+
+/* Order flags (movement/attack icons) */
+.star-mercs .order-flags {
+  display: inline-flex;
+  gap: 4px;
+  margin-left: 6px;
+  font-size: 11px;
+}
+
+.star-mercs .order-flags .fa-running,
+.star-mercs .order-flags .fa-crosshairs {
+  color: var(--sm-primary-light);
+}
+
+.star-mercs .order-flags .fa-ban,
+.star-mercs .order-flags .fa-shield-alt {
+  color: var(--sm-danger-light);
+}
+
+/* Phase announcement chat message */
+.star-mercs.phase-announcement {
+  text-align: center;
+  padding: 8px;
+  background: var(--sm-bg-medium);
+  border: 1px solid var(--sm-border);
+  border-radius: var(--sm-radius-lg);
+}
+
+.star-mercs.phase-announcement h3 {
+  margin: 0;
+  font-size: 15px;
+  color: var(--sm-accent);
+}
+
+/* Combat tracker phase display */
+.star-mercs-phase-display {
+  text-align: center;
+  padding: 6px 8px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-size: 13px;
+  border-bottom: 1px solid var(--sm-border);
+}
+
+.star-mercs-phase-display.phase-preparation {
+  background: #2a3a1a;
+  color: #8cc63f;
+}
+
+.star-mercs-phase-display.phase-orders {
+  background: #1a2a3a;
+  color: #4ac6ff;
+}
+
+.star-mercs-phase-display.phase-tactical {
+  background: #3a1a1a;
+  color: #ff6644;
+}
+
+.star-mercs-phase-display.phase-consolidation {
+  background: #2a2a1a;
+  color: #c9a227;
+}

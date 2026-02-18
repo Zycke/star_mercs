@@ -24,6 +24,7 @@ Hooks.once("init", () => {
   game.starmercs = {
     StarMercsActor: documents.StarMercsActor,
     StarMercsItem: documents.StarMercsItem,
+    StarMercsCombat: documents.StarMercsCombat,
     combat,
     dice
   };
@@ -34,6 +35,7 @@ Hooks.once("init", () => {
   // --- Register Document Classes ---
   CONFIG.Actor.documentClass = documents.StarMercsActor;
   CONFIG.Item.documentClass = documents.StarMercsItem;
+  CONFIG.Combat.documentClass = documents.StarMercsCombat;
 
   // --- Register Data Models ---
   CONFIG.Actor.dataModels.unit = dataModels.actor.UnitData;
@@ -126,10 +128,56 @@ Hooks.on("refreshToken", () => {
   game.starmercs?.targetingArrowLayer?.drawArrows();
 });
 
-/** Redraw arrows when a token's position changes (v12 has no moveToken hook). */
+/**
+ * Enforce movement restrictions based on the current combat phase and order.
+ * Blocks token position changes when movement is not allowed.
+ */
+Hooks.on("preUpdateToken", (tokenDoc, changes, options, userId) => {
+  if (!("x" in changes) && !("y" in changes)) return true;
+
+  const combat = game.combat;
+  if (!combat?.started) return true;
+
+  const actor = tokenDoc.actor;
+  if (!actor || actor.type !== "unit") return true;
+
+  // Phase/order restriction check
+  const moveCheck = combat.canMove(actor);
+  if (!moveCheck.allowed) {
+    ui.notifications.warn(moveCheck.reason);
+    return false;
+  }
+
+  // Tactical phase: enforce speed limit
+  if (combat.phase === "tactical") {
+    const movementUsed = tokenDoc.getFlag("star-mercs", "movementUsed") ?? 0;
+    const speed = actor.system.speed ?? 0;
+    if (speed > 0 && movementUsed >= speed) {
+      ui.notifications.warn(
+        game.i18n.format("STARMERCS.Phase.MovementExhausted", { speed })
+      );
+      return false;
+    }
+  }
+
+  return true;
+});
+
+/** Redraw arrows and track movement on token position changes. */
 Hooks.on("updateToken", (tokenDoc, changes) => {
+  // Redraw targeting arrows
   if ("x" in changes || "y" in changes || "elevation" in changes) {
     game.starmercs?.targetingArrowLayer?.drawArrows();
+  }
+
+  // Track movement during tactical phase
+  if (("x" in changes || "y" in changes) && game.combat?.started
+      && game.combat.phase === "tactical") {
+    const actor = tokenDoc.actor;
+    if (actor?.type === "unit") {
+      const movementUsed = tokenDoc.getFlag("star-mercs", "movementUsed") ?? 0;
+      tokenDoc.setFlag("star-mercs", "movementUsed", movementUsed + 1);
+    }
   }
 });
 
@@ -149,6 +197,69 @@ Hooks.on("createItem", (item) => {
 
 Hooks.on("deleteItem", (item) => {
   if (item.type === "weapon") game.starmercs?.targetingArrowLayer?.drawArrows();
+});
+
+/* ============================================ */
+/*  Combat Phase Hooks                         */
+/* ============================================ */
+
+/**
+ * When the combat phase changes, reset movement counters (on tactical entry)
+ * and re-render all open unit sheets so the order dropdown updates.
+ */
+Hooks.on("updateCombat", (combat, changes) => {
+  if (!foundry.utils.hasProperty(changes, "flags.star-mercs.phase")) return;
+  const newPhase = foundry.utils.getProperty(changes, "flags.star-mercs.phase");
+
+  // Reset movement counters when entering tactical phase
+  if (newPhase === "tactical") {
+    for (const combatant of combat.combatants) {
+      const token = combatant.token;
+      if (token) {
+        token.setFlag("star-mercs", "movementUsed", 0);
+      }
+    }
+  }
+
+  // Re-render all open unit sheets so phase indicators and order dropdown update
+  for (const app of Object.values(ui.windows)) {
+    if (app instanceof ActorSheet && app.actor?.type === "unit") {
+      app.render(false);
+    }
+  }
+});
+
+/**
+ * Inject the current phase display into the Combat Tracker sidebar.
+ */
+Hooks.on("renderCombatTracker", (app, html, data) => {
+  const combat = game.combat;
+  if (!combat?.started) return;
+  if (!(combat instanceof documents.StarMercsCombat)) return;
+
+  const phaseLabel = combat.phaseLabel;
+  const phase = combat.phase;
+
+  const phaseHtml = `
+    <div class="star-mercs-phase-display phase-${phase}">
+      <i class="fas fa-flag"></i>
+      Round ${combat.round} &mdash; ${phaseLabel}
+    </div>
+  `;
+
+  // Insert after the combat tracker header
+  const header = html.find("#combat-round");
+  if (header.length) {
+    html.find(".star-mercs-phase-display").remove();
+    header.after(phaseHtml);
+  }
+
+  // Rename "Next Turn" button to "Next Phase"
+  const nextTurnBtn = html.find('a[data-control="nextTurn"]');
+  if (nextTurnBtn.length) {
+    nextTurnBtn.attr("title", "Next Phase");
+    nextTurnBtn.find("i").attr("title", "Next Phase");
+  }
 });
 
 /** Add the targeting arrows toggle button to the scene controls. */

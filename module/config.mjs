@@ -42,6 +42,11 @@ STARMERCS.phases = {
 };
 
 /**
+ * Ordered array of phase keys for sequencing.
+ */
+STARMERCS.phaseOrder = ["preparation", "orders", "tactical", "consolidation"];
+
+/**
  * Terrain types — labels for dropdowns.
  */
 STARMERCS.terrainTypes = {

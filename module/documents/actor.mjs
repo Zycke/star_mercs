@@ -55,6 +55,20 @@ export default class StarMercsActor extends Actor {
   }
 
   /* ---------------------------------------- */
+  /*  Combat: Phase Enforcement               */
+  /* ---------------------------------------- */
+
+  /**
+   * Check whether this actor can attack in the current combat state.
+   * @returns {{allowed: boolean, reason: string|null}}
+   */
+  _checkAttackAllowed() {
+    const combat = game.combat;
+    if (!combat?.started) return { allowed: true, reason: null };
+    return combat.canAttack(this);
+  }
+
+  /* ---------------------------------------- */
   /*  Combat: Attack Roll                     */
   /* ---------------------------------------- */
 
@@ -71,6 +85,13 @@ export default class StarMercsActor extends Actor {
    * @returns {Promise<ChatMessage>}
    */
   async rollAttack(weapon, target = null) {
+    // Phase/order enforcement
+    const attackCheck = this._checkAttackAllowed();
+    if (!attackCheck.allowed) {
+      ui.notifications.warn(attackCheck.reason);
+      return null;
+    }
+
     // --- Targeted attack: full pipeline ---
     if (target) {
       return this._rollTargetedAttack(weapon, target);
@@ -251,6 +272,13 @@ export default class StarMercsActor extends Actor {
    * @returns {Promise<void>}
    */
   async rollAllAttacks() {
+    // Phase/order enforcement
+    const attackCheck = this._checkAttackAllowed();
+    if (!attackCheck.allowed) {
+      ui.notifications.warn(attackCheck.reason);
+      return;
+    }
+
     // Collect weapons with assigned targets (targetId stores token IDs)
     const targetedWeapons = [];
     for (const item of this.items) {
