@@ -1,10 +1,55 @@
 <div class="combat-status-section">
   <h3>Combat Status</h3>
+
+  {{!-- Phase indicator (only shown during active combat) --}}
+  {{#if combatActive}}
+    <div class="phase-indicator phase-{{currentPhase}}">
+      <i class="fas fa-flag"></i>
+      <span class="phase-label">{{phaseLabel}}</span>
+    </div>
+  {{/if}}
+
   <div class="combat-status-grid">
 
-    <div class="status-block">
-      <label>Current Order</label>
-      <span class="status-value">{{#if system.currentOrder}}{{system.currentOrder}}{{else}}None{{/if}}</span>
+    {{!-- Order Assignment --}}
+    <div class="status-block order-block">
+      <label>{{localize "STARMERCS.CurrentOrder"}}</label>
+      {{#if isOrdersPhase}}
+        {{!-- Interactive dropdown during Orders phase --}}
+        <select class="order-select">
+          <option value="">-- Select Order --</option>
+          {{#each availableOrders as |order|}}
+            <option value="{{order.name}}"
+              {{#if (eq order.name ../currentOrderName)}}selected{{/if}}>
+              {{order.name}}
+              {{#if (eq order.category "special")}}(Special){{/if}}
+            </option>
+          {{/each}}
+        </select>
+      {{else}}
+        {{!-- Read-only display outside Orders phase --}}
+        <span class="status-value">
+          {{#if currentOrderName}}
+            {{currentOrderName}}
+            {{#if currentOrderItem}}
+              <span class="order-flags">
+                {{#if currentOrderItem.system.allowsMovement}}
+                  <i class="fas fa-running" title="Movement Allowed"></i>
+                {{else}}
+                  <i class="fas fa-ban" title="No Movement"></i>
+                {{/if}}
+                {{#if currentOrderItem.system.allowsAttack}}
+                  <i class="fas fa-crosshairs" title="Attack Allowed"></i>
+                {{else}}
+                  <i class="fas fa-shield-alt" title="No Attack"></i>
+                {{/if}}
+              </span>
+            {{/if}}
+          {{else}}
+            None
+          {{/if}}
+        </span>
+      {{/if}}
     </div>
 
     <div class="status-block">

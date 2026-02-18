@@ -2,7 +2,7 @@
   "id": "star-mercs",
   "title": "Star Mercs",
   "description": "A hex-based tactical wargame system for Foundry VTT.",
-  "version": "0.0.13",
+  "version": "0.0.14",
   "url": "https://github.com/Zycke/star_mercs",
   "manifest": "https://raw.githubusercontent.com/Zycke/star_mercs/main/system.json",
   "download": "https://github.com/Zycke/star_mercs/archive/refs/heads/main.zip",

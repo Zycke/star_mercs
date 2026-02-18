@@ -70,6 +70,11 @@
   "STARMERCS.Phase.Orders": "Orders",
   "STARMERCS.Phase.Tactical": "Tactical",
   "STARMERCS.Phase.Consolidation": "Consolidation",
+  "STARMERCS.Phase.NoMovement": "Movement is not allowed during the {phase} phase.",
+  "STARMERCS.Phase.NoAttack": "Attacks are not allowed during the {phase} phase.",
+  "STARMERCS.Phase.OrderBlocksMovement": "Your current order ({order}) does not allow movement.",
+  "STARMERCS.Phase.OrderBlocksAttack": "Your current order ({order}) does not allow attacks.",
+  "STARMERCS.Phase.MovementExhausted": "This unit has used all {speed} hexes of movement this phase.",
 
   "STARMERCS.Terrain.Forest": "Forest",
   "STARMERCS.Terrain.Plain": "Plain",

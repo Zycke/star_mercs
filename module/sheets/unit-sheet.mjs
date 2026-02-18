@@ -49,6 +49,31 @@ export default class StarMercsUnitSheet extends ActorSheet {
     // Organize embedded items by type
     this._prepareItems(context);
 
+    // Phase-aware context
+    const combat = game.combat;
+    context.combatActive = combat?.started ?? false;
+    context.currentPhase = combat?.phase ?? null;
+    context.phaseLabel = combat?.phaseLabel ?? null;
+    context.isOrdersPhase = combat?.phase === "orders";
+    context.isTacticalPhase = combat?.phase === "tactical";
+
+    // Available orders for dropdown (from embedded order items)
+    context.availableOrders = this.actor.items
+      .filter(i => i.type === "order")
+      .map(order => ({
+        id: order.id,
+        name: order.name,
+        category: order.system.category,
+        allowsMovement: order.system.allowsMovement,
+        allowsAttack: order.system.allowsAttack
+      }));
+
+    // Currently selected order
+    context.currentOrderName = this.actor.system.currentOrder || "";
+    context.currentOrderItem = this.actor.items.find(
+      i => i.type === "order" && i.name === context.currentOrderName
+    ) || null;
+
     return context;
   }
 
@@ -126,6 +151,9 @@ export default class StarMercsUnitSheet extends ActorSheet {
 
     // Post item to chat
     html.on("click", ".item-chat", this._onItemChat.bind(this));
+
+    // Order assignment dropdown (Orders phase)
+    html.on("change", ".order-select", this._onOrderSelect.bind(this));
   }
 
   /* ---------------------------------------- */
@@ -246,6 +274,19 @@ export default class StarMercsUnitSheet extends ActorSheet {
     if (updates.length > 0) {
       await this.actor.updateEmbeddedDocuments("Item", updates);
     }
+  }
+
+  /* ---------------------------------------- */
+  /*  Order Assignment                        */
+  /* ---------------------------------------- */
+
+  /**
+   * Handle order selection from the dropdown during Orders phase.
+   */
+  async _onOrderSelect(event) {
+    event.preventDefault();
+    const selectedOrderName = event.currentTarget.value;
+    await this.actor.update({ "system.currentOrder": selectedOrderName });
   }
 
   /* ---------------------------------------- */
