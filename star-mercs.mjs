@@ -153,18 +153,30 @@ Hooks.on("deleteItem", (item) => {
 
 /** Add the targeting arrows toggle button to the scene controls. */
 Hooks.on("getSceneControlButtons", (controls) => {
-  const tokenControls = controls.find(c => c.name === "token");
+  // v13: controls is an object keyed by name; v12: controls is an array
+  const isV13 = !Array.isArray(controls);
+  const tokenControls = isV13 ? controls.tokens : controls.find(c => c.name === "token");
   if (!tokenControls) return;
 
-  tokenControls.tools.push({
+  const tool = {
     name: "targetingArrows",
     title: "STARMERCS.Controls.TargetingArrows",
     icon: "fas fa-location-arrow",
     visible: true,
     toggle: true,
     active: game.settings.get("star-mercs", "showTargetingArrows"),
+    onChange: (event, active) => {
+      game.settings.set("star-mercs", "showTargetingArrows", active);
+    },
     onClick: (toggled) => {
       game.settings.set("star-mercs", "showTargetingArrows", toggled);
     }
-  });
+  };
+
+  if (isV13) {
+    tool.order = Object.keys(tokenControls.tools).length;
+    tokenControls.tools.targetingArrows = tool;
+  } else {
+    tokenControls.tools.push(tool);
+  }
 });
