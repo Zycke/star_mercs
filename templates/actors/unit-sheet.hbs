@@ -52,7 +52,7 @@
         {{#if activeTraits.length}}
           <div class="active-traits-list">
             {{#each activeTraits as |trait|}}
-              <span class="active-trait-badge" title="{{trait.system.passive}}">
+              <span class="active-trait-badge" title="{{localizeConfig "traitModes" trait.system.passive}}">
                 {{trait.name}}{{#if trait.system.traitValue}}<span class="trait-bracket">[{{trait.system.traitValue}}]</span>{{/if}}
               </span>
             {{/each}}

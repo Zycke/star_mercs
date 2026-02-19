@@ -21,7 +21,7 @@
           <img src="{{order.img}}" width="24" height="24"/>
           {{order.name}}
         </span>
-        <span class="item-detail">{{order.system.category}}</span>
+        <span class="item-detail">{{localizeConfig "orderCategories" order.system.category}}</span>
         <span class="item-detail">{{order.system.supplyModifier}}</span>
         <span class="item-detail">
           {{#if order.system.readinessCost}}{{order.system.readinessCost}}{{else}}—{{/if}}

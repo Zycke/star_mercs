@@ -36,6 +36,30 @@
             </button>
           {{/if}}
         {{/if}}
+        {{#if orderDetails}}
+          <div class="order-details-box">
+            <div class="order-detail-row">
+              <span class="order-detail-label">{{localize "STARMERCS.OrderDetail.Attack"}}</span>
+              <span class="order-detail-value {{#if orderDetails.allowsAttack}}detail-allowed{{else}}detail-not-allowed{{/if}}">
+                {{#if orderDetails.allowsAttack}}{{localize "STARMERCS.OrderDetail.Allowed"}}{{else}}{{localize "STARMERCS.OrderDetail.NotAllowed"}}{{/if}}
+              </span>
+            </div>
+            <div class="order-detail-row">
+              <span class="order-detail-label">{{localize "STARMERCS.OrderDetail.Movement"}}</span>
+              <span class="order-detail-value {{#if orderDetails.allowsMovement}}detail-allowed{{else}}detail-not-allowed{{/if}}">
+                {{#if orderDetails.allowsMovement}}Up to {{orderDetails.speed}} hexes{{else}}{{localize "STARMERCS.OrderDetail.NoMovement"}}{{/if}}
+              </span>
+            </div>
+            <div class="order-detail-row">
+              <span class="order-detail-label">{{localize "STARMERCS.OrderDetail.ReadinessCost"}}</span>
+              <span class="order-detail-value">{{orderDetails.readinessCost}} RDY</span>
+            </div>
+            <div class="order-detail-row">
+              <span class="order-detail-label">{{localize "STARMERCS.OrderDetail.SupplyMod"}}</span>
+              <span class="order-detail-value">{{orderDetails.supplyModifier}}</span>
+            </div>
+          </div>
+        {{/if}}
       {{else}}
         {{!-- Read-only display outside Orders phase --}}
         <span class="status-value">
