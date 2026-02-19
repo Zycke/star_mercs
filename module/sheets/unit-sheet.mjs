@@ -68,13 +68,24 @@ export default class StarMercsUnitSheet extends ActorSheet {
     context.isOrdersPhase = combat?.phase === "orders";
     context.isTacticalPhase = combat?.phase === "tactical";
 
-    // Available orders from config (filtered by trait requirements and supply)
+    // Available orders from config (filtered by trait requirements, supply, and morale status)
     const allOrders = CONFIG.STARMERCS.orders ?? {};
     const hasNoSupply = (this.actor.system.supply?.current ?? 1) <= 0;
     const zeroSupplyOrders = ["hold", "move", "withdraw"];
 
+    // Check Breaking/Broken status from token flags
+    const activeToken = this.actor.getActiveTokens()?.[0];
+    const isBreaking = activeToken?.document?.getFlag("star-mercs", "breaking") ?? false;
+    const isBroken = activeToken?.document?.getFlag("star-mercs", "broken") ?? false;
+    const breakingOrders = ["hold", "withdraw"];
+    context.isBreaking = isBreaking;
+    context.isBroken = isBroken;
+    context.isDisordered = activeToken?.document?.getFlag("star-mercs", "disordered") ?? false;
+
     context.availableOrders = Object.entries(allOrders)
       .filter(([key, data]) => {
+        // Breaking/Broken units can only Hold or Withdraw
+        if ((isBreaking || isBroken) && !breakingOrders.includes(key)) return false;
         // Special orders require a trait
         if (data.category === "special" && data.requiredTrait) {
           if (!this.actor.hasTrait(data.requiredTrait)) return false;

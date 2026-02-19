@@ -29,8 +29,8 @@ export default class UnitData extends foundry.abstract.TypeDataModel {
         max: new NumberField({ required: true, integer: true, min: 1, initial: 10 })
       }),
       readiness: new SchemaField({
-        value: new NumberField({ required: true, integer: true, min: 0, initial: 5 }),
-        max: new NumberField({ required: true, integer: true, min: 0, initial: 5 })
+        value: new NumberField({ required: true, integer: true, min: 0, initial: 10 }),
+        max: new NumberField({ required: true, integer: true, min: 0, initial: 10 })
       }),
 
       // --- Movement ---
@@ -76,8 +76,8 @@ export default class UnitData extends foundry.abstract.TypeDataModel {
     this.ratingBonus = ratingBonuses[this.rating] ?? 0;
 
     // Readiness pool size determined by rank
-    const readinessPoolSizes = { green: 5, trained: 8, experienced: 10, veteran: 12, elite: 15 };
-    const poolSize = readinessPoolSizes[this.rating] ?? 5;
+    const readinessPoolSizes = { green: 10, trained: 13, experienced: 15, veteran: 17, elite: 20 };
+    const poolSize = readinessPoolSizes[this.rating] ?? 10;
     this.readiness.max = poolSize;
 
     // Cap current readiness to max

@@ -174,6 +174,21 @@
   border: 1px solid var(--sm-danger);
 }
 
+.star-mercs .status-warning.breaking {
+  background: #8b6914;
+  color: #fff;
+}
+
+.star-mercs .status-warning.broken {
+  background: #6b3030;
+  color: #fff;
+}
+
+.star-mercs .status-warning.disordered {
+  background: #6b5b3b;
+  color: #fff;
+}
+
 /* ============================= */
 /*  Tabs                         */
 /* ============================= */
@@ -1325,6 +1340,11 @@
   font-size: 12px;
   color: var(--sm-text-dim);
   margin-bottom: 2px;
+}
+
+/* Withdraw morale chat card */
+.star-mercs.chat-card.withdraw-morale {
+  border-left: 3px solid #5577aa;
 }
 
 /* ============================= */

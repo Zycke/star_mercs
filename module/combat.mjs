@@ -69,9 +69,18 @@ export function calculateAccuracy(weapon, attacker, target = null) {
   // EWAR: target's EWAR increases the accuracy threshold (harder to hit)
   const ewarMod = target ? (target.system.ewar ?? 0) : 0;
 
-  const effective = Math.max(2, Math.min(10, base - accurateMod + inaccurateMod + readinessMod + ewarMod));
+  // Disordered target: -1 to threshold (easier to hit)
+  let disorderedMod = 0;
+  if (target) {
+    const targetToken = canvas?.tokens?.placeables.find(t => t.actor === target);
+    if (targetToken?.document?.getFlag("star-mercs", "disordered")) {
+      disorderedMod = -1;
+    }
+  }
 
-  return { effective, base, readinessMod, ewarMod, accurateMod, inaccurateMod };
+  const effective = Math.max(2, Math.min(10, base - accurateMod + inaccurateMod + readinessMod + ewarMod + disorderedMod));
+
+  return { effective, base, readinessMod, ewarMod, accurateMod, inaccurateMod, disorderedMod };
 }
 
 /**
@@ -154,6 +163,13 @@ export function calculateDamage(weapon, attacker, target, hitType) {
   if (target.system.currentOrder === "assault") {
     damage += 1;
     modifiers.push({ label: "Target assaulting (+1 incoming)", value: +1 });
+  }
+
+  // Disordered target (failed withdraw morale): +1 damage
+  const targetToken = canvas?.tokens?.placeables.find(t => t.actor === target);
+  if (targetToken?.document?.getFlag("star-mercs", "disordered")) {
+    damage += 1;
+    modifiers.push({ label: "Target disordered (+1)", value: +1 });
   }
 
   // Area weapon trait: +1 damage vs Infantry
