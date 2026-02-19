@@ -25,6 +25,8 @@ export default class TargetingArrowLayer extends PIXI.Container {
   static ARROWHEAD_ANGLE = Math.PI / 6; // 30 degrees
   static ARROW_ALPHA = 0.8;
   static MULTI_ARROW_OFFSET = 6; // Perpendicular pixel offset for stacked arrows
+  static MOVE_ARROW_COLOR = 0x33FF33; // Green for movement destinations
+  static MOVE_ARROW_WIDTH = 4;
 
   /* ---------------------------------------- */
   /*  Public API                              */
@@ -50,6 +52,9 @@ export default class TargetingArrowLayer extends PIXI.Container {
     for (const { attackerCenter, targetCenter, color, offset } of arrowData) {
       this._drawArrow(attackerCenter, targetCenter, color, offset);
     }
+
+    // Draw movement destination arrows (green)
+    this._drawMoveDestinationArrows();
   }
 
   /* ---------------------------------------- */
@@ -168,5 +173,27 @@ export default class TargetingArrowLayer extends PIXI.Container {
     g.lineTo(cx, cy);
     g.closePath();
     g.endFill();
+  }
+
+  /* ---------------------------------------- */
+  /*  Movement Destination Arrows             */
+  /* ---------------------------------------- */
+
+  /**
+   * Draw green dashed arrows from tokens to their planned movement destinations.
+   * Destinations are stored as token flags during the Orders phase.
+   * @private
+   */
+  _drawMoveDestinationArrows() {
+    if (!canvas?.tokens?.placeables) return;
+
+    for (const token of canvas.tokens.placeables) {
+      const dest = token.document.getFlag("star-mercs", "moveDestination");
+      if (!dest) continue;
+
+      const from = token.center;
+      const to = { x: dest.x, y: dest.y };
+      this._drawArrow(from, to, TargetingArrowLayer.MOVE_ARROW_COLOR, 0);
+    }
   }
 }

@@ -32,6 +32,82 @@ STARMERCS.orderCategories = {
 };
 
 /**
+ * Standard orders available to all units.
+ * Special orders require a matching trait.
+ *
+ * readinessCost: readiness deducted during consolidation (negative = loss)
+ * allowsMovement: unit may move during tactical phase
+ * allowsAttack: unit may attack during tactical phase
+ * supplyModifier: multiplier string for supply consumption
+ */
+STARMERCS.orders = {
+  hold: {
+    label: "STARMERCS.Order.Hold",
+    category: "standard",
+    allowsMovement: false,
+    allowsAttack: true,
+    readinessCost: 0,
+    supplyModifier: "1x",
+    description: "Unit holds position and engages targets."
+  },
+  advance: {
+    label: "STARMERCS.Order.Advance",
+    category: "standard",
+    allowsMovement: true,
+    allowsAttack: true,
+    readinessCost: -1,
+    supplyModifier: "1x",
+    description: "Unit moves toward the enemy and engages."
+  },
+  dig_in: {
+    label: "STARMERCS.Order.DigIn",
+    category: "standard",
+    allowsMovement: false,
+    allowsAttack: false,
+    readinessCost: 1,
+    supplyModifier: "1x",
+    description: "Unit fortifies position and recovers readiness."
+  },
+  withdraw: {
+    label: "STARMERCS.Order.Withdraw",
+    category: "standard",
+    allowsMovement: true,
+    allowsAttack: false,
+    readinessCost: -1,
+    supplyModifier: "1x",
+    description: "Unit retreats from combat. Movement away from enemy."
+  },
+  recon: {
+    label: "STARMERCS.Order.Recon",
+    category: "standard",
+    allowsMovement: true,
+    allowsAttack: false,
+    readinessCost: -1,
+    supplyModifier: "1x",
+    description: "Unit scouts ahead. May reveal hidden enemies."
+  },
+  assault: {
+    label: "STARMERCS.Order.Assault",
+    category: "special",
+    requiredTrait: "Assault",
+    allowsMovement: true,
+    allowsAttack: true,
+    readinessCost: -2,
+    supplyModifier: "2x",
+    description: "Aggressive charge into enemy positions."
+  },
+  overwatch: {
+    label: "STARMERCS.Order.Overwatch",
+    category: "standard",
+    allowsMovement: false,
+    allowsAttack: true,
+    readinessCost: -1,
+    supplyModifier: "1x",
+    description: "Unit watches an area and fires on enemies that enter."
+  }
+};
+
+/**
  * Turn phases.
  */
 STARMERCS.phases = {

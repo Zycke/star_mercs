@@ -63,7 +63,11 @@
       {{!-- Target status after damage --}}
       {{#if targetName}}
         <div class="target-status">
-          {{#if targetDestroyed}}
+          {{#if damagePending}}
+            <div class="status-update pending">
+              <i class="fas fa-clock"></i> {{localize "STARMERCS.Phase.DamagePending"}}
+            </div>
+          {{else if targetDestroyed}}
             <div class="status-alert destroyed">
               <i class="fas fa-skull-crossbones"></i> {{targetName}} DESTROYED
             </div>

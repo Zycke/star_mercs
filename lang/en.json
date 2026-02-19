@@ -75,6 +75,15 @@
   "STARMERCS.Phase.OrderBlocksMovement": "Your current order ({order}) does not allow movement.",
   "STARMERCS.Phase.OrderBlocksAttack": "Your current order ({order}) does not allow attacks.",
   "STARMERCS.Phase.MovementExhausted": "This unit has used all {speed} hexes of movement this phase.",
+  "STARMERCS.Phase.DamagePending": "Damage pending — applied in Consolidation",
+
+  "STARMERCS.Order.Hold": "Hold",
+  "STARMERCS.Order.Advance": "Advance",
+  "STARMERCS.Order.DigIn": "Dig In",
+  "STARMERCS.Order.Withdraw": "Withdraw",
+  "STARMERCS.Order.Recon": "Recon",
+  "STARMERCS.Order.Assault": "Assault",
+  "STARMERCS.Order.Overwatch": "Overwatch",
 
   "STARMERCS.Terrain.Forest": "Forest",
   "STARMERCS.Terrain.Plain": "Plain",
