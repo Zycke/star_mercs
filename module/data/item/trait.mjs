@@ -1,4 +1,4 @@
-const { NumberField, StringField, HTMLField } = foundry.data.fields;
+const { BooleanField, NumberField, StringField, HTMLField } = foundry.data.fields;
 
 /**
  * Data model for trait items.
@@ -28,7 +28,10 @@ export default class TraitData extends foundry.abstract.TypeDataModel {
           conditional: "STARMERCS.TraitMode.Conditional"
         },
         label: "STARMERCS.TraitMode"
-      })
+      }),
+
+      // Whether this trait is currently activated (toggled via checkbox on the unit sheet)
+      active: new BooleanField({ required: true, initial: false, label: "STARMERCS.TraitActive" })
     };
   }
 

@@ -24,6 +24,21 @@
 
   </div>
 
+  {{!-- Supply Transfer --}}
+  <div class="supply-transfer-section">
+    <button type="button" class="transfer-supply-btn">
+      <i class="fas fa-truck"></i> {{localize "STARMERCS.TransferSupply"}}
+      <span class="transfer-range-info">({{supplyTransferRange}} hex range)</span>
+    </button>
+  </div>
+
+  {{#if hasNoSupply}}
+    <div class="supply-warning">
+      <i class="fas fa-exclamation-triangle"></i>
+      {{localize "STARMERCS.NoSupplyOrderRestricted"}}
+    </div>
+  {{/if}}
+
   <div class="notes-section">
     <h3>{{localize "STARMERCS.Notes"}}</h3>
     <textarea name="system.notes" rows="6" placeholder="Unit notes...">{{system.notes}}</textarea>

@@ -78,6 +78,7 @@
   "STARMERCS.Phase.DamagePending": "Damage pending — applied in Consolidation",
 
   "STARMERCS.Order.Hold": "Hold",
+  "STARMERCS.Order.Move": "Move",
   "STARMERCS.Order.Advance": "Advance",
   "STARMERCS.Order.DigIn": "Dig In",
   "STARMERCS.Order.Withdraw": "Withdraw",
@@ -114,6 +115,25 @@
   "STARMERCS.FireAll": "Fire All",
   "STARMERCS.FireAllTargeted": "Fire All Targeted Weapons",
   "STARMERCS.NoTargetsAssigned": "No weapons have assigned targets.",
+
+  "STARMERCS.Tab.Traits": "Traits",
+
+  "STARMERCS.ActiveTraits": "Active Traits",
+  "STARMERCS.NoActiveTraits": "No active traits",
+  "STARMERCS.TraitActive": "Active",
+
+  "STARMERCS.OutOfRange": "Target is out of range ({range} hex max, {distance} hexes away).",
+  "STARMERCS.NoSupplyAttack": "Cannot attack — unit has no supply.",
+  "STARMERCS.NoSupplyOrderRestricted": "No supply — only Hold, Move, and Withdraw orders are available.",
+
+  "STARMERCS.TransferSupply": "Transfer Supply",
+  "STARMERCS.TransferSupplyTo": "Transfer Supply To",
+  "STARMERCS.TransferAmount": "Amount",
+  "STARMERCS.TransferNoTargets": "No friendly units in range to transfer supply to.",
+  "STARMERCS.TransferSuccess": "Transferred {amount} supply to {target}.",
+  "STARMERCS.SupplyConsumed": "Supply Consumed",
+
+  "STARMERCS.ZeroSupplyPenalty": "Zero Supply (roll twice, take lower)",
 
   "STARMERCS.Settings.ShowTargetingArrows": "Show Targeting Arrows",
   "STARMERCS.Settings.ShowTargetingArrowsHint": "Display colored arrows on the canvas from units to their weapon targets.",

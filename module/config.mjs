@@ -46,9 +46,18 @@ STARMERCS.orders = {
     category: "standard",
     allowsMovement: false,
     allowsAttack: true,
+    readinessCost: 1,
+    supplyModifier: "1x",
+    description: "Unit holds position and engages targets. Recovers readiness."
+  },
+  move: {
+    label: "STARMERCS.Order.Move",
+    category: "standard",
+    allowsMovement: true,
+    allowsAttack: false,
     readinessCost: 0,
     supplyModifier: "1x",
-    description: "Unit holds position and engages targets."
+    description: "Unit moves without engaging the enemy."
   },
   advance: {
     label: "STARMERCS.Order.Advance",

@@ -7,6 +7,9 @@
     <div class="opposed-side attacker-side">
       <span class="side-name">{{attackerName}}</span>
       <span class="side-rating">{{attackerRating}} (+{{attackerBonus}})</span>
+      {{#if attackerZeroSupply}}
+        <span class="zero-supply-penalty"><i class="fas fa-box-open"></i> No Supply</span>
+      {{/if}}
       <div class="side-roll">
         <span class="die-result">{{attackerRoll}}</span>
         <span class="roll-bonus">+ {{attackerBonus}}</span>
@@ -19,6 +22,9 @@
     <div class="opposed-side defender-side">
       <span class="side-name">{{defenderName}}</span>
       <span class="side-rating">{{defenderRating}} (+{{defenderBonus}})</span>
+      {{#if defenderZeroSupply}}
+        <span class="zero-supply-penalty"><i class="fas fa-box-open"></i> No Supply</span>
+      {{/if}}
       <div class="side-roll">
         <span class="die-result">{{defenderRoll}}</span>
         <span class="roll-bonus">+ {{defenderBonus}}</span>

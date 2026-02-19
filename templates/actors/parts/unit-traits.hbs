@@ -9,7 +9,7 @@
   {{#if traits.length}}
     <ol class="item-list trait-list">
       {{#each traits as |trait|}}
-      <li class="item trait-item" data-item-id="{{trait._id}}">
+      <li class="item trait-item {{#unless trait.system.active}}trait-inactive{{/unless}}" data-item-id="{{trait._id}}">
         <span class="item-name clickable item-chat" title="Post to Chat">
           <img src="{{trait.img}}" width="24" height="24"/>
           {{trait.name}}
@@ -19,6 +19,11 @@
         </span>
         <span class="item-detail trait-mode">{{trait.system.passive}}</span>
         <span class="item-controls">
+          <label class="trait-toggle" title="Toggle Active">
+            <input type="checkbox" class="trait-active-toggle"
+                   data-item-id="{{trait._id}}"
+                   {{#if trait.system.active}}checked{{/if}} />
+          </label>
           <a class="item-edit" title="Edit"><i class="fas fa-edit"></i></a>
           <a class="item-delete" title="Delete"><i class="fas fa-trash"></i></a>
         </span>

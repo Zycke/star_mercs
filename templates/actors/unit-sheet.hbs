@@ -34,6 +34,7 @@
   {{!-- Navigation Tabs --}}
   <nav class="sheet-tabs tabs" data-group="primary">
     <a class="item" data-tab="attributes">{{localize "STARMERCS.Tab.Attributes"}}</a>
+    <a class="item" data-tab="traits">{{localize "STARMERCS.Tab.Traits"}}</a>
     <a class="item" data-tab="combat">{{localize "STARMERCS.Tab.Combat"}}</a>
     <a class="item" data-tab="logistics">{{localize "STARMERCS.Tab.Logistics"}}</a>
   </nav>
@@ -44,6 +45,26 @@
     {{!-- Attributes Tab --}}
     <div class="tab" data-group="primary" data-tab="attributes">
       {{> "systems/star-mercs/templates/actors/parts/unit-attributes.hbs"}}
+
+      {{!-- Active Traits Summary --}}
+      <div class="active-traits-summary">
+        <h3>{{localize "STARMERCS.ActiveTraits"}}</h3>
+        {{#if activeTraits.length}}
+          <div class="active-traits-list">
+            {{#each activeTraits as |trait|}}
+              <span class="active-trait-badge" title="{{trait.system.passive}}">
+                {{trait.name}}{{#if trait.system.traitValue}}<span class="trait-bracket">[{{trait.system.traitValue}}]</span>{{/if}}
+              </span>
+            {{/each}}
+          </div>
+        {{else}}
+          <p class="empty-list">{{localize "STARMERCS.NoActiveTraits"}}</p>
+        {{/if}}
+      </div>
+    </div>
+
+    {{!-- Traits Tab --}}
+    <div class="tab" data-group="primary" data-tab="traits">
       {{> "systems/star-mercs/templates/actors/parts/unit-traits.hbs"}}
     </div>
 
