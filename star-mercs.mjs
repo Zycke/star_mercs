@@ -102,6 +102,38 @@ Hooks.once("ready", () => {
   console.log("Star Mercs | System Ready");
 });
 
+/**
+ * When a new unit actor is created, auto-populate default traits from the
+ * traits compendium (all inactive by default).
+ */
+Hooks.on("createActor", async (actor, options, userId) => {
+  if (actor.type !== "unit") return;
+  if (game.user.id !== userId) return;
+
+  // Only populate if the actor has no traits yet
+  if (actor.items.filter(i => i.type === "trait").length > 0) return;
+
+  const pack = game.packs.get("star-mercs.traits");
+  if (!pack) return;
+
+  const traitDocs = await pack.getDocuments();
+  const traitData = traitDocs.map(t => ({
+    name: t.name,
+    type: "trait",
+    img: t.img,
+    system: {
+      description: t.system.description,
+      traitValue: t.system.traitValue,
+      passive: t.system.passive,
+      active: false
+    }
+  }));
+
+  if (traitData.length > 0) {
+    await actor.createEmbeddedDocuments("Item", traitData);
+  }
+});
+
 /* ============================================ */
 /*  Canvas & Targeting Arrow Hooks              */
 /* ============================================ */

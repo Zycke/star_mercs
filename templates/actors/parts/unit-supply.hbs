@@ -1,9 +1,9 @@
 <div class="supply-section">
-  <h3>{{localize "STARMERCS.Supply"}}</h3>
+  <h3>Supply</h3>
   <div class="supply-grid">
 
     <div class="attribute-block">
-      <label>{{localize "STARMERCS.SupplyCurrent"}}</label>
+      <label>Current Supply</label>
       <div class="resource-bar">
         <input type="number" name="system.supply.current"
                value="{{system.supply.current}}" min="0" max="{{system.supply.capacity}}"/>
@@ -14,7 +14,7 @@
     </div>
 
     <div class="attribute-block">
-      <label>{{localize "STARMERCS.SupplyUsage"}}</label>
+      <label>Supply Usage</label>
       <div class="input-with-suffix">
         <input type="number" name="system.supply.usage"
                value="{{system.supply.usage}}" min="0"/>
@@ -28,14 +28,14 @@
   {{#if canTransferSupply}}
     <div class="supply-transfer-section">
       <button type="button" class="transfer-supply-btn">
-        <i class="fas fa-truck"></i> {{localize "STARMERCS.TransferSupply"}}
+        <i class="fas fa-truck"></i> Transfer Supply
         <span class="transfer-range-info">({{supplyTransferRange}} hex range)</span>
       </button>
     </div>
   {{else}}
     <div class="supply-transfer-section">
       <span class="transfer-disabled-note">
-        <i class="fas fa-clock"></i> {{localize "STARMERCS.TransferPrepOnly"}}
+        <i class="fas fa-clock"></i> Supply transfers are only allowed during the Preparation phase.
       </span>
     </div>
   {{/if}}
@@ -43,12 +43,12 @@
   {{#if hasNoSupply}}
     <div class="supply-warning">
       <i class="fas fa-exclamation-triangle"></i>
-      {{localize "STARMERCS.NoSupplyOrderRestricted"}}
+      No supply — only Hold, Move, and Withdraw orders are available.
     </div>
   {{/if}}
 
   <div class="notes-section">
-    <h3>{{localize "STARMERCS.Notes"}}</h3>
+    <h3>Notes</h3>
     <textarea name="system.notes" rows="6" placeholder="Unit notes...">{{system.notes}}</textarea>
   </div>
 </div>

@@ -9,119 +9,121 @@
     </div>
   {{/if}}
 
-  <div class="combat-status-grid">
-
-    {{!-- Order Assignment --}}
-    <div class="status-block order-block">
-      <label>{{localize "STARMERCS.CurrentOrder"}}</label>
-      {{#if isOrdersPhase}}
-        {{!-- Interactive dropdown during Orders phase --}}
-        <select class="order-select">
-          <option value="">-- Select Order --</option>
-          {{#each availableOrders as |order|}}
-            <option value="{{order.key}}"
-              {{#if (eq order.key ../currentOrderKey)}}selected{{/if}}>
-              {{order.label}}
-              {{#if order.readinessCost}}
-                ({{order.readinessCost}} RDY)
-              {{/if}}
-              {{#if (eq order.category "special")}} [Special]{{/if}}
-            </option>
-          {{/each}}
-        </select>
-        {{#if currentOrderData}}
-          {{#if currentOrderData.allowsMovement}}
-            <button type="button" class="set-move-destination">
-              <i class="fas fa-map-marker-alt"></i> Set Move Destination
-            </button>
-          {{/if}}
-        {{/if}}
-        {{#if orderDetails}}
-          <div class="order-details-box">
-            <div class="order-detail-row">
-              <span class="order-detail-label">{{localize "STARMERCS.OrderDetail.Attack"}}</span>
-              <span class="order-detail-value {{#if orderDetails.allowsAttack}}detail-allowed{{else}}detail-not-allowed{{/if}}">
-                {{#if orderDetails.allowsAttack}}{{localize "STARMERCS.OrderDetail.Allowed"}}{{else}}{{localize "STARMERCS.OrderDetail.NotAllowed"}}{{/if}}
-              </span>
-            </div>
-            <div class="order-detail-row">
-              <span class="order-detail-label">{{localize "STARMERCS.OrderDetail.Movement"}}</span>
-              <span class="order-detail-value {{#if orderDetails.allowsMovement}}detail-allowed{{else}}detail-not-allowed{{/if}}">
-                {{#if orderDetails.allowsMovement}}Up to {{orderDetails.speed}} hexes{{else}}{{localize "STARMERCS.OrderDetail.NoMovement"}}{{/if}}
-              </span>
-            </div>
-            <div class="order-detail-row">
-              <span class="order-detail-label">{{localize "STARMERCS.OrderDetail.ReadinessCost"}}</span>
-              <span class="order-detail-value">{{orderDetails.readinessCost}} RDY</span>
-            </div>
-            <div class="order-detail-row">
-              <span class="order-detail-label">{{localize "STARMERCS.OrderDetail.SupplyMod"}}</span>
-              <span class="order-detail-value">{{orderDetails.supplyModifier}}</span>
-            </div>
-          </div>
-        {{/if}}
-      {{else}}
-        {{!-- Read-only display outside Orders phase --}}
-        <span class="status-value">
-          {{#if currentOrderKey}}
-            {{#if currentOrderData}}
-              {{localize currentOrderData.label}}
-              <span class="order-flags">
-                {{#if currentOrderData.allowsMovement}}
-                  <i class="fas fa-running" title="Movement Allowed"></i>
-                {{else}}
-                  <i class="fas fa-ban" title="No Movement"></i>
-                {{/if}}
-                {{#if currentOrderData.allowsAttack}}
-                  <i class="fas fa-crosshairs" title="Attack Allowed"></i>
-                {{else}}
-                  <i class="fas fa-shield-alt" title="No Attack"></i>
-                {{/if}}
-              </span>
-            {{else}}
-              {{currentOrderKey}}
+  {{!-- Order Assignment --}}
+  <div class="status-block order-block">
+    <label>Current Order</label>
+    {{#if isOrdersPhase}}
+      {{!-- Interactive dropdown during Orders phase --}}
+      <select class="order-select">
+        <option value="">-- Select Order --</option>
+        {{#each availableOrders as |order|}}
+          <option value="{{order.key}}"
+            {{#if (eq order.key ../currentOrderKey)}}selected{{/if}}>
+            {{order.label}}
+            {{#if order.readinessCost}}
+              ({{order.readinessCost}} RDY)
             {{/if}}
-          {{else}}
-            None
-          {{/if}}
-        </span>
+            {{#if (eq order.category "special")}} [Special]{{/if}}
+          </option>
+        {{/each}}
+      </select>
+      {{#if currentOrderData}}
+        {{#if currentOrderData.allowsMovement}}
+          <button type="button" class="set-move-destination">
+            <i class="fas fa-map-marker-alt"></i> Set Move Destination
+          </button>
+        {{/if}}
       {{/if}}
-    </div>
+      {{#if orderDetails}}
+        <div class="order-details-box">
+          <div class="order-detail-row">
+            <span class="order-detail-label">Attack</span>
+            <span class="order-detail-value {{#if orderDetails.allowsAttack}}detail-allowed{{else}}detail-not-allowed{{/if}}">
+              {{#if orderDetails.allowsAttack}}Allowed{{else}}Not Allowed{{/if}}
+            </span>
+          </div>
+          <div class="order-detail-row">
+            <span class="order-detail-label">Movement</span>
+            <span class="order-detail-value {{#if orderDetails.allowsMovement}}detail-allowed{{else}}detail-not-allowed{{/if}}">
+              {{#if orderDetails.allowsMovement}}Up to {{orderDetails.speed}} hexes{{else}}No Movement{{/if}}
+            </span>
+          </div>
+          <div class="order-detail-row">
+            <span class="order-detail-label">Readiness</span>
+            <span class="order-detail-value">{{orderDetails.readinessCost}} RDY</span>
+          </div>
+          <div class="order-detail-row">
+            <span class="order-detail-label">Supply</span>
+            <span class="order-detail-value">{{orderDetails.supplyModifier}}</span>
+          </div>
+        </div>
+      {{/if}}
+    {{else}}
+      {{!-- Read-only display outside Orders phase --}}
+      <span class="status-value">
+        {{#if currentOrderKey}}
+          {{#if currentOrderData}}
+            {{currentOrderData.labelText}}
+            <span class="order-flags">
+              {{#if currentOrderData.allowsMovement}}
+                <i class="fas fa-running" title="Movement Allowed"></i>
+              {{else}}
+                <i class="fas fa-ban" title="No Movement"></i>
+              {{/if}}
+              {{#if currentOrderData.allowsAttack}}
+                <i class="fas fa-crosshairs" title="Attack Allowed"></i>
+              {{else}}
+                <i class="fas fa-shield-alt" title="No Attack"></i>
+              {{/if}}
+            </span>
+          {{else}}
+            {{currentOrderKey}}
+          {{/if}}
+        {{else}}
+          None
+        {{/if}}
+      </span>
+    {{/if}}
+  </div>
 
-    {{!-- Pending Damage (shown during tactical phase) --}}
-    {{#if pendingDamage}}
-      <div class="status-block pending-damage-block">
-        <label>Pending Damage</label>
-        <div class="pending-damage-values">
-          <span class="pending-str">-{{pendingDamage.strength}} STR</span>
-          <span class="pending-rdy">-{{pendingDamage.readiness}} RDY</span>
+  {{!-- Pending Damage (shown during tactical phase) --}}
+  {{#if pendingDamage}}
+    <div class="status-block pending-damage-block">
+      <label>Pending Damage</label>
+      <div class="pending-damage-values">
+        <span class="pending-str">-{{pendingDamage.strength}} STR</span>
+        <span class="pending-rdy">-{{pendingDamage.readiness}} RDY</span>
+      </div>
+    </div>
+  {{/if}}
+
+  {{!-- Penalties Section (separate panel) --}}
+  <div class="combat-penalties-section">
+    <div class="combat-penalties-grid">
+      <div class="status-block">
+        <label>Casualty Penalty</label>
+        <span class="status-value {{#if derived.casualtyPenalty}}penalty{{/if}}">
+          {{#if derived.casualtyPenalty}}-{{derived.casualtyPenalty}} to damage{{else}}None{{/if}}
+        </span>
+      </div>
+
+      <div class="status-block">
+        <label>Readiness Effects</label>
+        <div>
+          {{#if derived.readinessPenalty.accuracy}}
+            <span class="penalty">Accuracy: +1 to hit numbers</span>
+          {{/if}}
+          {{#if derived.readinessPenalty.damage}}
+            <span class="penalty">Damage: -1 to all damage</span>
+          {{/if}}
+          {{#unless derived.readinessPenalty.accuracy}}
+            {{#unless derived.readinessPenalty.damage}}
+              <span class="status-value">No penalties</span>
+            {{/unless}}
+          {{/unless}}
         </div>
       </div>
-    {{/if}}
-
-    <div class="status-block">
-      <label>Casualty Penalty</label>
-      <span class="status-value {{#if derived.casualtyPenalty}}penalty{{/if}}">
-        {{#if derived.casualtyPenalty}}-{{derived.casualtyPenalty}} to damage{{else}}None{{/if}}
-      </span>
     </div>
-
-    <div class="status-block">
-      <label>Readiness Effects</label>
-      <div>
-        {{#if derived.readinessPenalty.accuracy}}
-          <span class="penalty">Accuracy: +1 to hit numbers</span>
-        {{/if}}
-        {{#if derived.readinessPenalty.damage}}
-          <span class="penalty">Damage: -1 to all damage</span>
-        {{/if}}
-        {{#unless derived.readinessPenalty.accuracy}}
-          {{#unless derived.readinessPenalty.damage}}
-            <span class="status-value">No penalties</span>
-          {{/unless}}
-        {{/unless}}
-      </div>
-    </div>
-
   </div>
+
 </div>

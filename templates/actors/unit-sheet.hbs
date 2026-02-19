@@ -10,13 +10,13 @@
       </h1>
       <div class="header-row">
         <div class="field-group">
-          <label>{{localize "STARMERCS.Rating"}}</label>
+          <label>Rating</label>
           <select name="system.rating">
             {{selectOptions ratingChoices selected=system.rating}}
           </select>
         </div>
         <div class="field-group">
-          <label>{{localize "STARMERCS.RatingBonus"}}</label>
+          <label>Rating Bonus</label>
           <span class="derived-value">+{{derived.ratingBonus}}</span>
         </div>
       </div>
@@ -33,10 +33,10 @@
 
   {{!-- Navigation Tabs --}}
   <nav class="sheet-tabs tabs" data-group="primary">
-    <a class="item" data-tab="attributes">{{localize "STARMERCS.Tab.Attributes"}}</a>
-    <a class="item" data-tab="traits">{{localize "STARMERCS.Tab.Traits"}}</a>
-    <a class="item" data-tab="combat">{{localize "STARMERCS.Tab.Combat"}}</a>
-    <a class="item" data-tab="logistics">{{localize "STARMERCS.Tab.Logistics"}}</a>
+    <a class="item" data-tab="attributes">Attributes</a>
+    <a class="item" data-tab="traits">Traits</a>
+    <a class="item" data-tab="combat">Combat</a>
+    <a class="item" data-tab="logistics">Logistics</a>
   </nav>
 
   {{!-- Sheet Body --}}
@@ -48,7 +48,7 @@
 
       {{!-- Active Traits Summary --}}
       <div class="active-traits-summary">
-        <h3>{{localize "STARMERCS.ActiveTraits"}}</h3>
+        <h3>Active Traits</h3>
         {{#if activeTraits.length}}
           <div class="active-traits-list">
             {{#each activeTraits as |trait|}}
@@ -58,7 +58,7 @@
             {{/each}}
           </div>
         {{else}}
-          <p class="empty-list">{{localize "STARMERCS.NoActiveTraits"}}</p>
+          <p class="empty-list">No active traits</p>
         {{/if}}
       </div>
     </div>
@@ -72,7 +72,6 @@
     <div class="tab" data-group="primary" data-tab="combat">
       {{> "systems/star-mercs/templates/actors/parts/unit-combat.hbs"}}
       {{> "systems/star-mercs/templates/actors/parts/unit-weapons.hbs"}}
-      {{> "systems/star-mercs/templates/actors/parts/unit-orders.hbs"}}
     </div>
 
     {{!-- Logistics Tab --}}

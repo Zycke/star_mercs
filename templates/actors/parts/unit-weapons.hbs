@@ -1,6 +1,6 @@
 <div class="items-section weapons-section">
   <div class="items-header">
-    <h3>{{localize "STARMERCS.Weapons"}}</h3>
+    <h3>Weapons</h3>
     <div class="weapons-header-actions">
       {{#if hasTargetedWeapons}}
         <a class="fire-all-weapons" title="Fire All Targeted Weapons">
@@ -33,7 +33,7 @@
           <img src="{{weapon.img}}" width="24" height="24"/>
           {{weapon.name}}
         </span>
-        <span class="item-detail item-type">{{localizeConfig "attackTypes" weapon.system.attackType}}</span>
+        <span class="item-detail item-type">{{weapon.attackTypeLabel}}</span>
         <span class="item-detail item-accuracy">{{weapon.system.accuracy}}+</span>
         <span class="item-detail item-damage">{{weapon.system.damage}}</span>
         <span class="item-detail item-range">{{weapon.system.range}}</span>

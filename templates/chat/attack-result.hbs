@@ -42,9 +42,9 @@
       {{#if softVsHeavy}}
         <div class="soft-vs-heavy-note">
           {{#if isHit}}
-            {{localize "STARMERCS.Combat.SoftVsHeavy"}}
+            Soft vs Heavy — only a natural 10 can hit
           {{else}}
-            {{localize "STARMERCS.Combat.SoftVsHeavyMiss"}}
+            Soft attack cannot damage Heavy (needed natural 10)
           {{/if}}
         </div>
       {{/if}}
@@ -74,7 +74,7 @@
         <div class="target-status">
           {{#if damagePending}}
             <div class="status-update pending">
-              <i class="fas fa-clock"></i> {{localize "STARMERCS.Phase.DamagePending"}}
+              <i class="fas fa-clock"></i> Damage pending — applied in Consolidation
             </div>
           {{else if targetDestroyed}}
             <div class="status-alert destroyed">
