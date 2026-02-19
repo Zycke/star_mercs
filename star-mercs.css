@@ -1282,6 +1282,51 @@
   margin-bottom: 4px;
 }
 
+/* Morale check chat card */
+.star-mercs.chat-card.morale-check {
+  border-left: 3px solid #d4a017;
+  padding: 6px 8px;
+}
+
+.star-mercs.chat-card.morale-check .morale-details {
+  font-size: 12px;
+  color: var(--sm-text-dim);
+  margin-bottom: 2px;
+}
+
+.star-mercs.chat-card.morale-check .morale-reroll {
+  font-size: 12px;
+  color: #8855cc;
+  font-style: italic;
+  margin-bottom: 2px;
+}
+
+.star-mercs .morale-passed {
+  color: #2d8c3c;
+}
+
+.star-mercs .morale-failed {
+  color: #cc3333;
+}
+
+/* Morale recovery chat card */
+.star-mercs.chat-card.morale-recovery {
+  border-left: 3px solid #2d8c3c;
+  padding: 6px 8px;
+}
+
+/* Assault morale chat card */
+.star-mercs.chat-card.assault-morale {
+  border-left: 3px solid #cc6600;
+  padding: 6px 8px;
+}
+
+.star-mercs.chat-card.assault-morale .morale-details {
+  font-size: 12px;
+  color: var(--sm-text-dim);
+  margin-bottom: 2px;
+}
+
 /* ============================= */
 /*  Trait Toggle & Inactive      */
 /* ============================= */

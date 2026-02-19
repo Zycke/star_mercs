@@ -1,3 +1,5 @@
+import StarMercsActor from "./actor.mjs";
+
 /**
  * Extended Combat class for Star Mercs that implements phase-based rounds.
  *
@@ -264,6 +266,7 @@ export default class StarMercsCombat extends Combat {
    * 1. Apply all pending damage to targets
    * 2. Deduct readiness costs from orders
    * 3. Consume supply (usage × order multiplier + weapons fired)
+   * 4. Morale checks for units with readiness < 10
    * @private
    */
   async _runConsolidationEffects() {
@@ -340,13 +343,261 @@ export default class StarMercsCombat extends Combat {
 
           await ChatMessage.create({
             content: `<div class="star-mercs chat-card consolidation-supply">
-              <div class="summary-header"><i class="fas fa-box"></i> <strong>${token?.name ?? actor.name}</strong> — ${game.i18n.localize("STARMERCS.SupplyConsumed")}: ${totalConsumption}</div>
+              <div class="summary-header"><i class="fas fa-box"></i> <strong>${token?.name ?? actor.name}</strong> — Supply Consumed: ${totalConsumption}</div>
               <div class="status-update">${parts.join(" + ")} — ${newSupply}/${supply.capacity} remaining</div>
             </div>`,
             speaker: { alias: "Star Mercs" }
           });
         }
       }
+    }
+
+    // 4. Morale checks (after all damage and readiness changes)
+    await this._runMoraleChecks();
+
+    // 5. Assault morale resolution
+    await this._runAssaultMorale();
+  }
+
+  /**
+   * Run morale checks for all units with readiness < 10.
+   * Roll d10: must roll > current readiness to pass.
+   * Modifiers:
+   *   -2 if not within comms range of any friendly unit
+   *   Re-roll allowed if within comms range of a friendly Command unit
+   * Failure: unit gains Routing status, loses 3 readiness.
+   * @private
+   */
+  async _runMoraleChecks() {
+    // Build a list of all token positions by team for comms range checks
+    const tokensByTeam = new Map();
+    for (const combatant of this.combatants) {
+      const a = combatant.actor;
+      if (!a || a.type !== "unit") continue;
+      const t = combatant.token;
+      if (!t) continue;
+      const team = a.system.team ?? "a";
+      if (!tokensByTeam.has(team)) tokensByTeam.set(team, []);
+      tokensByTeam.get(team).push({ token: t, actor: a });
+    }
+
+    for (const combatant of this.combatants) {
+      const actor = combatant.actor;
+      if (!actor || actor.type !== "unit") continue;
+      const token = combatant.token;
+      if (!token) continue;
+
+      // Skip destroyed units
+      if (actor.system.strength.value <= 0) continue;
+
+      // Already routing units: check if they recover (not adjacent to enemies)
+      const isRouting = token.getFlag("star-mercs", "routing") ?? false;
+      if (isRouting) {
+        const adjacentToEnemy = this._isAdjacentToEnemy(token, actor, tokensByTeam);
+        if (!adjacentToEnemy) {
+          await token.setFlag("star-mercs", "routing", false);
+          await ChatMessage.create({
+            content: `<div class="star-mercs chat-card morale-recovery">
+              <div class="summary-header"><i class="fas fa-shield-alt"></i> <strong>${token.name}</strong> — Morale Recovered</div>
+              <div class="status-update">No longer routing — not adjacent to enemies.</div>
+            </div>`,
+            speaker: { alias: "Star Mercs" }
+          });
+        }
+        continue;
+      }
+
+      // Only check morale if readiness < 10
+      const currentReadiness = actor.system.readiness.value;
+      if (currentReadiness >= 10) continue;
+
+      // Check comms isolation: is this unit within comms range of any friendly unit?
+      const team = actor.system.team ?? "a";
+      const friendlies = tokensByTeam.get(team) ?? [];
+      const commsRange = actor.system.comms ?? 3;
+      let withinCommsRange = false;
+      let hasCommandNearby = false;
+
+      const myCanvasToken = canvas?.tokens?.get(token.id);
+      for (const { token: friendlyToken, actor: friendlyActor } of friendlies) {
+        if (friendlyToken.id === token.id) continue;
+        if (friendlyActor.system.strength.value <= 0) continue;
+        const friendlyCanvasToken = canvas?.tokens?.get(friendlyToken.id);
+        if (!myCanvasToken || !friendlyCanvasToken) continue;
+
+        const distance = StarMercsActor.getHexDistance(myCanvasToken, friendlyCanvasToken);
+        const friendlyComms = friendlyActor.system.comms ?? 3;
+        if (distance <= Math.max(commsRange, friendlyComms)) {
+          withinCommsRange = true;
+          // Check if this friendly has the Command trait
+          if (friendlyActor.hasTrait("Command")) {
+            hasCommandNearby = true;
+          }
+        }
+      }
+
+      // Roll morale check: d10, need to roll > readiness to pass
+      const roll = new Roll("1d10");
+      await roll.evaluate();
+      let total = roll.total;
+
+      // Apply comms isolation penalty
+      const commsIsolation = !withinCommsRange;
+      if (commsIsolation) {
+        total -= 2;
+      }
+
+      const passed = total > currentReadiness;
+
+      // If failed and Command trait nearby, allow re-roll
+      let rerolled = false;
+      let rerollResult = null;
+      let rerollRollObj = null;
+      if (!passed && hasCommandNearby) {
+        rerolled = true;
+        rerollRollObj = new Roll("1d10");
+        await rerollRollObj.evaluate();
+        let rerollTotal = rerollRollObj.total;
+        if (commsIsolation) rerollTotal -= 2;
+        rerollResult = { roll: rerollRollObj.total, total: rerollTotal, passed: rerollTotal > currentReadiness };
+      }
+
+      const finalPassed = passed || (rerolled && rerollResult?.passed);
+
+      // Build morale check chat message
+      let moraleHtml = `<div class="star-mercs chat-card morale-check">`;
+      moraleHtml += `<div class="summary-header"><i class="fas fa-brain"></i> <strong>${token.name}</strong> — Morale Check</div>`;
+      moraleHtml += `<div class="morale-details">Readiness: ${currentReadiness}/10 | Roll: ${roll.total}`;
+      if (commsIsolation) moraleHtml += ` (-2 comms isolation = ${total})`;
+      moraleHtml += ` vs ${currentReadiness}+</div>`;
+
+      if (rerolled) {
+        moraleHtml += `<div class="morale-reroll">Command re-roll: ${rerollResult.roll}`;
+        if (commsIsolation) moraleHtml += ` (-2 = ${rerollResult.total})`;
+        moraleHtml += ` — ${rerollResult.passed ? "Passed" : "Failed"}</div>`;
+      }
+
+      if (finalPassed) {
+        moraleHtml += `<div class="status-update morale-passed"><i class="fas fa-check"></i> Morale holds!</div>`;
+      } else {
+        moraleHtml += `<div class="status-alert morale-failed"><i class="fas fa-running"></i> ROUTING — loses 3 readiness, must withdraw!</div>`;
+      }
+      moraleHtml += `</div>`;
+
+      await ChatMessage.create({
+        content: moraleHtml,
+        speaker: { alias: "Star Mercs" },
+        rolls: rerolled && rerollRollObj ? [roll, rerollRollObj] : [roll]
+      });
+
+      // Apply routing effects
+      if (!finalPassed) {
+        const newRdy = Math.max(0, actor.system.readiness.value - 3);
+        await actor.update({ "system.readiness.value": newRdy });
+        await token.setFlag("star-mercs", "routing", true);
+      }
+    }
+  }
+
+  /**
+   * Check if a token is adjacent (1 hex) to any enemy unit.
+   * @param {TokenDocument} token
+   * @param {StarMercsActor} actor
+   * @param {Map} tokensByTeam
+   * @returns {boolean}
+   * @private
+   */
+  _isAdjacentToEnemy(token, actor, tokensByTeam) {
+    const team = actor.system.team ?? "a";
+    const myCanvasToken = canvas?.tokens?.get(token.id);
+    if (!myCanvasToken) return false;
+
+    for (const [otherTeam, members] of tokensByTeam) {
+      if (otherTeam === team) continue;
+      for (const { token: enemyToken, actor: enemyActor } of members) {
+        if (enemyActor.system.strength.value <= 0) continue;
+        const enemyCanvasToken = canvas?.tokens?.get(enemyToken.id);
+        if (!enemyCanvasToken) continue;
+        const distance = StarMercsActor.getHexDistance(myCanvasToken, enemyCanvasToken);
+        if (distance <= 1) return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Run assault-specific morale resolution for units with the Assault order.
+   * Both the assaulting unit and its target roll d10 morale checks.
+   * Results:
+   *   - Assault fails, Defender passes: Assaulter stays, loses 2 readiness
+   *   - Assault passes, Defender fails: Defender falls back, loses 2 readiness
+   *   - Both fail: Each loses 2 readiness, stay in place
+   *   - Both pass: Nothing happens, stay in place
+   * @private
+   */
+  async _runAssaultMorale() {
+    for (const combatant of this.combatants) {
+      const actor = combatant.actor;
+      if (!actor || actor.type !== "unit") continue;
+      if (actor.system.currentOrder !== "assault") continue;
+      if (actor.system.strength.value <= 0) continue;
+
+      const token = combatant.token;
+      if (!token) continue;
+
+      const assaultTargetId = token.getFlag("star-mercs", "assaultTarget");
+      if (!assaultTargetId) continue;
+
+      const targetCanvasToken = canvas?.tokens?.get(assaultTargetId);
+      if (!targetCanvasToken?.actor) continue;
+      const targetActor = targetCanvasToken.actor;
+      if (targetActor.system.strength.value <= 0) continue;
+
+      // Roll morale for both units (d10, need > readiness to pass)
+      const assaultRoll = new Roll("1d10");
+      await assaultRoll.evaluate();
+      const assaultReadiness = actor.system.readiness.value;
+      const assaultPassed = assaultRoll.total > assaultReadiness;
+
+      const defenderRoll = new Roll("1d10");
+      await defenderRoll.evaluate();
+      const defenderReadiness = targetActor.system.readiness.value;
+      const defenderPassed = defenderRoll.total > defenderReadiness;
+
+      // Build chat message
+      let html = `<div class="star-mercs chat-card assault-morale">`;
+      html += `<div class="summary-header"><i class="fas fa-fist-raised"></i> Assault Resolution: <strong>${token.name}</strong> vs <strong>${targetCanvasToken.name}</strong></div>`;
+      html += `<div class="morale-details">${token.name}: Roll ${assaultRoll.total} vs ${assaultReadiness}+ — ${assaultPassed ? "Passed" : "Failed"}</div>`;
+      html += `<div class="morale-details">${targetCanvasToken.name}: Roll ${defenderRoll.total} vs ${defenderReadiness}+ — ${defenderPassed ? "Passed" : "Failed"}</div>`;
+
+      if (!assaultPassed && defenderPassed) {
+        // Assault failed: attacker stays, loses 2 readiness
+        const newRdy = Math.max(0, actor.system.readiness.value - 2);
+        await actor.update({ "system.readiness.value": newRdy });
+        html += `<div class="status-alert morale-failed"><i class="fas fa-shield-alt"></i> Assault repelled! ${token.name} loses 2 readiness.</div>`;
+      } else if (assaultPassed && !defenderPassed) {
+        // Defender failed: falls back, loses 2 readiness
+        const newRdy = Math.max(0, targetActor.system.readiness.value - 2);
+        await targetActor.update({ "system.readiness.value": newRdy });
+        html += `<div class="status-alert morale-failed"><i class="fas fa-running"></i> Defender breaks! ${targetCanvasToken.name} must fall back, loses 2 readiness.</div>`;
+      } else if (!assaultPassed && !defenderPassed) {
+        // Both failed: each loses 2 readiness
+        const newAttackerRdy = Math.max(0, actor.system.readiness.value - 2);
+        const newDefenderRdy = Math.max(0, targetActor.system.readiness.value - 2);
+        await actor.update({ "system.readiness.value": newAttackerRdy });
+        await targetActor.update({ "system.readiness.value": newDefenderRdy });
+        html += `<div class="status-alert morale-failed"><i class="fas fa-exchange-alt"></i> Both sides falter! Each loses 2 readiness.</div>`;
+      } else {
+        // Both passed: nothing happens
+        html += `<div class="status-update morale-passed"><i class="fas fa-handshake"></i> Stalemate — both sides hold their ground.</div>`;
+      }
+      html += `</div>`;
+
+      await ChatMessage.create({
+        content: html,
+        speaker: { alias: "Star Mercs" },
+        rolls: [assaultRoll, defenderRoll]
+      });
     }
   }
 
@@ -375,10 +626,11 @@ export default class StarMercsCombat extends Combat {
         await actor.updateEmbeddedDocuments("Item", clearUpdates);
       }
 
-      // 2. Clear movement destination and tracking
+      // 2. Clear movement destination, tracking, and assault target
       if (token) {
         await token.unsetFlag("star-mercs", "movementUsed");
         await token.unsetFlag("star-mercs", "moveDestination");
+        await token.unsetFlag("star-mercs", "assaultTarget");
         // 3. Clear weapons fired counter
         await token.unsetFlag("star-mercs", "weaponsFired");
       }

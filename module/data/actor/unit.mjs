@@ -57,6 +57,9 @@ export default class UnitData extends foundry.abstract.TypeDataModel {
       // --- Current Order ---
       currentOrder: new StringField({ required: false, initial: "", label: "STARMERCS.CurrentOrder" }),
 
+      // --- Team Assignment ---
+      team: new StringField({ required: true, initial: "a", choices: { a: "Team A", b: "Team B" } }),
+
       // --- Notes ---
       notes: new StringField({ required: false, initial: "" })
     };

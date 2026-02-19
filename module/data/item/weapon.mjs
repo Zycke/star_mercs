@@ -1,9 +1,9 @@
-const { NumberField, StringField } = foundry.data.fields;
+const { BooleanField, NumberField, StringField } = foundry.data.fields;
 
 /**
  * Data model for weapon items.
- * Weapons have an attack type (soft/hard/anti-air), accuracy rating, damage, and range.
- * Attack format follows the rules notation: "accuracy+/damage" (e.g., "5+/3").
+ * Weapons have an attack type (soft/hard/anti-air), damage, range, and optional traits.
+ * Attack roll is based on the firing unit's Rating, not the weapon itself.
  */
 export default class WeaponData extends foundry.abstract.TypeDataModel {
 
@@ -21,12 +21,6 @@ export default class WeaponData extends foundry.abstract.TypeDataModel {
         label: "STARMERCS.AttackType"
       }),
 
-      // Accuracy: target number on d10 (e.g., 5 means 5+ to hit)
-      accuracy: new NumberField({
-        required: true, integer: true, min: 2, max: 10, initial: 5,
-        label: "STARMERCS.Accuracy"
-      }),
-
       // Base damage dealt on a hit
       damage: new NumberField({
         required: true, integer: true, min: 1, initial: 3,
@@ -38,6 +32,12 @@ export default class WeaponData extends foundry.abstract.TypeDataModel {
         required: true, integer: true, min: 1, initial: 3,
         label: "STARMERCS.Range"
       }),
+
+      // --- Weapon Traits ---
+      indirect: new BooleanField({ required: false, initial: false }),
+      accurate: new NumberField({ required: false, integer: true, min: 0, initial: 0 }),
+      inaccurate: new NumberField({ required: false, integer: true, min: 0, initial: 0 }),
+      area: new BooleanField({ required: false, initial: false }),
 
       // Description / notes
       description: new StringField({ required: false, initial: "" }),
@@ -53,7 +53,7 @@ export default class WeaponData extends foundry.abstract.TypeDataModel {
 
   /** @override */
   prepareDerivedData() {
-    // Formatted attack string, e.g., "5+/3"
-    this.attackString = `${this.accuracy}+/${this.damage}`;
+    // Formatted attack string, e.g., "D3 R3"
+    this.attackString = `D${this.damage}/R${this.range}`;
   }
 }

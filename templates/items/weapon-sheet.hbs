@@ -17,15 +17,6 @@
 
     <div class="form-row">
       <div class="form-group">
-        <label>Accuracy</label>
-        <div class="input-with-suffix">
-          <input type="number" name="system.accuracy" value="{{system.accuracy}}"
-                 min="2" max="10"/>
-          <span class="suffix">+ to hit</span>
-        </div>
-      </div>
-
-      <div class="form-group">
         <label>Damage</label>
         <input type="number" name="system.damage" value="{{system.damage}}" min="1"/>
       </div>
@@ -39,9 +30,30 @@
       </div>
     </div>
 
-    <div class="form-group attack-summary">
-      <label>Attack String</label>
-      <span class="derived-value">{{system.accuracy}}+/{{system.damage}}</span>
+    <h3>Weapon Traits</h3>
+    <div class="form-row">
+      <div class="form-group checkbox-group">
+        <label>
+          <input type="checkbox" name="system.indirect" {{checked system.indirect}}/>
+          Indirect
+        </label>
+      </div>
+      <div class="form-group checkbox-group">
+        <label>
+          <input type="checkbox" name="system.area" {{checked system.area}}/>
+          Area
+        </label>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Accurate [X]</label>
+        <input type="number" name="system.accurate" value="{{system.accurate}}" min="0"/>
+      </div>
+      <div class="form-group">
+        <label>Inaccurate [X]</label>
+        <input type="number" name="system.inaccurate" value="{{system.inaccurate}}" min="0"/>
+      </div>
     </div>
 
     <div class="form-group">

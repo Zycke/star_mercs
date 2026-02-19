@@ -86,8 +86,32 @@ export default class StarMercsActor extends Actor {
   }
 
   /* ---------------------------------------- */
-  /*  Utility: Hex Distance                   */
+  /*  Utility: Hex Distance & Line of Sight   */
   /* ---------------------------------------- */
+
+  /**
+   * Check Line of Sight between two tokens using wall collision.
+   * @param {Token} token1
+   * @param {Token} token2
+   * @returns {boolean} True if token1 can see token2.
+   */
+  static hasLineOfSight(token1, token2) {
+    if (!token1 || !token2) return true;
+    const ray = new Ray(token1.center, token2.center);
+    // Check if any walls with sight restriction block the ray
+    const walls = canvas.walls?.placeables ?? [];
+    for (const wall of walls) {
+      if (wall.document.sight === CONST.WALL_SENSE_TYPES.NONE) continue;
+      const wallRay = new Ray(
+        { x: wall.document.c[0], y: wall.document.c[1] },
+        { x: wall.document.c[2], y: wall.document.c[3] }
+      );
+      if (foundry.utils.lineSegmentIntersects(ray.A, ray.B, wallRay.A, wallRay.B)) {
+        return false;
+      }
+    }
+    return true;
+  }
 
   /**
    * Calculate hex distance between two tokens.
@@ -155,6 +179,7 @@ export default class StarMercsActor extends Actor {
     }
 
     const result = await resolveAttack(weapon, this, target);
+    const attackTypeLabels = { soft: "Soft", hard: "Hard", antiAir: "Anti-Air" };
 
     // Attack was invalid (wrong weapon type, etc.)
     if (!result.valid) {
@@ -167,6 +192,7 @@ export default class StarMercsActor extends Actor {
             weaponName: weapon.name,
             attackString: weapon.system.attackString,
             attackType: weapon.system.attackType,
+            attackTypeLabel: attackTypeLabels[weapon.system.attackType] ?? weapon.system.attackType,
             invalid: true,
             invalidReason: result.reason
           }
@@ -207,13 +233,16 @@ export default class StarMercsActor extends Actor {
       weaponName: weapon.name,
       attackString: weapon.system.attackString,
       attackType: weapon.system.attackType,
+      attackTypeLabel: attackTypeLabels[weapon.system.attackType] ?? weapon.system.attackType,
       invalid: false,
       roll: result.roll.total,
       accuracyBase: result.accuracy.base,
       accuracyEffective: result.accuracy.effective,
       ewarMod: result.accuracy.ewarMod,
       readinessMod: result.accuracy.readinessMod,
-      hasAccuracyMods: result.accuracy.ewarMod > 0 || result.accuracy.readinessMod > 0,
+      accurateMod: result.accuracy.accurateMod ?? 0,
+      inaccurateMod: result.accuracy.inaccurateMod ?? 0,
+      hasAccuracyMods: (result.accuracy.ewarMod > 0 || result.accuracy.readinessMod > 0 || (result.accuracy.accurateMod ?? 0) > 0 || (result.accuracy.inaccurateMod ?? 0) > 0),
       hitType: result.hitResult.type,
       hitLabel: HIT_LABELS[result.hitResult.type],
       isHit: result.hitResult.hit,
@@ -259,6 +288,7 @@ export default class StarMercsActor extends Actor {
    * @private
    */
   async _rollStandaloneAttack(weapon) {
+    const attackTypeLabels = { soft: "Soft", hard: "Hard", antiAir: "Anti-Air" };
     const accuracy = calculateAccuracy(weapon, this);
     const roll = new Roll("1d10");
     await roll.evaluate();
@@ -297,13 +327,16 @@ export default class StarMercsActor extends Actor {
       weaponName: weapon.name,
       attackString: weapon.system.attackString,
       attackType: weapon.system.attackType,
+      attackTypeLabel: attackTypeLabels[weapon.system.attackType] ?? weapon.system.attackType,
       invalid: false,
       roll: roll.total,
       accuracyBase: accuracy.base,
       accuracyEffective: accuracy.effective,
       ewarMod: 0,
       readinessMod: accuracy.readinessMod,
-      hasAccuracyMods: accuracy.readinessMod > 0,
+      accurateMod: accuracy.accurateMod ?? 0,
+      inaccurateMod: accuracy.inaccurateMod ?? 0,
+      hasAccuracyMods: (accuracy.readinessMod > 0 || (accuracy.accurateMod ?? 0) > 0 || (accuracy.inaccurateMod ?? 0) > 0),
       hitType: hitResult.type,
       hitLabel: HIT_LABELS[hitResult.type],
       isHit: hitResult.hit,
@@ -459,6 +492,7 @@ export default class StarMercsActor extends Actor {
     }
 
     // Phase 3: Post individual attack results to chat
+    const attackTypeLabels = { soft: "Soft", hard: "Hard", antiAir: "Anti-Air" };
     for (const result of results) {
       if (!result.valid) {
         await ChatMessage.create({
@@ -470,6 +504,7 @@ export default class StarMercsActor extends Actor {
               weaponName: result.weapon.name,
               attackString: result.weapon.system.attackString,
               attackType: result.weapon.system.attackType,
+              attackTypeLabel: attackTypeLabels[result.weapon.system.attackType] ?? result.weapon.system.attackType,
               invalid: true,
               invalidReason: result.reason
             }
@@ -485,13 +520,16 @@ export default class StarMercsActor extends Actor {
         weaponName: result.weapon.name,
         attackString: result.weapon.system.attackString,
         attackType: result.weapon.system.attackType,
+        attackTypeLabel: attackTypeLabels[result.weapon.system.attackType] ?? result.weapon.system.attackType,
         invalid: false,
         roll: result.roll.total,
         accuracyBase: result.accuracy.base,
         accuracyEffective: result.accuracy.effective,
         ewarMod: result.accuracy.ewarMod,
         readinessMod: result.accuracy.readinessMod,
-        hasAccuracyMods: result.accuracy.ewarMod > 0 || result.accuracy.readinessMod > 0,
+        accurateMod: result.accuracy.accurateMod ?? 0,
+        inaccurateMod: result.accuracy.inaccurateMod ?? 0,
+        hasAccuracyMods: (result.accuracy.ewarMod > 0 || result.accuracy.readinessMod > 0 || (result.accuracy.accurateMod ?? 0) > 0 || (result.accuracy.inaccurateMod ?? 0) > 0),
         hitType: result.hitResult.type,
         hitLabel: HIT_LABELS[result.hitResult.type],
         isHit: result.hitResult.hit,

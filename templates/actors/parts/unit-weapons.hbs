@@ -21,9 +21,9 @@
       <li class="item-list-header">
         <span class="item-name">Name</span>
         <span class="item-detail item-type">Type</span>
-        <span class="item-detail item-accuracy">Acc</span>
         <span class="item-detail item-damage">Dmg</span>
         <span class="item-detail item-range">Range</span>
+        <span class="item-detail item-traits-col">Traits</span>
         <span class="item-detail item-target-col">Target</span>
         <span class="item-controls-header">Actions</span>
       </li>
@@ -34,9 +34,9 @@
           {{weapon.name}}
         </span>
         <span class="item-detail item-type">{{weapon.attackTypeLabel}}</span>
-        <span class="item-detail item-accuracy">{{weapon.system.accuracy}}+</span>
         <span class="item-detail item-damage">{{weapon.system.damage}}</span>
         <span class="item-detail item-range">{{weapon.system.range}}</span>
+        <span class="item-detail item-traits-col">{{weapon.traitsLabel}}</span>
         <span class="item-detail item-target-col">
           {{#if weapon.targetName}}
             <span class="weapon-target-name" title="{{weapon.targetName}}">{{weapon.targetName}}</span>

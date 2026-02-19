@@ -43,25 +43,35 @@ export function validateAttack(weapon, target) {
 
 /**
  * Calculate the effective accuracy threshold for an attack,
- * accounting for attacker readiness and target EWAR.
+ * based on the attacker's unit rating, weapon traits, readiness, and target EWAR.
+ *
+ * Rating thresholds: Green 7+, Trained 6+, Experienced 5+, Veteran 4+, Elite 3+
+ * Accurate[X]: reduces threshold by X (easier to hit)
+ * Inaccurate[X]: increases threshold by X (harder to hit)
  *
  * @param {Item} weapon - The weapon being fired.
  * @param {StarMercsActor} attacker - The attacking unit.
  * @param {StarMercsActor} [target] - The target unit (for EWAR).
- * @returns {{effective: number, base: number, readinessMod: number, ewarMod: number}}
+ * @returns {{effective: number, base: number, readinessMod: number, ewarMod: number, accurateMod: number, inaccurateMod: number}}
  */
 export function calculateAccuracy(weapon, attacker, target = null) {
-  const base = weapon.system.accuracy;
+  // Base accuracy from unit rating
+  const ratingData = CONFIG.STARMERCS.ratings?.[attacker.system.rating];
+  const base = ratingData?.accuracy ?? 7;
 
-  // Readiness penalty: +1 to accuracy needed if readiness ≤ 7
+  // Weapon trait modifiers: Accurate reduces threshold, Inaccurate increases it
+  const accurateMod = weapon.system.accurate ?? 0;
+  const inaccurateMod = weapon.system.inaccurate ?? 0;
+
+  // Readiness penalty: +1 to accuracy needed if readiness ≤ 70%
   const readinessMod = attacker.system.readinessPenalty?.accuracy ?? 0;
 
   // EWAR: target's EWAR increases the accuracy threshold (harder to hit)
   const ewarMod = target ? (target.system.ewar ?? 0) : 0;
 
-  const effective = Math.min(10, base + readinessMod + ewarMod);
+  const effective = Math.max(2, Math.min(10, base - accurateMod + inaccurateMod + readinessMod + ewarMod));
 
-  return { effective, base, readinessMod, ewarMod };
+  return { effective, base, readinessMod, ewarMod, accurateMod, inaccurateMod };
 }
 
 /**
@@ -88,10 +98,12 @@ export function determineHitResult(rollTotal, effectiveAccuracy) {
  * 2. +1 for critical, -1 for partial
  * 3. -N for attacker casualty penalty
  * 4. -1 for attacker readiness ≤ 4
- * 5. Half for hard-vs-infantry (rounded down)
- * 6. -X for target Armored[X]
- * 7. -1 for target Entrenched
- * 8. Floor at min 1
+ * 5. +1 for Area weapon vs Infantry
+ * 6. Half for hard-vs-infantry (rounded down)
+ * 7. -X for target Armored[X]
+ * 8. -1 for target Entrenched
+ * 9. -2 for target Fortified
+ * 10. Floor at min 1
  *
  * @param {Item} weapon - The weapon used.
  * @param {StarMercsActor} attacker - The attacking unit.
@@ -125,6 +137,29 @@ export function calculateDamage(weapon, attacker, target, hitType) {
   if (readinessDmg !== 0) {
     damage += readinessDmg; // readinessDmg is already negative
     modifiers.push({ label: "Low Readiness", value: readinessDmg });
+  }
+
+  // Assault order: +1 damage dealt to assault target
+  if (attacker.system.currentOrder === "assault") {
+    const attackerToken = canvas?.tokens?.placeables.find(t => t.actor === attacker);
+    const targetToken = canvas?.tokens?.placeables.find(t => t.actor === target);
+    const assaultTargetId = attackerToken?.document?.getFlag("star-mercs", "assaultTarget");
+    if (assaultTargetId && targetToken?.id === assaultTargetId) {
+      damage += 1;
+      modifiers.push({ label: "Assault (+1 damage)", value: +1 });
+    }
+  }
+
+  // Assault order on target: +1 damage received from all sources
+  if (target.system.currentOrder === "assault") {
+    damage += 1;
+    modifiers.push({ label: "Target assaulting (+1 incoming)", value: +1 });
+  }
+
+  // Area weapon trait: +1 damage vs Infantry
+  if (weapon.system.area && target.hasTrait("Infantry")) {
+    damage += 1;
+    modifiers.push({ label: "Area vs Infantry", value: +1 });
   }
 
   // Hard attack vs Infantry: half damage (rounded down)

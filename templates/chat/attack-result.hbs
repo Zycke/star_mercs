@@ -4,7 +4,7 @@
   {{#if invalid}}
     <div class="attack-header invalid">
       <span class="weapon-label">{{weaponName}} ({{attackString}})</span>
-      <span class="attack-type-badge {{attackType}}">{{localizeConfig "attackTypes" attackType}}</span>
+      <span class="attack-type-badge {{attackType}}">{{attackTypeLabel}}</span>
     </div>
     <div class="attack-invalid">
       <i class="fas fa-ban"></i> {{invalidReason}}
@@ -15,7 +15,7 @@
     {{!-- Attack header --}}
     <div class="attack-header">
       <span class="weapon-label">{{weaponName}} ({{attackString}})</span>
-      <span class="attack-type-badge {{attackType}}">{{localizeConfig "attackTypes" attackType}}</span>
+      <span class="attack-type-badge {{attackType}}">{{attackTypeLabel}}</span>
     </div>
 
     {{!-- Attacker / Target --}}
@@ -34,7 +34,7 @@
         <span class="accuracy-info">
           vs {{accuracyEffective}}+
           {{#if hasAccuracyMods}}
-            <span class="accuracy-breakdown">(base {{accuracyBase}}{{#if readinessMod}} +{{readinessMod}} readiness{{/if}}{{#if ewarMod}} +{{ewarMod}} EWAR{{/if}})</span>
+            <span class="accuracy-breakdown">(base {{accuracyBase}}{{#if accurateMod}} -{{accurateMod}} Accurate{{/if}}{{#if inaccurateMod}} +{{inaccurateMod}} Inaccurate{{/if}}{{#if readinessMod}} +{{readinessMod}} readiness{{/if}}{{#if ewarMod}} +{{ewarMod}} EWAR{{/if}})</span>
           {{/if}}
         </span>
       </div>

@@ -48,6 +48,12 @@ export default class StarMercsUnitSheet extends ActorSheet {
       elite: "Elite (+5)"
     };
 
+    // Team choices for the dropdown
+    context.teamChoices = {
+      a: "Team A",
+      b: "Team B"
+    };
+
     // Organize embedded items by type
     this._prepareItems(context);
 
@@ -142,14 +148,20 @@ export default class StarMercsUnitSheet extends ActorSheet {
     for (const item of this.actor.items) {
       if (item.type === "weapon") {
         // Build weapon display data with resolved target name
-        // Resolve attack type label
+        // Resolve attack type label and weapon traits label
         const attackTypeLabels = { soft: "Soft", hard: "Hard", antiAir: "Anti-Air" };
+        const wTraits = [];
+        if (item.system.indirect) wTraits.push("Indirect");
+        if (item.system.area) wTraits.push("Area");
+        if (item.system.accurate > 0) wTraits.push(`Acc+${item.system.accurate}`);
+        if (item.system.inaccurate > 0) wTraits.push(`Inacc-${item.system.inaccurate}`);
         const weaponData = {
           _id: item.id,
           img: item.img,
           name: item.name,
           system: item.system,
           attackTypeLabel: attackTypeLabels[item.system.attackType] ?? item.system.attackType,
+          traitsLabel: wTraits.length > 0 ? wTraits.join(", ") : "—",
           targetName: null,
           targetId: null
         };
@@ -307,6 +319,15 @@ export default class StarMercsUnitSheet extends ActorSheet {
       return;
     }
 
+    // Line of Sight check (unless weapon has Indirect trait)
+    if (!item.system.indirect) {
+      const myToken = this.actor.getActiveTokens()?.[0];
+      if (myToken && !StarMercsActor.hasLineOfSight(myToken, targetToken)) {
+        ui.notifications.warn(`${item.name} requires Line of Sight — target is not visible. (Indirect weapons bypass this.)`);
+        return;
+      }
+    }
+
     await item.update({ "system.targetId": targetToken.id });
   }
 
@@ -353,11 +374,97 @@ export default class StarMercsUnitSheet extends ActorSheet {
 
   /**
    * Handle order selection from the dropdown during Orders phase.
+   * If the Assault order is selected, prompt user to pick a target within movement range.
    */
   async _onOrderSelect(event) {
     event.preventDefault();
     const selectedOrderKey = event.currentTarget.value;
     await this.actor.update({ "system.currentOrder": selectedOrderKey });
+
+    // Clear any previous assault target
+    const token = this.actor.getActiveTokens()?.[0];
+    if (token?.document) {
+      await token.document.unsetFlag("star-mercs", "assaultTarget");
+    }
+
+    // If assault order selected, prompt for target selection
+    if (selectedOrderKey === "assault") {
+      this._promptAssaultTarget();
+    }
+  }
+
+  /**
+   * Prompt the user to select an assault target within movement range.
+   * @private
+   */
+  _promptAssaultTarget() {
+    const myToken = this.actor.getActiveTokens()?.[0];
+    if (!myToken) {
+      ui.notifications.warn("Place this unit's token on the canvas first.");
+      return;
+    }
+
+    const speed = this.actor.system.speed ?? 4;
+
+    // Find enemy tokens within movement range
+    const team = this.actor.system.team ?? "a";
+    const validTargets = [];
+    for (const token of canvas.tokens.placeables) {
+      if (token === myToken) continue;
+      if (!token.actor || token.actor.type !== "unit") continue;
+      const otherTeam = token.actor.system.team ?? "a";
+      if (otherTeam === team) continue;
+      if (token.actor.system.strength.value <= 0) continue;
+
+      const distance = StarMercsActor.getHexDistance(myToken, token);
+      if (distance <= speed) {
+        validTargets.push({ tokenId: token.id, name: token.name, distance });
+      }
+    }
+
+    if (validTargets.length === 0) {
+      ui.notifications.warn("No enemy units within movement range for assault.");
+      return;
+    }
+
+    const targetOptions = validTargets.map(t =>
+      `<option value="${t.tokenId}">${t.name} (${t.distance} hex${t.distance > 1 ? "es" : ""})</option>`
+    ).join("");
+
+    const dialogContent = `
+      <form>
+        <div class="form-group">
+          <label>Select assault target (within ${speed} hex range)</label>
+          <select id="assault-target">${targetOptions}</select>
+        </div>
+      </form>
+    `;
+
+    const actor = this.actor;
+    new Dialog({
+      title: "Select Assault Target",
+      content: dialogContent,
+      buttons: {
+        confirm: {
+          icon: '<i class="fas fa-crosshairs"></i>',
+          label: "Confirm Target",
+          callback: async (html) => {
+            const targetTokenId = html.find("#assault-target").val();
+            const token = actor.getActiveTokens()?.[0];
+            if (token?.document && targetTokenId) {
+              await token.document.setFlag("star-mercs", "assaultTarget", targetTokenId);
+              const targetToken = canvas.tokens.get(targetTokenId);
+              ui.notifications.info(`Assault target set: ${targetToken?.name ?? "Unknown"}`);
+            }
+          }
+        },
+        cancel: {
+          icon: '<i class="fas fa-times"></i>',
+          label: "Cancel"
+        }
+      },
+      default: "confirm"
+    }).render(true);
   }
 
   /**
