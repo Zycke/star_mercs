@@ -24,13 +24,21 @@
 
   </div>
 
-  {{!-- Supply Transfer --}}
-  <div class="supply-transfer-section">
-    <button type="button" class="transfer-supply-btn">
-      <i class="fas fa-truck"></i> {{localize "STARMERCS.TransferSupply"}}
-      <span class="transfer-range-info">({{supplyTransferRange}} hex range)</span>
-    </button>
-  </div>
+  {{!-- Supply Transfer (only during preparation phase) --}}
+  {{#if canTransferSupply}}
+    <div class="supply-transfer-section">
+      <button type="button" class="transfer-supply-btn">
+        <i class="fas fa-truck"></i> {{localize "STARMERCS.TransferSupply"}}
+        <span class="transfer-range-info">({{supplyTransferRange}} hex range)</span>
+      </button>
+    </div>
+  {{else}}
+    <div class="supply-transfer-section">
+      <span class="transfer-disabled-note">
+        <i class="fas fa-clock"></i> {{localize "STARMERCS.TransferPrepOnly"}}
+      </span>
+    </div>
+  {{/if}}
 
   {{#if hasNoSupply}}
     <div class="supply-warning">

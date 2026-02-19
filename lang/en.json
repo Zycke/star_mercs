@@ -135,6 +135,27 @@
 
   "STARMERCS.ZeroSupplyPenalty": "Zero Supply (roll twice, take lower)",
 
+  "STARMERCS.Order.Fortify": "Fortify",
+  "STARMERCS.Order.Construct": "Construct",
+  "STARMERCS.Order.MeteoricAssault": "Meteoric Assault",
+  "STARMERCS.Order.SupplyOrder": "Supply",
+  "STARMERCS.Order.Deploy": "Deploy",
+
+  "STARMERCS.OrderDetail.Movement": "Movement",
+  "STARMERCS.OrderDetail.Attack": "Attack",
+  "STARMERCS.OrderDetail.ReadinessCost": "Readiness",
+  "STARMERCS.OrderDetail.SupplyMod": "Supply",
+  "STARMERCS.OrderDetail.Allowed": "Allowed",
+  "STARMERCS.OrderDetail.NotAllowed": "Not Allowed",
+  "STARMERCS.OrderDetail.UpToSpeed": "Up to Speed ({speed} hexes)",
+  "STARMERCS.OrderDetail.NoMovement": "No Movement",
+  "STARMERCS.OrderDetail.SelectOrder": "-- Select Order --",
+
+  "STARMERCS.TransferPrepOnly": "Supply transfers are only allowed during the Preparation phase.",
+
+  "STARMERCS.Combat.SoftVsHeavy": "Soft vs Heavy — only a natural 10 can hit",
+  "STARMERCS.Combat.SoftVsHeavyMiss": "Soft attack cannot damage Heavy (needed natural 10)",
+
   "STARMERCS.Settings.ShowTargetingArrows": "Show Targeting Arrows",
   "STARMERCS.Settings.ShowTargetingArrowsHint": "Display colored arrows on the canvas from units to their weapon targets.",
   "STARMERCS.Controls.TargetingArrows": "Toggle Targeting Arrows"

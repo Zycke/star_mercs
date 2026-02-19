@@ -7,6 +7,8 @@
  * EWAR: Increases the accuracy threshold needed to hit (makes unit harder to hit).
  * Armored[X]: Reduces incoming damage by X.
  * Entrenched: Reduces incoming damage by 1.
+ * Fortified: Reduces incoming damage by 2.
+ * Heavy: Soft attacks only hit on natural 10.
  */
 
 /**
@@ -25,15 +27,13 @@ export function validateAttack(weapon, target) {
 
   // Flying units can only be hit by anti-air
   if (isFlying && !isHovering && attackType !== "antiAir") {
-    return { valid: false, reason: `${target.name} is Flying — only Anti-Air weapons can target it.` };
+    return { valid: false, reason: `${target.name} is Flying — only Anti-Air weapons can target it.`, softVsHeavy: false };
   }
 
-  // Soft attack does no damage to Heavy units
-  if (attackType === "soft" && isHeavy) {
-    return { valid: false, reason: `${weapon.name} (Soft Attack) has no effect on ${target.name} (Heavy).` };
-  }
+  // Soft attack vs Heavy: allowed, but only a natural 10 can hit
+  const softVsHeavy = attackType === "soft" && isHeavy;
 
-  return { valid: true, reason: null };
+  return { valid: true, reason: null, softVsHeavy };
 }
 
 /**
@@ -143,6 +143,12 @@ export function calculateDamage(weapon, attacker, target, hitType) {
     modifiers.push({ label: "Entrenched", value: -1 });
   }
 
+  // Target Fortified: -2 damage
+  if (target.hasTrait("Fortified")) {
+    damage -= 2;
+    modifiers.push({ label: "Fortified", value: -2 });
+  }
+
   // Floor at minimum 1 (if the attack hit, it always does at least 1)
   const final = Math.max(1, damage);
 
@@ -185,6 +191,9 @@ export async function resolveAttack(weapon, attacker, target) {
     };
   }
 
+  // Track soft-vs-Heavy flag for chat display
+  const softVsHeavy = validation.softVsHeavy;
+
   // Step 2: Calculate accuracy
   const accuracy = calculateAccuracy(weapon, attacker, target);
 
@@ -193,7 +202,12 @@ export async function resolveAttack(weapon, attacker, target) {
   await roll.evaluate();
 
   // Step 4: Determine hit
-  const hitResult = determineHitResult(roll.total, accuracy.effective);
+  let hitResult = determineHitResult(roll.total, accuracy.effective);
+
+  // Step 4b: Soft vs Heavy — only a natural 10 can hit
+  if (softVsHeavy && roll.total !== 10) {
+    hitResult = { hit: false, type: "miss" };
+  }
 
   // Step 5: Calculate damage (only if hit)
   let damage = null;
@@ -208,6 +222,7 @@ export async function resolveAttack(weapon, attacker, target) {
     accuracy,
     hitResult,
     damage,
+    softVsHeavy,
     weapon,
     attacker,
     target

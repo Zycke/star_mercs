@@ -26,6 +26,15 @@ export function registerHandlebarsHelpers() {
   Handlebars.registerHelper("lte", function(a, b) {
     return a <= b;
   });
+
+  // Localize a config enum value (e.g., "soft" → "Soft Attack")
+  Handlebars.registerHelper("localizeConfig", function(configKey, value) {
+    const map = CONFIG.STARMERCS?.[configKey];
+    if (!map || !value) return value;
+    const i18nKey = map[value];
+    if (!i18nKey) return value;
+    return game.i18n.localize(i18nKey);
+  });
 }
 
 /**

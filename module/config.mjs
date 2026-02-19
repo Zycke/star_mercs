@@ -113,6 +113,56 @@ STARMERCS.orders = {
     readinessCost: -1,
     supplyModifier: "1x",
     description: "Unit watches an area and fires on enemies that enter."
+  },
+  fortify: {
+    label: "STARMERCS.Order.Fortify",
+    category: "special",
+    requiredTrait: "Engineer",
+    allowsMovement: false,
+    allowsAttack: false,
+    readinessCost: -1,
+    supplyModifier: "1x",
+    description: "Engineer unit constructs fortifications at its position."
+  },
+  construct: {
+    label: "STARMERCS.Order.Construct",
+    category: "special",
+    requiredTrait: "Engineer",
+    allowsMovement: false,
+    allowsAttack: false,
+    readinessCost: -1,
+    supplyModifier: "1x",
+    description: "Engineer unit constructs field structures."
+  },
+  meteoric_assault: {
+    label: "STARMERCS.Order.MeteoricAssault",
+    category: "special",
+    requiredTrait: "Meteoric Assault",
+    allowsMovement: true,
+    allowsAttack: true,
+    readinessCost: -2,
+    supplyModifier: "2x",
+    description: "Unit performs a devastating drop assault from orbit or high altitude."
+  },
+  supply_order: {
+    label: "STARMERCS.Order.SupplyOrder",
+    category: "special",
+    requiredTrait: "Supply",
+    allowsMovement: true,
+    allowsAttack: false,
+    readinessCost: 0,
+    supplyModifier: "0x",
+    description: "Unit focuses on supply distribution to nearby friendlies."
+  },
+  deploy: {
+    label: "STARMERCS.Order.Deploy",
+    category: "special",
+    requiredTrait: "Deploy",
+    allowsMovement: false,
+    allowsAttack: false,
+    readinessCost: -1,
+    supplyModifier: "1x",
+    description: "Unit deploys into combat readiness, enabling abilities and weapons."
   }
 };
 

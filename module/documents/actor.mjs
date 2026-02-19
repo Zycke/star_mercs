@@ -224,6 +224,8 @@ export default class StarMercsActor extends Actor {
       damageBase: result.damage?.base ?? 0,
       damageModifiers: result.damage?.modifiers ?? [],
       hasDamageModifiers: (result.damage?.modifiers?.length ?? 0) > 0,
+      // Soft vs Heavy indicator
+      softVsHeavy: result.softVsHeavy ?? false,
       // Damage application results
       damagePending: damageApplied?.pending ?? false,
       targetDestroyed: damageApplied?.destroyed ?? false,
@@ -500,6 +502,7 @@ export default class StarMercsActor extends Actor {
         damageBase: result.damage?.base ?? 0,
         damageModifiers: result.damage?.modifiers ?? [],
         hasDamageModifiers: (result.damage?.modifiers?.length ?? 0) > 0,
+        softVsHeavy: result.softVsHeavy ?? false,
         damagePending: deferDamage,
         targetDestroyed: false,
         targetRouted: false,

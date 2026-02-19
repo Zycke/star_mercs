@@ -92,6 +92,18 @@ export default class StarMercsUnitSheet extends ActorSheet {
     context.currentOrderKey = this.actor.system.currentOrder || "";
     context.currentOrderData = allOrders[context.currentOrderKey] || null;
 
+    // Order details for the selected order
+    if (context.currentOrderData) {
+      const od = context.currentOrderData;
+      context.orderDetails = {
+        allowsAttack: od.allowsAttack,
+        allowsMovement: od.allowsMovement,
+        readinessCost: od.readinessCost,
+        supplyModifier: od.supplyModifier,
+        speed: this.actor.system.speed ?? 0
+      };
+    }
+
     // Pending damage on this unit's token (if any)
     const token = this.actor.getActiveTokens()?.[0];
     if (token?.document) {
@@ -101,7 +113,9 @@ export default class StarMercsUnitSheet extends ActorSheet {
       }
     }
 
-    // Supply transfer range
+    // Supply transfer: only during preparation phase
+    context.isPreparationPhase = combat?.phase === "preparation";
+    context.canTransferSupply = !combat?.started || combat?.phase === "preparation";
     context.supplyTransferRange = this.actor.getSupplyTransferRange();
 
     return context;
@@ -387,6 +401,13 @@ export default class StarMercsUnitSheet extends ActorSheet {
    */
   async _onTransferSupply(event) {
     event.preventDefault();
+
+    // Only allow supply transfer during preparation phase
+    const combat = game.combat;
+    if (combat?.started && combat.phase !== "preparation") {
+      ui.notifications.warn(game.i18n.localize("STARMERCS.TransferPrepOnly"));
+      return;
+    }
 
     const myToken = this.actor.getActiveTokens()?.[0];
     if (!myToken) {

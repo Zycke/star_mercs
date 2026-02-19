@@ -4,7 +4,7 @@
   {{#if invalid}}
     <div class="attack-header invalid">
       <span class="weapon-label">{{weaponName}} ({{attackString}})</span>
-      <span class="attack-type-badge {{attackType}}">{{attackType}}</span>
+      <span class="attack-type-badge {{attackType}}">{{localizeConfig "attackTypes" attackType}}</span>
     </div>
     <div class="attack-invalid">
       <i class="fas fa-ban"></i> {{invalidReason}}
@@ -15,7 +15,7 @@
     {{!-- Attack header --}}
     <div class="attack-header">
       <span class="weapon-label">{{weaponName}} ({{attackString}})</span>
-      <span class="attack-type-badge {{attackType}}">{{attackType}}</span>
+      <span class="attack-type-badge {{attackType}}">{{localizeConfig "attackTypes" attackType}}</span>
     </div>
 
     {{!-- Attacker / Target --}}
@@ -39,6 +39,15 @@
         </span>
       </div>
       <div class="hit-label {{hitType}}">{{hitLabel}}</div>
+      {{#if softVsHeavy}}
+        <div class="soft-vs-heavy-note">
+          {{#if isHit}}
+            {{localize "STARMERCS.Combat.SoftVsHeavy"}}
+          {{else}}
+            {{localize "STARMERCS.Combat.SoftVsHeavyMiss"}}
+          {{/if}}
+        </div>
+      {{/if}}
     </div>
 
     {{!-- Damage (if hit) --}}

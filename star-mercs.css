@@ -126,6 +126,18 @@
   align-items: center;
 }
 
+/* Rating dropdown fix (same dark styling as order-select) */
+.star-mercs .header-row select {
+  background: var(--sm-bg-input);
+  color: var(--sm-text);
+  border: 1px solid var(--sm-border);
+}
+
+.star-mercs .header-row select option {
+  background: var(--sm-bg-input);
+  color: var(--sm-text);
+}
+
 .star-mercs .field-group {
   display: flex;
   flex-direction: column;
@@ -1387,4 +1399,50 @@
 /* Supply transfer chat card */
 .star-mercs.chat-card.supply-transfer {
   border-left: 3px solid var(--sm-primary-light);
+}
+
+/* ============================= */
+/*  Order Details Box            */
+/* ============================= */
+
+.star-mercs .order-details-box {
+  margin-top: 6px;
+  padding: 6px 10px;
+  background: var(--sm-bg-medium);
+  border: 1px solid var(--sm-border);
+  border-radius: var(--sm-radius);
+  font-size: 12px;
+}
+
+.star-mercs .order-details-box .order-detail-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 2px 0;
+}
+
+.star-mercs .order-details-box .order-detail-label {
+  color: var(--sm-text-muted);
+  text-transform: uppercase;
+  font-size: 10px;
+  letter-spacing: 0.3px;
+}
+
+.star-mercs .order-details-box .order-detail-value {
+  font-weight: 600;
+}
+
+.star-mercs .order-details-box .detail-allowed {
+  color: var(--sm-primary-light);
+}
+
+.star-mercs .order-details-box .detail-not-allowed {
+  color: var(--sm-danger-light);
+}
+
+/* Soft vs Heavy indicator in chat */
+.star-mercs.chat-card .soft-vs-heavy-note {
+  font-size: 10px;
+  color: #ffb74d;
+  font-style: italic;
+  margin-top: 2px;
 }
