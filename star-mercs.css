@@ -283,21 +283,33 @@
 }
 
 /* ============================= */
-/*  Combat Status Grid           */
+/*  Combat Status Layout         */
 /* ============================= */
-
-.star-mercs .combat-status-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 10px;
-  margin-bottom: 16px;
-}
 
 .star-mercs .status-block {
   padding: 6px 8px;
   background: var(--sm-bg-medium);
   border: 1px solid var(--sm-border);
   border-radius: var(--sm-radius);
+  margin-bottom: 8px;
+}
+
+.star-mercs .order-block {
+  overflow: hidden;
+}
+
+.star-mercs .combat-penalties-section {
+  margin-top: 8px;
+}
+
+.star-mercs .combat-penalties-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.star-mercs .combat-penalties-grid .status-block {
+  margin-bottom: 0;
 }
 
 .star-mercs .status-value {
@@ -1408,10 +1420,13 @@
 .star-mercs .order-details-box {
   margin-top: 6px;
   padding: 6px 10px;
-  background: var(--sm-bg-medium);
+  background: var(--sm-bg-light);
   border: 1px solid var(--sm-border);
   border-radius: var(--sm-radius);
   font-size: 12px;
+  overflow: hidden;
+  box-sizing: border-box;
+  width: 100%;
 }
 
 .star-mercs .order-details-box .order-detail-row {

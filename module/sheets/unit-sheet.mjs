@@ -88,9 +88,16 @@ export default class StarMercsUnitSheet extends ActorSheet {
 
     context.hasNoSupply = hasNoSupply;
 
-    // Currently selected order key and its config data
+    // Currently selected order key and its config data (add resolved labelText)
     context.currentOrderKey = this.actor.system.currentOrder || "";
-    context.currentOrderData = allOrders[context.currentOrderKey] || null;
+    const rawOrderData = allOrders[context.currentOrderKey] || null;
+    if (rawOrderData) {
+      context.currentOrderData = Object.assign({}, rawOrderData, {
+        labelText: game.i18n.localize(rawOrderData.label)
+      });
+    } else {
+      context.currentOrderData = null;
+    }
 
     // Order details for the selected order
     if (context.currentOrderData) {
@@ -135,11 +142,14 @@ export default class StarMercsUnitSheet extends ActorSheet {
     for (const item of this.actor.items) {
       if (item.type === "weapon") {
         // Build weapon display data with resolved target name
+        // Resolve attack type label
+        const attackTypeLabels = { soft: "Soft", hard: "Hard", antiAir: "Anti-Air" };
         const weaponData = {
           _id: item.id,
           img: item.img,
           name: item.name,
           system: item.system,
+          attackTypeLabel: attackTypeLabels[item.system.attackType] ?? item.system.attackType,
           targetName: null,
           targetId: null
         };
@@ -153,7 +163,15 @@ export default class StarMercsUnitSheet extends ActorSheet {
         }
         weapons.push(weaponData);
       } else if (item.type === "trait") {
-        traits.push(item);
+        const modeLabels = { passive: "Passive", active: "Active", conditional: "Conditional" };
+        const traitData = {
+          _id: item.id,
+          img: item.img,
+          name: item.name,
+          system: item.system,
+          modeLabel: modeLabels[item.system.passive] ?? item.system.passive
+        };
+        traits.push(traitData);
       } else if (item.type === "order") {
         orders.push(item);
       }

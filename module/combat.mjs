@@ -30,6 +30,11 @@ export function validateAttack(weapon, target) {
     return { valid: false, reason: `${target.name} is Flying — only Anti-Air weapons can target it.`, softVsHeavy: false };
   }
 
+  // Anti-air weapons can only target units with the Flying trait
+  if (attackType === "antiAir" && !isFlying) {
+    return { valid: false, reason: `${weapon.name} (Anti-Air) can only target units with the Flying trait.`, softVsHeavy: false };
+  }
+
   // Soft attack vs Heavy: allowed, but only a natural 10 can hit
   const softVsHeavy = attackType === "soft" && isHeavy;
 
@@ -212,7 +217,12 @@ export async function resolveAttack(weapon, attacker, target) {
   // Step 5: Calculate damage (only if hit)
   let damage = null;
   if (hitResult.hit) {
-    damage = calculateDamage(weapon, attacker, target, hitResult.type);
+    if (softVsHeavy) {
+      // Soft vs Heavy on natural 10: always exactly 1 damage
+      damage = { final: 1, base: weapon.system.damage, modifiers: [{ label: "Soft vs Heavy (fixed)", value: null }] };
+    } else {
+      damage = calculateDamage(weapon, attacker, target, hitResult.type);
+    }
   }
 
   return {

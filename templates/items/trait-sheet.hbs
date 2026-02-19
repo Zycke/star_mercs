@@ -13,7 +13,7 @@
   <section class="sheet-body">
     <div class="form-row">
       <div class="form-group">
-        <label>{{localize "STARMERCS.TraitValue"}}</label>
+        <label>Value [X]</label>
         <div class="input-with-suffix">
           <input type="number" name="system.traitValue" value="{{system.traitValue}}"
                  min="0"/>
@@ -22,7 +22,7 @@
       </div>
 
       <div class="form-group">
-        <label>{{localize "STARMERCS.TraitMode"}}</label>
+        <label>Mode</label>
         <select name="system.passive">
           {{selectOptions modeChoices selected=system.passive}}
         </select>
@@ -30,7 +30,7 @@
     </div>
 
     <div class="form-group description-field">
-      <label>{{localize "STARMERCS.Description"}}</label>
+      <label>Description</label>
       {{editor enrichedDescription target="system.description" button=true editable=editable}}
     </div>
   </section>
