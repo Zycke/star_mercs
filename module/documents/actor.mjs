@@ -33,25 +33,34 @@ export default class StarMercsActor extends Actor {
 
   /**
    * Check if the unit has a specific trait by name (case-insensitive).
+   * Only returns true if the trait is activated (checkbox checked).
    * @param {string} traitName
    * @returns {boolean}
    */
   hasTrait(traitName) {
     return this.items.some(i =>
       i.type === "trait" && i.name.toLowerCase() === traitName.toLowerCase()
+      && i.system.active
     );
   }
 
   /**
    * Get a trait's numeric value (the [X] parameter).
+   * Only returns value if the trait is activated.
    * @param {string} traitName
-   * @returns {number} The trait value, or 0 if not found.
+   * @returns {number} The trait value, or 0 if not found/inactive.
    */
   getTraitValue(traitName) {
     const trait = this.items.find(i =>
       i.type === "trait" && i.name.toLowerCase() === traitName.toLowerCase()
+      && i.system.active
     );
     return trait ? trait.system.traitValue : 0;
+  }
+
+  /** Get all active trait items. */
+  get activeTraits() {
+    return this.items.filter(i => i.type === "trait" && i.system.active);
   }
 
   /* ---------------------------------------- */
@@ -63,9 +72,35 @@ export default class StarMercsActor extends Actor {
    * @returns {{allowed: boolean, reason: string|null}}
    */
   _checkAttackAllowed() {
+    // Zero supply: cannot attack
+    if (this.type === "unit" && (this.system.supply?.current ?? 1) <= 0) {
+      return {
+        allowed: false,
+        reason: game.i18n.localize("STARMERCS.NoSupplyAttack")
+      };
+    }
+
     const combat = game.combat;
     if (!combat?.started) return { allowed: true, reason: null };
     return combat.canAttack(this);
+  }
+
+  /* ---------------------------------------- */
+  /*  Utility: Hex Distance                   */
+  /* ---------------------------------------- */
+
+  /**
+   * Calculate hex distance between two tokens.
+   * @param {Token} token1
+   * @param {Token} token2
+   * @returns {number} Distance in hexes.
+   */
+  static getHexDistance(token1, token2) {
+    const ray = new Ray(token1.center, token2.center);
+    const segments = [{ ray }];
+    const distance = canvas.grid.measureDistances(segments, { gridSpaces: true })[0];
+    const gridDistance = canvas.scene.grid.distance || 1;
+    return Math.round(distance / gridDistance);
   }
 
   /* ---------------------------------------- */
@@ -106,6 +141,19 @@ export default class StarMercsActor extends Actor {
    * @private
    */
   async _rollTargetedAttack(weapon, target) {
+    // Range check: find both tokens and measure hex distance
+    const attackerToken = canvas?.tokens?.placeables.find(t => t.actor === this);
+    const targetToken = canvas?.tokens?.placeables.find(t => t.actor === target);
+    if (attackerToken && targetToken && weapon.system.range > 0) {
+      const distance = StarMercsActor.getHexDistance(attackerToken, targetToken);
+      if (distance > weapon.system.range) {
+        ui.notifications.warn(
+          game.i18n.format("STARMERCS.OutOfRange", { range: weapon.system.range, distance })
+        );
+        return null;
+      }
+    }
+
     const result = await resolveAttack(weapon, this, target);
 
     // Attack was invalid (wrong weapon type, etc.)
@@ -189,6 +237,12 @@ export default class StarMercsActor extends Actor {
       "systems/star-mercs/templates/chat/attack-result.hbs",
       templateData
     );
+
+    // Track weapons fired for supply consumption
+    if (game.combat?.started && attackerToken) {
+      const fired = attackerToken.document.getFlag("star-mercs", "weaponsFired") ?? 0;
+      await attackerToken.document.setFlag("star-mercs", "weaponsFired", fired + 1);
+    }
 
     return ChatMessage.create({
       content,
@@ -300,11 +354,23 @@ export default class StarMercsActor extends Actor {
     }
 
     // Collect weapons with assigned targets (targetId stores token IDs)
+    const attackerToken = canvas?.tokens?.placeables.find(t => t.actor === this);
     const targetedWeapons = [];
     for (const item of this.items) {
       if (item.type === "weapon" && item.system.targetId) {
         const targetToken = canvas?.tokens?.get(item.system.targetId);
         if (targetToken?.actor) {
+          // Range check
+          if (attackerToken && item.system.range > 0) {
+            const distance = StarMercsActor.getHexDistance(attackerToken, targetToken);
+            if (distance > item.system.range) {
+              ui.notifications.warn(
+                game.i18n.format("STARMERCS.OutOfRange", { range: item.system.range, distance })
+                + ` (${item.name})`
+              );
+              continue;
+            }
+          }
           targetedWeapons.push({ weapon: item, target: targetToken.actor, targetToken });
         }
       }
@@ -479,6 +545,13 @@ export default class StarMercsActor extends Actor {
       });
     }
 
+    // Track weapons fired for supply consumption
+    const validResults = results.filter(r => r.valid);
+    if (game.combat?.started && attackerToken && validResults.length > 0) {
+      const fired = attackerToken.document.getFlag("star-mercs", "weaponsFired") ?? 0;
+      await attackerToken.document.setFlag("star-mercs", "weaponsFired", fired + validResults.length);
+    }
+
     // Phase 5: Clear all weapon targets after firing
     const clearUpdates = [];
     for (const { weapon } of targetedWeapons) {
@@ -548,5 +621,52 @@ export default class StarMercsActor extends Actor {
    */
   async rollSkillCheck(options = {}) {
     return skillCheck(this, options);
+  }
+
+  /* ---------------------------------------- */
+  /*  Supply Transfer                         */
+  /* ---------------------------------------- */
+
+  /**
+   * Get the supply transfer range for this unit.
+   * Base range is 1 hex (adjacent), extended by Supply[X] trait.
+   * @returns {number}
+   */
+  getSupplyTransferRange() {
+    const supplyTraitValue = this.getTraitValue("Supply");
+    return 1 + supplyTraitValue;
+  }
+
+  /**
+   * Transfer supply to another unit.
+   * @param {StarMercsActor} targetActor - The target unit to receive supply.
+   * @param {number} amount - Amount of supply to transfer.
+   * @returns {Promise<boolean>} True if transfer succeeded.
+   */
+  async transferSupply(targetActor, amount) {
+    if (!targetActor || targetActor.type !== "unit") return false;
+
+    const currentSupply = this.system.supply.current;
+    const targetSupply = targetActor.system.supply.current;
+    const targetCapacity = targetActor.system.supply.capacity;
+
+    // Clamp amount to what we have and what they can receive
+    const actualAmount = Math.min(amount, currentSupply, targetCapacity - targetSupply);
+    if (actualAmount <= 0) return false;
+
+    // Execute transfer
+    await this.update({ "system.supply.current": currentSupply - actualAmount });
+    await targetActor.update({ "system.supply.current": targetSupply + actualAmount });
+
+    // Post to chat
+    await ChatMessage.create({
+      content: `<div class="star-mercs chat-card supply-transfer">
+        <div class="summary-header"><i class="fas fa-truck"></i> <strong>${this.name}</strong> &rarr; <strong>${targetActor.name}</strong></div>
+        <div class="summary-damage">${game.i18n.format("STARMERCS.TransferSuccess", { amount: actualAmount, target: targetActor.name })}</div>
+      </div>`,
+      speaker: ChatMessage.getSpeaker({ actor: this })
+    });
+
+    return true;
   }
 }

@@ -42,9 +42,23 @@ export async function skillCheck(actor, { flavor = null, toChat = true } = {}) {
 }
 
 /**
+ * Perform a skill check with the zero-supply penalty (roll twice, take lower).
+ * @param {StarMercsActor} actor
+ * @returns {Promise<object>} The worse of two skill check results.
+ * @private
+ */
+async function _zeroSupplySkillCheck(actor) {
+  const roll1 = await skillCheck(actor, { toChat: false });
+  const roll2 = await skillCheck(actor, { toChat: false });
+  return roll1.total <= roll2.total ? roll1 : roll2;
+}
+
+/**
  * Perform an opposed check between two actors.
  * Both roll d10 + rating bonus. Higher total wins.
  * Difference of 10+ = Critical Success for the winner.
+ *
+ * If an actor has 0 supply, they roll twice and take the lower result.
  *
  * @param {StarMercsActor} attacker - The initiating actor.
  * @param {StarMercsActor} defender - The opposing actor.
@@ -57,8 +71,16 @@ export async function opposedCheck(attacker, defender, {
   attackerLabel = "Attacker",
   defenderLabel = "Defender"
 } = {}) {
-  const attackerResult = await skillCheck(attacker, { toChat: false });
-  const defenderResult = await skillCheck(defender, { toChat: false });
+  // Check zero supply for each side
+  const attackerNoSupply = attacker.type === "unit" && (attacker.system.supply?.current ?? 1) <= 0;
+  const defenderNoSupply = defender.type === "unit" && (defender.system.supply?.current ?? 1) <= 0;
+
+  const attackerResult = attackerNoSupply
+    ? await _zeroSupplySkillCheck(attacker)
+    : await skillCheck(attacker, { toChat: false });
+  const defenderResult = defenderNoSupply
+    ? await _zeroSupplySkillCheck(defender)
+    : await skillCheck(defender, { toChat: false });
 
   const difference = Math.abs(attackerResult.total - defenderResult.total);
   let winner;
@@ -69,8 +91,8 @@ export async function opposedCheck(attacker, defender, {
   const isCritical = difference >= 10;
 
   const result = {
-    attacker: { ...attackerResult, label: attackerLabel },
-    defender: { ...defenderResult, label: defenderLabel },
+    attacker: { ...attackerResult, label: attackerLabel, zeroSupply: attackerNoSupply },
+    defender: { ...defenderResult, label: defenderLabel, zeroSupply: defenderNoSupply },
     winner,
     isCritical,
     difference
@@ -90,11 +112,13 @@ export async function opposedCheck(attacker, defender, {
       attackerBonus: attackerResult.ratingBonus,
       attackerTotal: attackerResult.total,
       attackerRating: attackerResult.rating,
+      attackerZeroSupply: attackerNoSupply,
       defenderName: defender.name,
       defenderRoll: defenderResult.natural,
       defenderBonus: defenderResult.ratingBonus,
       defenderTotal: defenderResult.total,
       defenderRating: defenderResult.rating,
+      defenderZeroSupply: defenderNoSupply,
       winnerName,
       isCritical,
       critText,

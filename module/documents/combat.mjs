@@ -65,7 +65,12 @@ export default class StarMercsCombat extends Combat {
     const currentIndex = this.phaseIndex;
     const nextIndex = currentIndex + 1;
 
-    // Leaving consolidation — run cleanup
+    // Entering consolidation — apply damage, readiness costs, supply consumption
+    if (nextIndex === 3) {
+      await this._runConsolidationEffects();
+    }
+
+    // Leaving consolidation — clear targets, destinations, orders
     if (currentIndex === 3) {
       await this._runConsolidationCleanup();
     }
@@ -243,15 +248,25 @@ export default class StarMercsCombat extends Combat {
   }
 
   /**
-   * End-of-round cleanup during consolidation:
-   * 1. Apply all pending damage to targets
-   * 2. Deduct readiness costs from orders
-   * 3. Clear weapon targets
-   * 4. Clear movement destinations and movement tracking
-   * 5. Clear current orders
+   * Parse a supply modifier string (e.g., "1x", "2x") into a numeric multiplier.
+   * @param {string} mod - The modifier string.
+   * @returns {number} The numeric multiplier.
    * @private
    */
-  async _runConsolidationCleanup() {
+  _parseSupplyMultiplier(mod) {
+    if (!mod) return 1;
+    const match = mod.match(/^(\d+)x$/i);
+    return match ? parseInt(match[1]) : 1;
+  }
+
+  /**
+   * Consolidation effects: runs at the BEGINNING of consolidation phase.
+   * 1. Apply all pending damage to targets
+   * 2. Deduct readiness costs from orders
+   * 3. Consume supply (usage × order multiplier + weapons fired)
+   * @private
+   */
+  async _runConsolidationEffects() {
     for (const combatant of this.combatants) {
       const actor = combatant.actor;
       if (!actor || actor.type !== "unit") continue;
@@ -293,7 +308,7 @@ export default class StarMercsCombat extends Combat {
       if (order && order.system.readinessCost !== 0) {
         const cost = order.system.readinessCost;
         const currentRdy = actor.system.readiness.value;
-        // Positive cost = recovery, negative = loss (cost is stored as -1, -2, etc. OR +1 for recovery)
+        // Positive cost = recovery, negative = loss
         const newRdy = Math.max(0, Math.min(actor.system.readiness.max, currentRdy + cost));
         if (newRdy !== currentRdy) {
           await actor.update({ "system.readiness.value": newRdy });
@@ -307,7 +322,49 @@ export default class StarMercsCombat extends Combat {
         }
       }
 
-      // 3. Clear weapon targets
+      // 3. Consume supply: (usage × order multiplier) + weapons fired
+      const supply = actor.system.supply;
+      if (supply && supply.current > 0) {
+        const baseUsage = supply.usage ?? 0;
+        const multiplier = order ? this._parseSupplyMultiplier(order.system.supplyModifier) : 1;
+        const weaponsFired = token ? (token.getFlag("star-mercs", "weaponsFired") ?? 0) : 0;
+        const totalConsumption = (baseUsage * multiplier) + weaponsFired;
+
+        if (totalConsumption > 0) {
+          const newSupply = Math.max(0, supply.current - totalConsumption);
+          await actor.update({ "system.supply.current": newSupply });
+
+          const parts = [];
+          if (baseUsage > 0) parts.push(`${baseUsage * multiplier} base${multiplier > 1 ? ` (×${multiplier})` : ""}`);
+          if (weaponsFired > 0) parts.push(`${weaponsFired} weapon${weaponsFired > 1 ? "s" : ""} fired`);
+
+          await ChatMessage.create({
+            content: `<div class="star-mercs chat-card consolidation-supply">
+              <div class="summary-header"><i class="fas fa-box"></i> <strong>${token?.name ?? actor.name}</strong> — ${game.i18n.localize("STARMERCS.SupplyConsumed")}: ${totalConsumption}</div>
+              <div class="status-update">${parts.join(" + ")} — ${newSupply}/${supply.capacity} remaining</div>
+            </div>`,
+            speaker: { alias: "Star Mercs" }
+          });
+        }
+      }
+    }
+  }
+
+  /**
+   * End-of-consolidation cleanup: runs when LEAVING consolidation phase.
+   * 1. Clear weapon targets
+   * 2. Clear movement destinations and movement tracking
+   * 3. Clear weapons fired counter
+   * 4. Clear current orders
+   * @private
+   */
+  async _runConsolidationCleanup() {
+    for (const combatant of this.combatants) {
+      const actor = combatant.actor;
+      if (!actor || actor.type !== "unit") continue;
+      const token = combatant.token;
+
+      // 1. Clear weapon targets
       const clearUpdates = [];
       for (const item of actor.items) {
         if (item.type === "weapon" && item.system.targetId) {
@@ -318,13 +375,15 @@ export default class StarMercsCombat extends Combat {
         await actor.updateEmbeddedDocuments("Item", clearUpdates);
       }
 
-      // 4. Clear movement destination and tracking
+      // 2. Clear movement destination and tracking
       if (token) {
         await token.unsetFlag("star-mercs", "movementUsed");
         await token.unsetFlag("star-mercs", "moveDestination");
+        // 3. Clear weapons fired counter
+        await token.unsetFlag("star-mercs", "weaponsFired");
       }
 
-      // 5. Clear current order
+      // 4. Clear current order
       await actor.update({ "system.currentOrder": "" });
     }
   }

@@ -1,3 +1,5 @@
+import StarMercsActor from "../documents/actor.mjs";
+
 /**
  * Sheet class for Star Mercs Unit actors.
  * Displays unit attributes, embedded weapons/traits/orders, and combat status.
@@ -49,6 +51,9 @@ export default class StarMercsUnitSheet extends ActorSheet {
     // Organize embedded items by type
     this._prepareItems(context);
 
+    // Active traits for summary on Attributes tab
+    context.activeTraits = this.actor.items.filter(i => i.type === "trait" && i.system.active);
+
     // Phase-aware context
     const combat = game.combat;
     context.combatActive = combat?.started ?? false;
@@ -57,13 +62,19 @@ export default class StarMercsUnitSheet extends ActorSheet {
     context.isOrdersPhase = combat?.phase === "orders";
     context.isTacticalPhase = combat?.phase === "tactical";
 
-    // Available orders from config (filtered by trait requirements)
+    // Available orders from config (filtered by trait requirements and supply)
     const allOrders = CONFIG.STARMERCS.orders ?? {};
+    const hasNoSupply = (this.actor.system.supply?.current ?? 1) <= 0;
+    const zeroSupplyOrders = ["hold", "move", "withdraw"];
+
     context.availableOrders = Object.entries(allOrders)
-      .filter(([, data]) => {
+      .filter(([key, data]) => {
+        // Special orders require a trait
         if (data.category === "special" && data.requiredTrait) {
-          return this.actor.hasTrait(data.requiredTrait);
+          if (!this.actor.hasTrait(data.requiredTrait)) return false;
         }
+        // Zero supply: only Hold, Move, Withdraw
+        if (hasNoSupply && !zeroSupplyOrders.includes(key)) return false;
         return true;
       })
       .map(([key, data]) => ({
@@ -74,6 +85,8 @@ export default class StarMercsUnitSheet extends ActorSheet {
         allowsAttack: data.allowsAttack,
         readinessCost: data.readinessCost
       }));
+
+    context.hasNoSupply = hasNoSupply;
 
     // Currently selected order key and its config data
     context.currentOrderKey = this.actor.system.currentOrder || "";
@@ -87,6 +100,9 @@ export default class StarMercsUnitSheet extends ActorSheet {
         context.pendingDamage = pending;
       }
     }
+
+    // Supply transfer range
+    context.supplyTransferRange = this.actor.getSupplyTransferRange();
 
     return context;
   }
@@ -171,6 +187,12 @@ export default class StarMercsUnitSheet extends ActorSheet {
 
     // Movement destination selection (Orders phase)
     html.on("click", ".set-move-destination", this._onSetMoveDestination.bind(this));
+
+    // Trait activation toggle
+    html.on("change", ".trait-active-toggle", this._onTraitToggle.bind(this));
+
+    // Supply transfer
+    html.on("click", ".transfer-supply-btn", this._onTransferSupply.bind(this));
   }
 
   /* ---------------------------------------- */
@@ -340,6 +362,115 @@ export default class StarMercsUnitSheet extends ActorSheet {
     };
 
     canvas.stage.on("pointerdown", handler);
+  }
+
+  /* ---------------------------------------- */
+  /*  Trait Handlers                          */
+  /* ---------------------------------------- */
+
+  /**
+   * Toggle a trait's active state via its checkbox.
+   */
+  async _onTraitToggle(event) {
+    const itemId = event.currentTarget.dataset.itemId;
+    const item = this.actor.items.get(itemId);
+    if (!item) return;
+    await item.update({ "system.active": event.currentTarget.checked });
+  }
+
+  /* ---------------------------------------- */
+  /*  Supply Transfer                         */
+  /* ---------------------------------------- */
+
+  /**
+   * Open a dialog to transfer supply to a nearby friendly unit.
+   */
+  async _onTransferSupply(event) {
+    event.preventDefault();
+
+    const myToken = this.actor.getActiveTokens()?.[0];
+    if (!myToken) {
+      ui.notifications.warn("Place this unit's token on the canvas first.");
+      return;
+    }
+
+    const transferRange = this.actor.getSupplyTransferRange();
+    const currentSupply = this.actor.system.supply.current;
+    if (currentSupply <= 0) {
+      ui.notifications.warn("No supply available to transfer.");
+      return;
+    }
+
+    // Find nearby friendly units within range
+    const nearbyTargets = [];
+    for (const token of canvas.tokens.placeables) {
+      if (token === myToken) continue;
+      if (!token.actor || token.actor.type !== "unit") continue;
+
+      const distance = StarMercsActor.getHexDistance(myToken, token);
+      if (distance <= transferRange) {
+        const targetSupply = token.actor.system.supply;
+        if (targetSupply.current < targetSupply.capacity) {
+          nearbyTargets.push({
+            tokenId: token.id,
+            name: token.name,
+            distance,
+            actor: token.actor,
+            spaceAvailable: targetSupply.capacity - targetSupply.current
+          });
+        }
+      }
+    }
+
+    if (nearbyTargets.length === 0) {
+      ui.notifications.warn(game.i18n.localize("STARMERCS.TransferNoTargets"));
+      return;
+    }
+
+    // Build dialog content
+    const targetOptions = nearbyTargets.map(t =>
+      `<option value="${t.tokenId}">${t.name} (${t.distance} hex${t.distance > 1 ? "es" : ""}, space: ${t.spaceAvailable})</option>`
+    ).join("");
+
+    const dialogContent = `
+      <form>
+        <div class="form-group">
+          <label>${game.i18n.localize("STARMERCS.TransferSupplyTo")}</label>
+          <select id="transfer-target">${targetOptions}</select>
+        </div>
+        <div class="form-group">
+          <label>${game.i18n.localize("STARMERCS.TransferAmount")} (max: ${currentSupply})</label>
+          <input type="number" id="transfer-amount" value="1" min="1" max="${currentSupply}" />
+        </div>
+      </form>
+    `;
+
+    const actor = this.actor;
+    new Dialog({
+      title: game.i18n.localize("STARMERCS.TransferSupply"),
+      content: dialogContent,
+      buttons: {
+        transfer: {
+          icon: '<i class="fas fa-truck"></i>',
+          label: game.i18n.localize("STARMERCS.TransferSupply"),
+          callback: async (html) => {
+            const targetTokenId = html.find("#transfer-target").val();
+            const amount = parseInt(html.find("#transfer-amount").val()) || 0;
+            if (amount <= 0) return;
+
+            const targetToken = canvas.tokens.get(targetTokenId);
+            if (!targetToken?.actor) return;
+
+            await actor.transferSupply(targetToken.actor, amount);
+          }
+        },
+        cancel: {
+          icon: '<i class="fas fa-times"></i>',
+          label: "Cancel"
+        }
+      },
+      default: "transfer"
+    }).render(true);
   }
 
   /* ---------------------------------------- */

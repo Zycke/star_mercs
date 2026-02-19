@@ -344,6 +344,19 @@
   border-bottom: 1px solid var(--sm-border);
 }
 
+/* Header columns must match data row flex values */
+.star-mercs .item-list-header .item-name {
+  flex: 2;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.star-mercs .item-list-header .item-detail {
+  flex: 1;
+  text-align: center;
+}
+
 .star-mercs .item-list .item {
   display: flex;
   align-items: center;
@@ -1016,6 +1029,14 @@
 .star-mercs .order-select {
   width: 100%;
   font-size: 13px;
+  background: var(--sm-bg-input);
+  color: var(--sm-text);
+  border: 1px solid var(--sm-border);
+}
+
+.star-mercs .order-select option {
+  background: var(--sm-bg-input);
+  color: var(--sm-text);
 }
 
 /* Order flags (movement/attack icons) */
@@ -1225,4 +1246,145 @@
   font-size: 14px;
   color: var(--sm-danger-light);
   margin-bottom: 4px;
+}
+
+/* Consolidation supply chat card */
+.star-mercs.chat-card.consolidation-supply {
+  border-left: 3px solid var(--sm-primary-light);
+}
+
+.star-mercs.chat-card.consolidation-supply .summary-header {
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+/* ============================= */
+/*  Trait Toggle & Inactive      */
+/* ============================= */
+
+.star-mercs .trait-item.trait-inactive {
+  opacity: 0.4;
+}
+
+.star-mercs .trait-item.trait-inactive .item-name,
+.star-mercs .trait-item.trait-inactive .trait-mode {
+  color: var(--sm-text-dim);
+}
+
+.star-mercs .trait-toggle {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  margin-right: 4px;
+}
+
+.star-mercs .trait-active-toggle {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--sm-primary);
+  cursor: pointer;
+}
+
+/* ============================= */
+/*  Active Traits Summary        */
+/* ============================= */
+
+.star-mercs .active-traits-summary {
+  margin-top: 12px;
+}
+
+.star-mercs .active-traits-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.star-mercs .active-trait-badge {
+  display: inline-block;
+  padding: 3px 8px;
+  background: var(--sm-bg-medium);
+  border: 1px solid var(--sm-primary);
+  border-radius: var(--sm-radius);
+  font-size: 12px;
+  color: var(--sm-primary-light);
+  font-weight: 600;
+}
+
+.star-mercs .active-trait-badge .trait-bracket {
+  color: var(--sm-accent);
+  font-weight: 700;
+}
+
+/* ============================= */
+/*  Supply Transfer              */
+/* ============================= */
+
+.star-mercs .supply-transfer-section {
+  margin: 10px 0;
+}
+
+.star-mercs .transfer-supply-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--sm-bg-light);
+  border: 1px solid var(--sm-primary);
+  border-radius: var(--sm-radius);
+  color: var(--sm-primary-light);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  transition: background 0.15s, color 0.15s;
+}
+
+.star-mercs .transfer-supply-btn:hover {
+  background: var(--sm-primary-dark);
+  color: #8cc63f;
+}
+
+.star-mercs .transfer-range-info {
+  font-weight: 400;
+  font-size: 11px;
+  color: var(--sm-text-muted);
+}
+
+/* ============================= */
+/*  Supply Warning               */
+/* ============================= */
+
+.star-mercs .supply-warning {
+  margin-top: 8px;
+  padding: 6px 10px;
+  background: #3a1a1a;
+  border: 1px solid var(--sm-danger);
+  border-radius: var(--sm-radius);
+  color: var(--sm-danger-light);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.star-mercs .supply-warning i {
+  margin-right: 4px;
+}
+
+/* ============================= */
+/*  Zero Supply Penalty in Chat  */
+/* ============================= */
+
+.star-mercs.chat-card .zero-supply-penalty {
+  display: block;
+  font-size: 10px;
+  color: var(--sm-danger-light);
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.star-mercs.chat-card .zero-supply-penalty i {
+  margin-right: 2px;
+}
+
+/* Supply transfer chat card */
+.star-mercs.chat-card.supply-transfer {
+  border-left: 3px solid var(--sm-primary-light);
 }
