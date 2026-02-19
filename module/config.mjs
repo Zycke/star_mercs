@@ -7,11 +7,11 @@ export const STARMERCS = {};
  * Unit rating levels and their associated skill check bonuses.
  */
 STARMERCS.ratings = {
-  green: { label: "STARMERCS.Rating.Green", bonus: 0 },
-  trained: { label: "STARMERCS.Rating.Trained", bonus: 1 },
-  experienced: { label: "STARMERCS.Rating.Experienced", bonus: 2 },
-  veteran: { label: "STARMERCS.Rating.Veteran", bonus: 3 },
-  elite: { label: "STARMERCS.Rating.Elite", bonus: 5 }
+  green: { label: "STARMERCS.Rating.Green", bonus: 0, accuracy: 7 },
+  trained: { label: "STARMERCS.Rating.Trained", bonus: 1, accuracy: 6 },
+  experienced: { label: "STARMERCS.Rating.Experienced", bonus: 2, accuracy: 5 },
+  veteran: { label: "STARMERCS.Rating.Veteran", bonus: 3, accuracy: 4 },
+  elite: { label: "STARMERCS.Rating.Elite", bonus: 5, accuracy: 3 }
 };
 
 /**

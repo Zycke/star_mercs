@@ -19,16 +19,28 @@
           <label>Rating Bonus</label>
           <span class="derived-value">+{{derived.ratingBonus}}</span>
         </div>
+        <div class="field-group">
+          <label>Team</label>
+          <select name="system.team">
+            {{selectOptions teamChoices selected=system.team}}
+          </select>
+        </div>
       </div>
     </div>
   </header>
 
   {{!-- Status Warnings --}}
-  {{#if derived.isRouted}}
-    <div class="status-warning routed">ROUTED — Unit removed from play</div>
-  {{/if}}
   {{#if derived.isDestroyed}}
     <div class="status-warning destroyed">DESTROYED — Unit eliminated</div>
+  {{/if}}
+  {{#if isBreaking}}
+    <div class="status-warning breaking">BREAKING — Can only Hold or Withdraw</div>
+  {{/if}}
+  {{#if isBroken}}
+    <div class="status-warning broken">BROKEN — Can only Hold or Withdraw</div>
+  {{/if}}
+  {{#if isDisordered}}
+    <div class="status-warning disordered">DISORDERED — Enemies get +1 to hit and +1 damage</div>
   {{/if}}
 
   {{!-- Navigation Tabs --}}
@@ -52,7 +64,7 @@
         {{#if activeTraits.length}}
           <div class="active-traits-list">
             {{#each activeTraits as |trait|}}
-              <span class="active-trait-badge" title="{{localizeConfig "traitModes" trait.system.passive}}">
+              <span class="active-trait-badge">
                 {{trait.name}}{{#if trait.system.traitValue}}<span class="trait-bracket">[{{trait.system.traitValue}}]</span>{{/if}}
               </span>
             {{/each}}
