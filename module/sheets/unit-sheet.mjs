@@ -57,22 +57,36 @@ export default class StarMercsUnitSheet extends ActorSheet {
     context.isOrdersPhase = combat?.phase === "orders";
     context.isTacticalPhase = combat?.phase === "tactical";
 
-    // Available orders for dropdown (from embedded order items)
-    context.availableOrders = this.actor.items
-      .filter(i => i.type === "order")
-      .map(order => ({
-        id: order.id,
-        name: order.name,
-        category: order.system.category,
-        allowsMovement: order.system.allowsMovement,
-        allowsAttack: order.system.allowsAttack
+    // Available orders from config (filtered by trait requirements)
+    const allOrders = CONFIG.STARMERCS.orders ?? {};
+    context.availableOrders = Object.entries(allOrders)
+      .filter(([, data]) => {
+        if (data.category === "special" && data.requiredTrait) {
+          return this.actor.hasTrait(data.requiredTrait);
+        }
+        return true;
+      })
+      .map(([key, data]) => ({
+        key,
+        label: game.i18n.localize(data.label),
+        category: data.category,
+        allowsMovement: data.allowsMovement,
+        allowsAttack: data.allowsAttack,
+        readinessCost: data.readinessCost
       }));
 
-    // Currently selected order
-    context.currentOrderName = this.actor.system.currentOrder || "";
-    context.currentOrderItem = this.actor.items.find(
-      i => i.type === "order" && i.name === context.currentOrderName
-    ) || null;
+    // Currently selected order key and its config data
+    context.currentOrderKey = this.actor.system.currentOrder || "";
+    context.currentOrderData = allOrders[context.currentOrderKey] || null;
+
+    // Pending damage on this unit's token (if any)
+    const token = this.actor.getActiveTokens()?.[0];
+    if (token?.document) {
+      const pending = token.document.getFlag("star-mercs", "pendingDamage");
+      if (pending && (pending.strength > 0 || pending.readiness > 0)) {
+        context.pendingDamage = pending;
+      }
+    }
 
     return context;
   }
@@ -154,6 +168,9 @@ export default class StarMercsUnitSheet extends ActorSheet {
 
     // Order assignment dropdown (Orders phase)
     html.on("change", ".order-select", this._onOrderSelect.bind(this));
+
+    // Movement destination selection (Orders phase)
+    html.on("click", ".set-move-destination", this._onSetMoveDestination.bind(this));
   }
 
   /* ---------------------------------------- */
@@ -285,8 +302,44 @@ export default class StarMercsUnitSheet extends ActorSheet {
    */
   async _onOrderSelect(event) {
     event.preventDefault();
-    const selectedOrderName = event.currentTarget.value;
-    await this.actor.update({ "system.currentOrder": selectedOrderName });
+    const selectedOrderKey = event.currentTarget.value;
+    await this.actor.update({ "system.currentOrder": selectedOrderKey });
+  }
+
+  /**
+   * Enter move destination selection mode.
+   * The next canvas click sets the unit's planned movement hex.
+   */
+  _onSetMoveDestination(event) {
+    event.preventDefault();
+
+    // Find this actor's token on canvas
+    const token = this.actor.getActiveTokens()?.[0];
+    if (!token) {
+      ui.notifications.warn("Place this unit's token on the canvas first.");
+      return;
+    }
+
+    ui.notifications.info("Click a hex on the map to set the movement destination.");
+
+    const handler = (event) => {
+      const pos = event.data.getLocalPosition(canvas.app.stage);
+      // Snap to hex grid center
+      const snapped = canvas.grid.getSnappedPoint(pos, { mode: CONST.GRID_SNAPPING_MODES.CENTER });
+      const dest = snapped ?? pos;
+
+      // Store destination on the token document
+      token.document.setFlag("star-mercs", "moveDestination", { x: dest.x, y: dest.y });
+
+      // Redraw arrows to show the green movement arrow
+      game.starmercs?.targetingArrowLayer?.drawArrows();
+
+      // Clean up listener
+      canvas.stage.off("pointerdown", handler);
+      ui.notifications.info("Movement destination set.");
+    };
+
+    canvas.stage.on("pointerdown", handler);
   }
 
   /* ---------------------------------------- */

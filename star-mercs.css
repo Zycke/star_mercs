@@ -1081,3 +1081,148 @@
   background: #2a2a1a;
   color: #c9a227;
 }
+
+/* ============================= */
+/*  Pending Damage Block         */
+/* ============================= */
+
+.star-mercs .pending-damage-block {
+  border-left: 3px solid var(--sm-danger-light);
+}
+
+.star-mercs .pending-damage-values {
+  display: flex;
+  gap: 12px;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.star-mercs .pending-str {
+  color: var(--sm-danger-light);
+}
+
+.star-mercs .pending-rdy {
+  color: #ffb74d;
+}
+
+/* Pending status in chat cards */
+.star-mercs.chat-card .status-update.pending {
+  color: #ffb74d;
+  font-style: italic;
+}
+
+.star-mercs.chat-card .status-update.pending i {
+  margin-right: 4px;
+}
+
+/* ============================= */
+/*  Movement Destination Button  */
+/* ============================= */
+
+.star-mercs .set-move-destination {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  padding: 4px 10px;
+  background: var(--sm-bg-light);
+  border: 1px solid var(--sm-primary);
+  border-radius: var(--sm-radius);
+  color: var(--sm-primary-light);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  transition: background 0.15s, color 0.15s;
+}
+
+.star-mercs .set-move-destination:hover {
+  background: var(--sm-primary-dark);
+  color: #8cc63f;
+}
+
+/* ============================= */
+/*  Consolidation Chat Cards     */
+/* ============================= */
+
+.star-mercs.chat-card.consolidation-damage {
+  border-left: 3px solid var(--sm-danger-light);
+}
+
+.star-mercs.chat-card.consolidation-readiness {
+  border-left: 3px solid #ffb74d;
+}
+
+/* ============================= */
+/*  Move Destination Button      */
+/* ============================= */
+
+.star-mercs .set-move-destination {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  padding: 4px 10px;
+  background: #1a3a1a;
+  border: 1px solid #33cc33;
+  border-radius: var(--sm-radius);
+  color: #33ff33;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.star-mercs .set-move-destination:hover {
+  background: #2a5a2a;
+}
+
+/* ============================= */
+/*  Pending Damage Display       */
+/* ============================= */
+
+.star-mercs .pending-damage-block {
+  border-left: 3px solid var(--sm-accent);
+}
+
+.star-mercs .pending-damage-values {
+  display: flex;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.star-mercs .pending-str {
+  color: var(--sm-danger-light);
+}
+
+.star-mercs .pending-rdy {
+  color: var(--sm-accent);
+}
+
+/* Pending damage status in chat */
+.star-mercs.chat-card .status-update.pending {
+  color: var(--sm-accent);
+  font-style: italic;
+}
+
+.star-mercs.chat-card .status-update.pending i {
+  margin-right: 4px;
+}
+
+/* Consolidation chat cards */
+.star-mercs.chat-card.consolidation-damage,
+.star-mercs.chat-card.consolidation-readiness {
+  border-left: 3px solid var(--sm-accent);
+}
+
+.star-mercs.chat-card.consolidation-damage .summary-header,
+.star-mercs.chat-card.consolidation-readiness .summary-header {
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+.star-mercs.chat-card.consolidation-damage .summary-damage {
+  font-size: 14px;
+  color: var(--sm-danger-light);
+  margin-bottom: 4px;
+}

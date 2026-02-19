@@ -127,10 +127,29 @@ export default class StarMercsActor extends Actor {
       });
     }
 
-    // Apply damage to target if hit
+    // Determine whether to defer damage (active combat) or apply immediately (sandbox)
     let damageApplied = null;
+    const deferDamage = game.combat?.started;
+
     if (result.hitResult.hit && result.damage) {
-      damageApplied = await target.applyDamage(result.damage.final, this);
+      if (deferDamage) {
+        // Store as pending — will be applied during consolidation
+        const maxStr = target.system.strength.max;
+        const threshold = maxStr * 0.25;
+        const readinessLoss = result.damage.final > threshold ? 2 : 1;
+
+        // Find the target's token document
+        const targetToken = canvas?.tokens?.placeables.find(t => t.actor === target);
+        if (targetToken) {
+          await game.combat.addPendingDamage(
+            targetToken.document, result.damage.final, readinessLoss,
+            this.name, weapon.name
+          );
+        }
+        damageApplied = { pending: true, damage: result.damage.final, readinessLost: readinessLoss };
+      } else {
+        damageApplied = await target.applyDamage(result.damage.final, this);
+      }
     }
 
     // Build chat card
@@ -158,6 +177,7 @@ export default class StarMercsActor extends Actor {
       damageModifiers: result.damage?.modifiers ?? [],
       hasDamageModifiers: (result.damage?.modifiers?.length ?? 0) > 0,
       // Damage application results
+      damagePending: damageApplied?.pending ?? false,
       targetDestroyed: damageApplied?.destroyed ?? false,
       targetRouted: damageApplied?.routed ?? false,
       targetNewStrength: damageApplied?.newStrength ?? null,
@@ -323,9 +343,12 @@ export default class StarMercsActor extends Actor {
       }
     }
 
-    // Apply accumulated damage to each target (simultaneous resolution)
+    // Determine whether to defer damage (active combat) or apply immediately
+    const deferDamage = game.combat?.started;
+
+    // Apply or defer accumulated damage to each target
     const damageResults = new Map();
-    for (const [targetId, { target, totalDamage, hitDamages }] of damageByTarget) {
+    for (const [targetId, { target, targetName, totalDamage, hitDamages }] of damageByTarget) {
       const maxStrength = target.system.strength.max;
       const threshold = maxStrength * 0.25;
       let totalReadinessLoss = 0;
@@ -333,21 +356,38 @@ export default class StarMercsActor extends Actor {
         totalReadinessLoss += dmg > threshold ? 2 : 1;
       }
 
-      const newStrength = Math.max(0, target.system.strength.value - totalDamage);
-      const newReadiness = Math.max(0, target.system.readiness.value - totalReadinessLoss);
+      if (deferDamage) {
+        // Store as pending damage on the token
+        const targetToken = canvas?.tokens?.get(targetId);
+        if (targetToken) {
+          await game.combat.addPendingDamage(
+            targetToken.document, totalDamage, totalReadinessLoss,
+            this.name, `${hitDamages.length} weapon(s)`
+          );
+        }
+        damageResults.set(targetId, {
+          pending: true,
+          totalDamage,
+          readinessLost: totalReadinessLoss
+        });
+      } else {
+        const newStrength = Math.max(0, target.system.strength.value - totalDamage);
+        const newReadiness = Math.max(0, target.system.readiness.value - totalReadinessLoss);
 
-      await target.update({
-        "system.strength.value": newStrength,
-        "system.readiness.value": newReadiness
-      });
+        await target.update({
+          "system.strength.value": newStrength,
+          "system.readiness.value": newReadiness
+        });
 
-      damageResults.set(targetId, {
-        newStrength,
-        newReadiness,
-        readinessLost: totalReadinessLoss,
-        destroyed: newStrength <= 0,
-        routed: newStrength > 0 && newReadiness <= 0
-      });
+        damageResults.set(targetId, {
+          pending: false,
+          newStrength,
+          newReadiness,
+          readinessLost: totalReadinessLoss,
+          destroyed: newStrength <= 0,
+          routed: newStrength > 0 && newReadiness <= 0
+        });
+      }
     }
 
     // Phase 3: Post individual attack results to chat
@@ -394,6 +434,7 @@ export default class StarMercsActor extends Actor {
         damageBase: result.damage?.base ?? 0,
         damageModifiers: result.damage?.modifiers ?? [],
         hasDamageModifiers: (result.damage?.modifiers?.length ?? 0) > 0,
+        damagePending: deferDamage,
         targetDestroyed: false,
         targetRouted: false,
         targetNewStrength: null,
@@ -421,7 +462,9 @@ export default class StarMercsActor extends Actor {
       statusHtml += `<div class="summary-header"><i class="fas fa-crosshairs"></i> <strong>${this.name}</strong> &rarr; <strong>${targetName}</strong></div>`;
       statusHtml += `<div class="summary-damage">Total Damage: <strong>${entry.totalDamage}</strong> (${entry.hitDamages.length} hit${entry.hitDamages.length > 1 ? "s" : ""})</div>`;
 
-      if (dmgResult.destroyed) {
+      if (dmgResult.pending) {
+        statusHtml += `<div class="status-update pending"><i class="fas fa-clock"></i> Damage pending — applied in Consolidation</div>`;
+      } else if (dmgResult.destroyed) {
         statusHtml += `<div class="status-alert destroyed"><i class="fas fa-skull-crossbones"></i> ${targetName} DESTROYED</div>`;
       } else if (dmgResult.routed) {
         statusHtml += `<div class="status-alert routed"><i class="fas fa-running"></i> ${targetName} ROUTED</div>`;

@@ -29,8 +29,8 @@ export default class UnitData extends foundry.abstract.TypeDataModel {
         max: new NumberField({ required: true, integer: true, min: 1, initial: 10 })
       }),
       readiness: new SchemaField({
-        value: new NumberField({ required: true, integer: true, min: 0, max: 10, initial: 10 }),
-        max: new NumberField({ required: true, integer: true, min: 0, max: 10, initial: 10 })
+        value: new NumberField({ required: true, integer: true, min: 0, initial: 5 }),
+        max: new NumberField({ required: true, integer: true, min: 0, initial: 5 })
       }),
 
       // --- Movement ---
@@ -72,16 +72,27 @@ export default class UnitData extends foundry.abstract.TypeDataModel {
     const ratingBonuses = { green: 0, trained: 1, experienced: 2, veteran: 3, elite: 5 };
     this.ratingBonus = ratingBonuses[this.rating] ?? 0;
 
+    // Readiness pool size determined by rank
+    const readinessPoolSizes = { green: 5, trained: 8, experienced: 10, veteran: 12, elite: 15 };
+    const poolSize = readinessPoolSizes[this.rating] ?? 5;
+    this.readiness.max = poolSize;
+
+    // Cap current readiness to max
+    if (this.readiness.value > this.readiness.max) {
+      this.readiness.value = this.readiness.max;
+    }
+
     // Casualty penalty: for every 20% of strength lost, -1 to damage rolls (min 1 on actual rolls)
     const strengthPct = this.strength.max > 0
       ? this.strength.value / this.strength.max
       : 0;
     this.casualtyPenalty = Math.floor((1 - strengthPct) * 5);
 
-    // Readiness penalties
+    // Readiness penalties (thresholds scale with pool size)
+    const rdyPct = poolSize > 0 ? this.readiness.value / poolSize : 0;
     this.readinessPenalty = {
-      accuracy: this.readiness.value <= 7 ? 1 : 0,
-      damage: this.readiness.value <= 4 ? -1 : 0
+      accuracy: rdyPct <= 0.7 ? 1 : 0,
+      damage: rdyPct <= 0.4 ? -1 : 0
     };
 
     // Status flags

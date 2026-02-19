@@ -221,6 +221,9 @@ Hooks.on("updateCombat", (combat, changes) => {
     }
   }
 
+  // Redraw arrows (movement destination arrows appear/disappear based on phase)
+  game.starmercs?.targetingArrowLayer?.drawArrows();
+
   // Re-render all open unit sheets so phase indicators and order dropdown update
   for (const app of Object.values(ui.windows)) {
     if (app instanceof ActorSheet && app.actor?.type === "unit") {

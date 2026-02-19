@@ -185,19 +185,48 @@ export default class StarMercsCombat extends Combat {
   }
 
   /* ---------------------------------------- */
+  /*  Pending Damage                          */
+  /* ---------------------------------------- */
+
+  /**
+   * Add pending damage to a token (deferred until consolidation).
+   * @param {TokenDocument} tokenDoc - The target token document.
+   * @param {number} strengthDamage - Strength damage to apply.
+   * @param {number} readinessLoss - Readiness loss to apply.
+   * @param {string} sourceName - Name of the attacking unit (for display).
+   * @param {string} weaponName - Name of the weapon (for display).
+   */
+  async addPendingDamage(tokenDoc, strengthDamage, readinessLoss, sourceName, weaponName) {
+    const existing = tokenDoc.getFlag("star-mercs", "pendingDamage") ?? {
+      strength: 0, readiness: 0, hits: []
+    };
+    existing.strength += strengthDamage;
+    existing.readiness += readinessLoss;
+    existing.hits.push({ source: sourceName, weapon: weaponName, damage: strengthDamage, readinessLoss });
+    await tokenDoc.setFlag("star-mercs", "pendingDamage", existing);
+  }
+
+  /* ---------------------------------------- */
   /*  Internal Helpers                        */
   /* ---------------------------------------- */
 
   /**
-   * Look up the actor's currently assigned order item.
+   * Look up the actor's currently assigned order from config.
+   * Returns a shape compatible with the previous item-based lookup.
    * @param {StarMercsActor} actor
-   * @returns {Item|null}
+   * @returns {{key: string, name: string, system: object}|null}
    * @private
    */
   _getActorOrder(actor) {
-    const orderName = actor.system.currentOrder;
-    if (!orderName) return null;
-    return actor.items.find(i => i.type === "order" && i.name === orderName) || null;
+    const orderKey = actor.system.currentOrder;
+    if (!orderKey) return null;
+    const orderData = CONFIG.STARMERCS.orders?.[orderKey];
+    if (!orderData) return null;
+    return {
+      key: orderKey,
+      name: game.i18n.localize(orderData.label),
+      system: orderData
+    };
   }
 
   /**
@@ -214,15 +243,71 @@ export default class StarMercsCombat extends Combat {
   }
 
   /**
-   * End-of-round cleanup: clear weapon targets and movement flags.
+   * End-of-round cleanup during consolidation:
+   * 1. Apply all pending damage to targets
+   * 2. Deduct readiness costs from orders
+   * 3. Clear weapon targets
+   * 4. Clear movement destinations and movement tracking
+   * 5. Clear current orders
    * @private
    */
   async _runConsolidationCleanup() {
     for (const combatant of this.combatants) {
       const actor = combatant.actor;
       if (!actor || actor.type !== "unit") continue;
+      const token = combatant.token;
 
-      // Clear weapon targets
+      // 1. Apply pending damage
+      if (token) {
+        const pending = token.getFlag("star-mercs", "pendingDamage");
+        if (pending && (pending.strength > 0 || pending.readiness > 0)) {
+          const newStrength = Math.max(0, actor.system.strength.value - pending.strength);
+          const newReadiness = Math.max(0, actor.system.readiness.value - pending.readiness);
+          await actor.update({
+            "system.strength.value": newStrength,
+            "system.readiness.value": newReadiness
+          });
+
+          // Post damage application summary to chat
+          const destroyed = newStrength <= 0;
+          const routed = !destroyed && newReadiness <= 0;
+          let statusText = `STR ${newStrength} | RDY ${newReadiness}`;
+          if (destroyed) statusText = "DESTROYED";
+          else if (routed) statusText = "ROUTED";
+
+          await ChatMessage.create({
+            content: `<div class="star-mercs chat-card consolidation-damage">
+              <div class="summary-header"><i class="fas fa-skull"></i> <strong>${token.name}</strong> — Damage Applied</div>
+              <div class="summary-damage">-${pending.strength} STR, -${pending.readiness} RDY</div>
+              <div class="status-update">${statusText}</div>
+            </div>`,
+            speaker: { alias: "Star Mercs" }
+          });
+
+          await token.unsetFlag("star-mercs", "pendingDamage");
+        }
+      }
+
+      // 2. Deduct readiness cost from the unit's current order
+      const order = this._getActorOrder(actor);
+      if (order && order.system.readinessCost !== 0) {
+        const cost = order.system.readinessCost;
+        const currentRdy = actor.system.readiness.value;
+        // Positive cost = recovery, negative = loss (cost is stored as -1, -2, etc. OR +1 for recovery)
+        const newRdy = Math.max(0, Math.min(actor.system.readiness.max, currentRdy + cost));
+        if (newRdy !== currentRdy) {
+          await actor.update({ "system.readiness.value": newRdy });
+          const label = cost > 0 ? `+${cost}` : `${cost}`;
+          await ChatMessage.create({
+            content: `<div class="star-mercs chat-card consolidation-readiness">
+              <div class="summary-header"><i class="fas fa-battery-half"></i> <strong>${token?.name ?? actor.name}</strong> — Order Readiness: ${label} (${order.name})</div>
+            </div>`,
+            speaker: { alias: "Star Mercs" }
+          });
+        }
+      }
+
+      // 3. Clear weapon targets
       const clearUpdates = [];
       for (const item of actor.items) {
         if (item.type === "weapon" && item.system.targetId) {
@@ -233,11 +318,14 @@ export default class StarMercsCombat extends Combat {
         await actor.updateEmbeddedDocuments("Item", clearUpdates);
       }
 
-      // Reset movement tracking
-      const token = combatant.token;
+      // 4. Clear movement destination and tracking
       if (token) {
         await token.unsetFlag("star-mercs", "movementUsed");
+        await token.unsetFlag("star-mercs", "moveDestination");
       }
+
+      // 5. Clear current order
+      await actor.update({ "system.currentOrder": "" });
     }
   }
 }
