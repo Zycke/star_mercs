@@ -38,6 +38,8 @@ export default class WeaponData extends foundry.abstract.TypeDataModel {
       accurate: new NumberField({ required: false, integer: true, min: 0, initial: 0 }),
       inaccurate: new NumberField({ required: false, integer: true, min: 0, initial: 0 }),
       area: new BooleanField({ required: false, initial: false }),
+      artillery: new BooleanField({ required: false, initial: false }),
+      aircraft: new BooleanField({ required: false, initial: false }),
 
       // Description / notes
       description: new StringField({ required: false, initial: "" }),

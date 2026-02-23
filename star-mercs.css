@@ -655,6 +655,114 @@
 /*  Supply Section               */
 /* ============================= */
 
+.star-mercs .supply-section h3 {
+  margin-bottom: 8px;
+}
+
+.star-mercs .supply-categories-grid {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.star-mercs .supply-categories-grid.ammo-row {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.star-mercs .supply-categories-grid.logistics-row {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.star-mercs .supply-categories-grid.placeholder-row {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.star-mercs .supply-category {
+  padding: 6px 8px;
+  background: var(--sm-bg-medium);
+  border: 1px solid var(--sm-border);
+  border-radius: var(--sm-radius);
+}
+
+.star-mercs .supply-category.placeholder {
+  opacity: 0.6;
+}
+
+.star-mercs .supply-category-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  font-size: 12px;
+  margin-bottom: 4px;
+  color: var(--sm-text);
+}
+
+.star-mercs .supply-category-header i {
+  color: var(--sm-accent);
+  width: 16px;
+  text-align: center;
+}
+
+.star-mercs .supply-category .resource-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.star-mercs .supply-category .resource-bar input {
+  width: 50px;
+  text-align: center;
+}
+
+.star-mercs .supply-category .resource-bar .sep {
+  color: var(--sm-text-muted);
+  font-weight: 700;
+}
+
+.star-mercs .fuel-per-hex {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--sm-text-dim);
+}
+
+.star-mercs .fuel-per-hex input {
+  width: 40px;
+  text-align: center;
+}
+
+.star-mercs .placeholder-note {
+  font-size: 10px;
+  color: var(--sm-text-dim);
+  margin-top: 4px;
+  font-style: italic;
+}
+
+.star-mercs .placeholder-note i {
+  margin-right: 2px;
+}
+
+/* Supply transfer form */
+.supply-transfer-form .transfer-category {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.supply-transfer-form .transfer-category label {
+  flex: 1;
+  font-size: 12px;
+}
+
+.supply-transfer-form .transfer-category input {
+  width: 60px;
+  text-align: center;
+}
+
 .star-mercs .notes-section {
   margin-top: 16px;
 }

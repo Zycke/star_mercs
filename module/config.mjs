@@ -163,6 +163,15 @@ STARMERCS.orders = {
     readinessCost: -1,
     supplyModifier: "1x",
     description: "Unit deploys into combat readiness, enabling abilities and weapons."
+  },
+  stand_down: {
+    label: "STARMERCS.Order.StandDown",
+    category: "standard",
+    allowsMovement: false,
+    allowsAttack: false,
+    readinessCost: 3,
+    supplyModifier: "0x",
+    description: "Unit powers down and conserves resources. Recovers 3 readiness. Attackers gain +2 to hit and +2 damage against this unit. Vehicles do not consume baseline fuel."
   }
 };
 

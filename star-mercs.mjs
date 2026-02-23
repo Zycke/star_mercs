@@ -180,7 +180,7 @@ Hooks.on("preUpdateToken", (tokenDoc, changes, options, userId) => {
     return false;
   }
 
-  // Tactical phase: enforce speed limit
+  // Tactical phase: enforce speed limit and fuel check
   if (combat.phase === "tactical") {
     const movementUsed = tokenDoc.getFlag("star-mercs", "movementUsed") ?? 0;
     const speed = actor.system.speed ?? 0;
@@ -189,6 +189,17 @@ Hooks.on("preUpdateToken", (tokenDoc, changes, options, userId) => {
         game.i18n.format("STARMERCS.Phase.MovementExhausted", { speed })
       );
       return false;
+    }
+
+    // Check if unit has fuel to move
+    const fuelPerHex = actor.system.fuelPerHex ?? 0;
+    if (fuelPerHex > 0) {
+      const fuelRemaining = actor.system.supply?.fuel?.current ?? 0;
+      const fuelNeeded = (movementUsed + 1) * fuelPerHex;
+      if (fuelNeeded > fuelRemaining) {
+        ui.notifications.warn("Cannot move — not enough fuel remaining.");
+        return false;
+      }
     }
   }
 

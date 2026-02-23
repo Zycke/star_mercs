@@ -78,9 +78,15 @@ export function calculateAccuracy(weapon, attacker, target = null) {
     }
   }
 
-  const effective = Math.max(2, Math.min(10, base - accurateMod + inaccurateMod + readinessMod + ewarMod + disorderedMod));
+  // Stand Down target: -2 to threshold (much easier to hit)
+  let standDownMod = 0;
+  if (target?.system?.currentOrder === "stand_down") {
+    standDownMod = -2;
+  }
 
-  return { effective, base, readinessMod, ewarMod, accurateMod, inaccurateMod, disorderedMod };
+  const effective = Math.max(2, Math.min(10, base - accurateMod + inaccurateMod + readinessMod + ewarMod + disorderedMod + standDownMod));
+
+  return { effective, base, readinessMod, ewarMod, accurateMod, inaccurateMod, disorderedMod, standDownMod };
 }
 
 /**
@@ -170,6 +176,12 @@ export function calculateDamage(weapon, attacker, target, hitType) {
   if (targetToken?.document?.getFlag("star-mercs", "disordered")) {
     damage += 1;
     modifiers.push({ label: "Target disordered (+1)", value: +1 });
+  }
+
+  // Stand Down target: +2 damage
+  if (target.system.currentOrder === "stand_down") {
+    damage += 2;
+    modifiers.push({ label: "Target standing down (+2)", value: +2 });
   }
 
   // Area weapon trait: +1 damage vs Infantry

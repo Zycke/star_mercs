@@ -70,7 +70,11 @@ export default class StarMercsUnitSheet extends ActorSheet {
 
     // Available orders from config (filtered by trait requirements, supply, and morale status)
     const allOrders = CONFIG.STARMERCS.orders ?? {};
-    const hasNoSupply = (this.actor.system.supply?.current ?? 1) <= 0;
+    // Check if all ammo supply categories are empty
+    const sup = this.actor.system.supply ?? {};
+    const hasNoSupply = (sup.smallArms?.current ?? 0) <= 0
+      && (sup.heavyWeapons?.current ?? 0) <= 0
+      && (sup.ordnance?.current ?? 0) <= 0;
     const zeroSupplyOrders = ["hold", "move", "withdraw"];
 
     // Check Breaking/Broken status from token flags
@@ -164,6 +168,8 @@ export default class StarMercsUnitSheet extends ActorSheet {
         const wTraits = [];
         if (item.system.indirect) wTraits.push("Indirect");
         if (item.system.area) wTraits.push("Area");
+        if (item.system.artillery) wTraits.push("Artillery");
+        if (item.system.aircraft) wTraits.push("Aircraft");
         if (item.system.accurate > 0) wTraits.push(`Acc+${item.system.accurate}`);
         if (item.system.inaccurate > 0) wTraits.push(`Inacc-${item.system.inaccurate}`);
         const weaponData = {
@@ -552,13 +558,17 @@ export default class StarMercsUnitSheet extends ActorSheet {
     }
 
     const transferRange = this.actor.getSupplyTransferRange();
-    const currentSupply = this.actor.system.supply.current;
-    if (currentSupply <= 0) {
+
+    // Check if we have any supply to transfer
+    const mySup = this.actor.system.supply;
+    const cats = StarMercsActor.SUPPLY_CATEGORIES;
+    const hasAnySupply = cats.some(c => (mySup[c]?.current ?? 0) > 0);
+    if (!hasAnySupply) {
       ui.notifications.warn("No supply available to transfer.");
       return;
     }
 
-    // Find nearby friendly units within range
+    // Find nearby friendly units within range that have space for at least one category
     const nearbyTargets = [];
     for (const token of canvas.tokens.placeables) {
       if (token === myToken) continue;
@@ -566,14 +576,14 @@ export default class StarMercsUnitSheet extends ActorSheet {
 
       const distance = StarMercsActor.getHexDistance(myToken, token);
       if (distance <= transferRange) {
-        const targetSupply = token.actor.system.supply;
-        if (targetSupply.current < targetSupply.capacity) {
+        const targetSup = token.actor.system.supply;
+        const hasSpace = cats.some(c => (targetSup[c]?.current ?? 0) < (targetSup[c]?.capacity ?? 0));
+        if (hasSpace) {
           nearbyTargets.push({
             tokenId: token.id,
             name: token.name,
             distance,
-            actor: token.actor,
-            spaceAvailable: targetSupply.capacity - targetSupply.current
+            actor: token.actor
           });
         }
       }
@@ -584,41 +594,55 @@ export default class StarMercsUnitSheet extends ActorSheet {
       return;
     }
 
-    // Build dialog content
+    // Build dialog content with per-category inputs
     const targetOptions = nearbyTargets.map(t =>
-      `<option value="${t.tokenId}">${t.name} (${t.distance} hex${t.distance > 1 ? "es" : ""}, space: ${t.spaceAvailable})</option>`
+      `<option value="${t.tokenId}">${t.name} (${t.distance} hex${t.distance > 1 ? "es" : ""})</option>`
     ).join("");
 
+    const labels = StarMercsActor.SUPPLY_LABELS;
+    const categoryInputs = cats.map(cat => {
+      const available = mySup[cat]?.current ?? 0;
+      if (available <= 0) return "";
+      return `<div class="form-group transfer-category">
+        <label>${labels[cat]} (have: ${available})</label>
+        <input type="number" data-category="${cat}" value="0" min="0" max="${available}" />
+      </div>`;
+    }).filter(s => s).join("");
+
     const dialogContent = `
-      <form>
+      <form class="supply-transfer-form">
         <div class="form-group">
-          <label>${game.i18n.localize("STARMERCS.TransferSupplyTo")}</label>
+          <label>Transfer To</label>
           <select id="transfer-target">${targetOptions}</select>
         </div>
-        <div class="form-group">
-          <label>${game.i18n.localize("STARMERCS.TransferAmount")} (max: ${currentSupply})</label>
-          <input type="number" id="transfer-amount" value="1" min="1" max="${currentSupply}" />
-        </div>
+        <hr/>
+        <h4>Amounts to Transfer</h4>
+        ${categoryInputs}
       </form>
     `;
 
     const actor = this.actor;
     new Dialog({
-      title: game.i18n.localize("STARMERCS.TransferSupply"),
+      title: "Transfer Supply",
       content: dialogContent,
       buttons: {
         transfer: {
           icon: '<i class="fas fa-truck"></i>',
-          label: game.i18n.localize("STARMERCS.TransferSupply"),
+          label: "Transfer",
           callback: async (html) => {
             const targetTokenId = html.find("#transfer-target").val();
-            const amount = parseInt(html.find("#transfer-amount").val()) || 0;
-            if (amount <= 0) return;
-
             const targetToken = canvas.tokens.get(targetTokenId);
             if (!targetToken?.actor) return;
 
-            await actor.transferSupply(targetToken.actor, amount);
+            const transfers = {};
+            html.find("input[data-category]").each(function() {
+              const cat = this.dataset.category;
+              const val = parseInt(this.value) || 0;
+              if (val > 0) transfers[cat] = val;
+            });
+
+            if (Object.keys(transfers).length === 0) return;
+            await actor.transferSupply(targetToken.actor, transfers);
           }
         },
         cancel: {

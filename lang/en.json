@@ -140,6 +140,7 @@
   "STARMERCS.Order.MeteoricAssault": "Meteoric Assault",
   "STARMERCS.Order.SupplyOrder": "Supply",
   "STARMERCS.Order.Deploy": "Deploy",
+  "STARMERCS.Order.StandDown": "Stand Down",
 
   "STARMERCS.OrderDetail.Movement": "Movement",
   "STARMERCS.OrderDetail.Attack": "Attack",

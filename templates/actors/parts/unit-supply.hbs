@@ -1,27 +1,122 @@
 <div class="supply-section">
   <h3>Supply</h3>
-  <div class="supply-grid">
 
-    <div class="attribute-block">
-      <label>Current Supply</label>
+  {{!-- Ammunition Categories --}}
+  <div class="supply-categories-grid ammo-row">
+    <div class="supply-category">
+      <div class="supply-category-header">
+        <i class="fas fa-crosshairs"></i>
+        <span>Small Arms</span>
+      </div>
       <div class="resource-bar">
-        <input type="number" name="system.supply.current"
-               value="{{system.supply.current}}" min="0" max="{{system.supply.capacity}}"/>
+        <input type="number" name="system.supply.smallArms.current"
+               value="{{system.supply.smallArms.current}}" min="0" max="{{system.supply.smallArms.capacity}}"/>
         <span class="sep">/</span>
-        <input type="number" name="system.supply.capacity"
-               value="{{system.supply.capacity}}" min="0"/>
+        <input type="number" name="system.supply.smallArms.capacity"
+               value="{{system.supply.smallArms.capacity}}" min="0"/>
       </div>
     </div>
 
-    <div class="attribute-block">
-      <label>Supply Usage</label>
-      <div class="input-with-suffix">
-        <input type="number" name="system.supply.usage"
-               value="{{system.supply.usage}}" min="0"/>
-        <span class="suffix">per turn</span>
+    <div class="supply-category">
+      <div class="supply-category-header">
+        <i class="fas fa-bomb"></i>
+        <span>Heavy Weapons</span>
+      </div>
+      <div class="resource-bar">
+        <input type="number" name="system.supply.heavyWeapons.current"
+               value="{{system.supply.heavyWeapons.current}}" min="0" max="{{system.supply.heavyWeapons.capacity}}"/>
+        <span class="sep">/</span>
+        <input type="number" name="system.supply.heavyWeapons.capacity"
+               value="{{system.supply.heavyWeapons.capacity}}" min="0"/>
       </div>
     </div>
 
+    <div class="supply-category">
+      <div class="supply-category-header">
+        <i class="fas fa-rocket"></i>
+        <span>Ordnance</span>
+      </div>
+      <div class="resource-bar">
+        <input type="number" name="system.supply.ordnance.current"
+               value="{{system.supply.ordnance.current}}" min="0" max="{{system.supply.ordnance.capacity}}"/>
+        <span class="sep">/</span>
+        <input type="number" name="system.supply.ordnance.capacity"
+               value="{{system.supply.ordnance.capacity}}" min="0"/>
+      </div>
+    </div>
+  </div>
+
+  {{!-- Fuel and Basic Supplies --}}
+  <div class="supply-categories-grid logistics-row">
+    <div class="supply-category">
+      <div class="supply-category-header">
+        <i class="fas fa-gas-pump"></i>
+        <span>Fuel</span>
+      </div>
+      <div class="resource-bar">
+        <input type="number" name="system.supply.fuel.current"
+               value="{{system.supply.fuel.current}}" min="0" max="{{system.supply.fuel.capacity}}"/>
+        <span class="sep">/</span>
+        <input type="number" name="system.supply.fuel.capacity"
+               value="{{system.supply.fuel.capacity}}" min="0"/>
+      </div>
+      <div class="fuel-per-hex">
+        <label>Per hex:</label>
+        <input type="number" name="system.fuelPerHex"
+               value="{{system.fuelPerHex}}" min="0"/>
+      </div>
+    </div>
+
+    <div class="supply-category">
+      <div class="supply-category-header">
+        <i class="fas fa-medkit"></i>
+        <span>Basic Supplies</span>
+      </div>
+      <div class="resource-bar">
+        <input type="number" name="system.supply.basicSupplies.current"
+               value="{{system.supply.basicSupplies.current}}" min="0" max="{{system.supply.basicSupplies.capacity}}"/>
+        <span class="sep">/</span>
+        <input type="number" name="system.supply.basicSupplies.capacity"
+               value="{{system.supply.basicSupplies.capacity}}" min="0"/>
+      </div>
+    </div>
+  </div>
+
+  {{!-- Placeholder Categories (Materials & Parts) --}}
+  <div class="supply-categories-grid placeholder-row">
+    <div class="supply-category placeholder">
+      <div class="supply-category-header">
+        <i class="fas fa-hammer"></i>
+        <span>Materials</span>
+      </div>
+      <div class="resource-bar">
+        <input type="number" name="system.supply.materials.current"
+               value="{{system.supply.materials.current}}" min="0" max="{{system.supply.materials.capacity}}"/>
+        <span class="sep">/</span>
+        <input type="number" name="system.supply.materials.capacity"
+               value="{{system.supply.materials.capacity}}" min="0"/>
+      </div>
+      <div class="placeholder-note">
+        <i class="fas fa-info-circle"></i> Not yet implemented
+      </div>
+    </div>
+
+    <div class="supply-category placeholder">
+      <div class="supply-category-header">
+        <i class="fas fa-wrench"></i>
+        <span>Parts</span>
+      </div>
+      <div class="resource-bar">
+        <input type="number" name="system.supply.parts.current"
+               value="{{system.supply.parts.current}}" min="0" max="{{system.supply.parts.capacity}}"/>
+        <span class="sep">/</span>
+        <input type="number" name="system.supply.parts.capacity"
+               value="{{system.supply.parts.capacity}}" min="0"/>
+      </div>
+      <div class="placeholder-note">
+        <i class="fas fa-info-circle"></i> Not yet implemented
+      </div>
+    </div>
   </div>
 
   {{!-- Supply Transfer (only during preparation phase) --}}
@@ -43,7 +138,7 @@
   {{#if hasNoSupply}}
     <div class="supply-warning">
       <i class="fas fa-exclamation-triangle"></i>
-      No supply — only Hold, Move, and Withdraw orders are available.
+      No ammo supply — only Hold, Move, and Withdraw orders are available.
     </div>
   {{/if}}
 

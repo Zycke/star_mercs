@@ -36,12 +36,40 @@ export default class UnitData extends foundry.abstract.TypeDataModel {
       // --- Movement ---
       speed: new NumberField({ required: true, integer: true, min: 0, initial: 4, label: "STARMERCS.Speed" }),
 
-      // --- Supply ---
+      // --- Supply (7 categories) ---
       supply: new SchemaField({
-        capacity: new NumberField({ required: true, integer: true, min: 0, initial: 10 }),
-        usage: new NumberField({ required: true, integer: true, min: 0, initial: 1 }),
-        current: new NumberField({ required: true, integer: true, min: 0, initial: 10 })
+        smallArms: new SchemaField({
+          current: new NumberField({ required: true, integer: true, min: 0, initial: 10 }),
+          capacity: new NumberField({ required: true, integer: true, min: 0, initial: 10 })
+        }),
+        heavyWeapons: new SchemaField({
+          current: new NumberField({ required: true, integer: true, min: 0, initial: 10 }),
+          capacity: new NumberField({ required: true, integer: true, min: 0, initial: 10 })
+        }),
+        ordnance: new SchemaField({
+          current: new NumberField({ required: true, integer: true, min: 0, initial: 5 }),
+          capacity: new NumberField({ required: true, integer: true, min: 0, initial: 5 })
+        }),
+        fuel: new SchemaField({
+          current: new NumberField({ required: true, integer: true, min: 0, initial: 10 }),
+          capacity: new NumberField({ required: true, integer: true, min: 0, initial: 10 })
+        }),
+        materials: new SchemaField({
+          current: new NumberField({ required: true, integer: true, min: 0, initial: 0 }),
+          capacity: new NumberField({ required: true, integer: true, min: 0, initial: 0 })
+        }),
+        parts: new SchemaField({
+          current: new NumberField({ required: true, integer: true, min: 0, initial: 0 }),
+          capacity: new NumberField({ required: true, integer: true, min: 0, initial: 0 })
+        }),
+        basicSupplies: new SchemaField({
+          current: new NumberField({ required: true, integer: true, min: 0, initial: 10 }),
+          capacity: new NumberField({ required: true, integer: true, min: 0, initial: 10 })
+        })
       }),
+
+      // Fuel consumed per hex of movement
+      fuelPerHex: new NumberField({ required: true, integer: true, min: 0, initial: 1 }),
 
       // --- Detection ---
       sensors: new NumberField({ required: true, integer: true, min: 0, initial: 2, label: "STARMERCS.Sensors" }),

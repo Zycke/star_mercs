@@ -352,30 +352,73 @@ export default class StarMercsCombat extends Combat {
         }
       }
 
-      // 4. Consume supply: (usage × order multiplier) + weapons fired
+      // 4. Consume supply by category
       const supply = actor.system.supply;
-      if (supply && supply.current > 0) {
-        const baseUsage = supply.usage ?? 0;
-        const multiplier = order ? this._parseSupplyMultiplier(order.system.supplyModifier) : 1;
-        const weaponsFired = token ? (token.getFlag("star-mercs", "weaponsFired") ?? 0) : 0;
-        const totalConsumption = (baseUsage * multiplier) + weaponsFired;
+      const supplyUpdate = {};
+      const consumedParts = [];
 
-        if (totalConsumption > 0) {
-          const newSupply = Math.max(0, supply.current - totalConsumption);
-          await actor.update({ "system.supply.current": newSupply });
+      // 4a. Ammo consumption based on weapons fired
+      if (token) {
+        const smallArmsFired = token.getFlag("star-mercs", "weaponsFired_smallArms") ?? 0;
+        const heavyFired = token.getFlag("star-mercs", "weaponsFired_heavyWeapons") ?? 0;
+        const ordnanceFired = token.getFlag("star-mercs", "weaponsFired_ordnance") ?? 0;
 
-          const parts = [];
-          if (baseUsage > 0) parts.push(`${baseUsage * multiplier} base${multiplier > 1 ? ` (×${multiplier})` : ""}`);
-          if (weaponsFired > 0) parts.push(`${weaponsFired} weapon${weaponsFired > 1 ? "s" : ""} fired`);
-
-          await ChatMessage.create({
-            content: `<div class="star-mercs chat-card consolidation-supply">
-              <div class="summary-header"><i class="fas fa-box"></i> <strong>${token?.name ?? actor.name}</strong> — Supply Consumed: ${totalConsumption}</div>
-              <div class="status-update">${parts.join(" + ")} — ${newSupply}/${supply.capacity} remaining</div>
-            </div>`,
-            speaker: { alias: "Star Mercs" }
-          });
+        if (smallArmsFired > 0 && supply.smallArms.current > 0) {
+          const used = Math.min(smallArmsFired, supply.smallArms.current);
+          supplyUpdate["system.supply.smallArms.current"] = supply.smallArms.current - used;
+          consumedParts.push(`Small Arms: -${used}`);
         }
+        if (heavyFired > 0 && supply.heavyWeapons.current > 0) {
+          const used = Math.min(heavyFired, supply.heavyWeapons.current);
+          supplyUpdate["system.supply.heavyWeapons.current"] = supply.heavyWeapons.current - used;
+          consumedParts.push(`Heavy Wpns: -${used}`);
+        }
+        if (ordnanceFired > 0 && supply.ordnance.current > 0) {
+          const used = Math.min(ordnanceFired, supply.ordnance.current);
+          supplyUpdate["system.supply.ordnance.current"] = supply.ordnance.current - used;
+          consumedParts.push(`Ordnance: -${used}`);
+        }
+      }
+
+      // 4b. Fuel consumption: movement + Vehicle baseline
+      {
+        const movementUsed = token ? (token.getFlag("star-mercs", "movementUsed") ?? 0) : 0;
+        const fuelPerHex = actor.system.fuelPerHex ?? 0;
+        let fuelUsed = movementUsed * fuelPerHex;
+
+        // Vehicle trait baseline: 1 fuel/turn unless Stand Down order
+        const orderKey = actor.system.currentOrder;
+        if (actor.hasTrait("Vehicle") && orderKey !== "stand_down") {
+          fuelUsed += 1;
+        }
+
+        if (fuelUsed > 0 && supply.fuel.current > 0) {
+          const used = Math.min(fuelUsed, supply.fuel.current);
+          supplyUpdate["system.supply.fuel.current"] = supply.fuel.current - used;
+          const fuelDetails = [];
+          if (movementUsed > 0) fuelDetails.push(`${movementUsed} hex × ${fuelPerHex}`);
+          if (actor.hasTrait("Vehicle") && orderKey !== "stand_down") fuelDetails.push("+1 vehicle baseline");
+          consumedParts.push(`Fuel: -${used} (${fuelDetails.join(", ")})`);
+        }
+      }
+
+      // 4c. Basic supplies: 1 per unit per turn
+      if (supply.basicSupplies.current > 0) {
+        supplyUpdate["system.supply.basicSupplies.current"] = Math.max(0, supply.basicSupplies.current - 1);
+        consumedParts.push("Basic: -1");
+      }
+
+      // Apply all supply updates at once
+      if (Object.keys(supplyUpdate).length > 0) {
+        await actor.update(supplyUpdate);
+
+        await ChatMessage.create({
+          content: `<div class="star-mercs chat-card consolidation-supply">
+            <div class="summary-header"><i class="fas fa-box"></i> <strong>${token?.name ?? actor.name}</strong> — Supply Consumed</div>
+            <div class="status-update">${consumedParts.join(" | ")}</div>
+          </div>`,
+          speaker: { alias: "Star Mercs" }
+        });
       }
     }
 
@@ -906,8 +949,10 @@ export default class StarMercsCombat extends Combat {
         await token.unsetFlag("star-mercs", "movementUsed");
         await token.unsetFlag("star-mercs", "moveDestination");
         await token.unsetFlag("star-mercs", "assaultTarget");
-        // 3. Clear weapons fired counter
-        await token.unsetFlag("star-mercs", "weaponsFired");
+        // 3. Clear per-type weapons fired counters
+        await token.unsetFlag("star-mercs", "weaponsFired_smallArms");
+        await token.unsetFlag("star-mercs", "weaponsFired_heavyWeapons");
+        await token.unsetFlag("star-mercs", "weaponsFired_ordnance");
         // 4. Clear disordered flag (resets each turn)
         await token.unsetFlag("star-mercs", "disordered");
       }
