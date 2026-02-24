@@ -54,7 +54,9 @@ export default class CommsLinkManager {
       const actor = token.actor;
       if (!actor || actor.type !== "unit") continue;
       if (actor.system.strength.value <= 0) continue;
-      parts.push(`${token.id}:${Math.round(token.x)},${Math.round(token.y)}:${actor.system.comms}:${actor.system.team}`);
+      const hasCommand = actor.hasTrait("Command") ? 1 : 0;
+      const hasSatUplink = actor.hasTrait("Satellite Uplink") ? 1 : 0;
+      parts.push(`${token.id}:${Math.round(token.x)},${Math.round(token.y)}:${actor.system.comms}:${actor.system.team}:${hasCommand}:${hasSatUplink}`);
     }
     return parts.sort().join("|");
   }

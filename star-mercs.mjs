@@ -208,9 +208,21 @@ Hooks.on("preUpdateToken", (tokenDoc, changes, options, userId) => {
 
   // Tactical phase: enforce speed limit and fuel check
   if (combat.phase === "tactical") {
+    // Calculate actual hex distance of the proposed move
+    const currentToken = canvas.tokens?.get(tokenDoc.id);
+    if (!currentToken) return true;
+    const currentCenter = currentToken.center;
+    const newX = changes.x ?? tokenDoc.x;
+    const newY = changes.y ?? tokenDoc.y;
+    const newCenter = { x: newX + (currentToken.w / 2), y: newY + (currentToken.h / 2) };
+    const ray = new Ray(currentCenter, newCenter);
+    const distance = canvas.grid.measureDistances([{ ray }], { gridSpaces: true })[0];
+    const gridDistance = canvas.scene.grid.distance || 1;
+    const hexesMoved = Math.max(1, Math.round(distance / gridDistance));
+
     const movementUsed = tokenDoc.getFlag("star-mercs", "movementUsed") ?? 0;
     const speed = actor.system.speed ?? 0;
-    if (speed > 0 && movementUsed >= speed) {
+    if (speed > 0 && (movementUsed + hexesMoved) > speed) {
       ui.notifications.warn(
         game.i18n.format("STARMERCS.Phase.MovementExhausted", { speed })
       );
@@ -221,19 +233,22 @@ Hooks.on("preUpdateToken", (tokenDoc, changes, options, userId) => {
     const fuelPerHex = actor.system.fuelPerHex ?? 0;
     if (fuelPerHex > 0) {
       const fuelRemaining = actor.system.supply?.fuel?.current ?? 0;
-      const fuelNeeded = (movementUsed + 1) * fuelPerHex;
+      const fuelNeeded = (movementUsed + hexesMoved) * fuelPerHex;
       if (fuelNeeded > fuelRemaining) {
         ui.notifications.warn("Cannot move — not enough fuel remaining.");
         return false;
       }
     }
+
+    // Pass computed distance to updateToken hook via options
+    options._starMercsHexesMoved = hexesMoved;
   }
 
   return true;
 });
 
 /** Redraw arrows and track movement on token position changes. */
-Hooks.on("updateToken", (tokenDoc, changes) => {
+Hooks.on("updateToken", (tokenDoc, changes, options) => {
   // Redraw targeting arrows and comms links
   if ("x" in changes || "y" in changes || "elevation" in changes) {
     game.starmercs?.targetingArrowLayer?.drawArrows();
@@ -245,28 +260,42 @@ Hooks.on("updateToken", (tokenDoc, changes) => {
       && game.combat.phase === "tactical") {
     const actor = tokenDoc.actor;
     if (actor?.type === "unit") {
+      const hexesMoved = options?._starMercsHexesMoved ?? 1;
       const movementUsed = tokenDoc.getFlag("star-mercs", "movementUsed") ?? 0;
-      tokenDoc.setFlag("star-mercs", "movementUsed", movementUsed + 1);
+      tokenDoc.setFlag("star-mercs", "movementUsed", movementUsed + hexesMoved);
     }
   }
 });
 
-/** Redraw arrows when an embedded weapon item is updated. */
+/** Redraw arrows when an embedded weapon item is updated, and comms links when traits change. */
 Hooks.on("updateItem", (item, changes) => {
-  if (item.type !== "weapon") return;
-  if (foundry.utils.hasProperty(changes, "system.targetId")
-      || foundry.utils.hasProperty(changes, "system.attackType")) {
-    game.starmercs?.targetingArrowLayer?.drawArrows();
+  if (item.type === "weapon") {
+    if (foundry.utils.hasProperty(changes, "system.targetId")
+        || foundry.utils.hasProperty(changes, "system.attackType")) {
+      game.starmercs?.targetingArrowLayer?.drawArrows();
+    }
+  }
+  if (item.type === "trait" && foundry.utils.hasProperty(changes, "system.active")) {
+    game.starmercs?.commsLinkManager?.invalidate();
+    game.starmercs?.commsLinkLayer?.drawLinks();
   }
 });
 
-/** Redraw arrows when a weapon is created or deleted. */
+/** Redraw arrows when a weapon is created or deleted, and comms links when traits change. */
 Hooks.on("createItem", (item) => {
   if (item.type === "weapon") game.starmercs?.targetingArrowLayer?.drawArrows();
+  if (item.type === "trait") {
+    game.starmercs?.commsLinkManager?.invalidate();
+    game.starmercs?.commsLinkLayer?.drawLinks();
+  }
 });
 
 Hooks.on("deleteItem", (item) => {
   if (item.type === "weapon") game.starmercs?.targetingArrowLayer?.drawArrows();
+  if (item.type === "trait") {
+    game.starmercs?.commsLinkManager?.invalidate();
+    game.starmercs?.commsLinkLayer?.drawLinks();
+  }
 });
 
 /* ============================================ */

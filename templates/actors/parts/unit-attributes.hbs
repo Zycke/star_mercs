@@ -22,10 +22,10 @@
       <label>Readiness</label>
       <div class="resource-bar">
         <input type="number" name="system.readiness.value"
-               value="{{system.readiness.value}}" min="0" max="10"/>
+               value="{{system.readiness.value}}" min="0" max="{{system.readiness.max}}"/>
         <span class="sep">/</span>
         <input type="number" name="system.readiness.max"
-               value="{{system.readiness.max}}" min="0" max="10"/>
+               value="{{system.readiness.max}}" min="0" max="20"/>
       </div>
       {{#if derived.readinessPenalty.accuracy}}
         <span class="penalty">+1 accuracy needed</span>

@@ -434,25 +434,6 @@ export default class StarMercsCombat extends Combat {
   /* ---------------------------------------- */
 
   /**
-   * Build a Map of combatant tokens grouped by team.
-   * @returns {Map<string, Array<{token: TokenDocument, actor: StarMercsActor}>>}
-   * @private
-   */
-  _buildTokensByTeam() {
-    const tokensByTeam = new Map();
-    for (const combatant of this.combatants) {
-      const a = combatant.actor;
-      if (!a || a.type !== "unit") continue;
-      const t = combatant.token;
-      if (!t) continue;
-      const team = a.system.team ?? "a";
-      if (!tokensByTeam.has(team)) tokensByTeam.set(team, []);
-      tokensByTeam.get(team).push({ token: t, actor: a });
-    }
-    return tokensByTeam;
-  }
-
-  /**
    * Get comms chain status for a unit using the CommsLinkManager.
    * @param {string} tokenId - The token's ID.
    * @returns {{isIsolated: boolean, hasCommandInChain: boolean}}
@@ -483,8 +464,8 @@ export default class StarMercsCombat extends Combat {
       return { total: dieResult, passed: false, autoFail: true };
     }
     let total = dieResult;
-    total -= damageTaken;
-    const passed = total > readiness;
+    total += damageTaken;
+    const passed = total <= readiness;
     return { total, passed, autoFail: false };
   }
 
@@ -1017,32 +998,6 @@ export default class StarMercsCombat extends Combat {
   /* ---------------------------------------- */
   /*  Helpers                                 */
   /* ---------------------------------------- */
-
-  /**
-   * Check if a token is adjacent (1 hex) to any enemy unit.
-   * @param {TokenDocument} token
-   * @param {StarMercsActor} actor
-   * @param {Map} tokensByTeam
-   * @returns {boolean}
-   * @private
-   */
-  _isAdjacentToEnemy(token, actor, tokensByTeam) {
-    const team = actor.system.team ?? "a";
-    const myCanvasToken = canvas?.tokens?.get(token.id);
-    if (!myCanvasToken) return false;
-
-    for (const [otherTeam, members] of tokensByTeam) {
-      if (otherTeam === team) continue;
-      for (const { token: enemyToken, actor: enemyActor } of members) {
-        if (enemyActor.system.strength.value <= 0) continue;
-        const enemyCanvasToken = canvas?.tokens?.get(enemyToken.id);
-        if (!enemyCanvasToken) continue;
-        const distance = StarMercsActor.getHexDistance(myCanvasToken, enemyCanvasToken);
-        if (distance <= 1) return true;
-      }
-    }
-    return false;
-  }
 
   /**
    * End-of-consolidation cleanup: runs when LEAVING consolidation phase.
