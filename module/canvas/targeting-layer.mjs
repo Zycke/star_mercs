@@ -53,8 +53,9 @@ export default class TargetingArrowLayer extends PIXI.Container {
       this._drawArrow(attackerCenter, targetCenter, color, offset);
     }
 
-    // Draw movement destination arrows (green)
+    // Draw movement destination arrows (green) and hex highlights
     this._drawMoveDestinationArrows();
+    this._drawMoveDestinationHighlights();
   }
 
   /* ---------------------------------------- */
@@ -194,6 +195,43 @@ export default class TargetingArrowLayer extends PIXI.Container {
       const from = token.center;
       const to = { x: dest.x, y: dest.y };
       this._drawArrow(from, to, TargetingArrowLayer.MOVE_ARROW_COLOR, 0);
+    }
+  }
+
+  /* ---------------------------------------- */
+  /*  Movement Destination Hex Highlights     */
+  /* ---------------------------------------- */
+
+  /**
+   * Draw a filled hex highlight at each controlled token's move destination.
+   * Only drawn for currently selected/controlled tokens.
+   * @private
+   */
+  _drawMoveDestinationHighlights() {
+    if (!canvas?.tokens?.controlled?.length) return;
+
+    const g = this.arrowGraphics;
+
+    for (const token of canvas.tokens.controlled) {
+      const dest = token.document.getFlag("star-mercs", "moveDestination");
+      if (!dest) continue;
+
+      // Get the hex grid top-left point for the destination
+      const topLeft = canvas.grid.getTopLeftPoint({ x: dest.x, y: dest.y });
+
+      // Get hex shape vertices (relative to top-left)
+      const shape = canvas.grid.getShape();
+      if (!shape || shape.length < 3) continue;
+
+      // Draw filled hex polygon
+      g.lineStyle(2, TargetingArrowLayer.MOVE_ARROW_COLOR, 0.6);
+      g.beginFill(TargetingArrowLayer.MOVE_ARROW_COLOR, 0.2);
+      g.moveTo(topLeft.x + shape[0].x, topLeft.y + shape[0].y);
+      for (let i = 1; i < shape.length; i++) {
+        g.lineTo(topLeft.x + shape[i].x, topLeft.y + shape[i].y);
+      }
+      g.closePath();
+      g.endFill();
     }
   }
 }

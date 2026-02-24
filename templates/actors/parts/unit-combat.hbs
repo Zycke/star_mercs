@@ -126,4 +126,26 @@
     </div>
   </div>
 
+  {{!-- GM Overrides --}}
+  {{#if isGM}}
+  <div class="gm-overrides">
+    <h3>GM Overrides</h3>
+    <div class="gm-override-row">
+      <label class="gm-toggle">
+        <input type="checkbox" class="gm-toggle-breaking" {{#if isBreaking}}checked{{/if}}/>
+        Breaking
+      </label>
+    </div>
+    <div class="gm-override-row">
+      <label>Override Order</label>
+      <select class="gm-order-override">
+        <option value="">-- No Override --</option>
+        {{#each allOrders}}
+        <option value="{{@key}}" {{#if (eq @key ../currentOrderKey)}}selected{{/if}}>{{this.label}}</option>
+        {{/each}}
+      </select>
+    </div>
+  </div>
+  {{/if}}
+
 </div>

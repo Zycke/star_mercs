@@ -85,8 +85,8 @@ Hooks.once("init", () => {
 
   // --- Client Settings ---
   game.settings.register("star-mercs", "showTargetingArrows", {
-    name: "STARMERCS.Settings.ShowTargetingArrows",
-    hint: "STARMERCS.Settings.ShowTargetingArrowsHint",
+    name: "Show Targeting Arrows",
+    hint: "Display arrows between units and their weapon targets on the canvas.",
     scope: "client",
     config: false,
     type: Boolean,
@@ -97,8 +97,8 @@ Hooks.once("init", () => {
   });
 
   game.settings.register("star-mercs", "showCommsLinks", {
-    name: "STARMERCS.Settings.ShowCommsLinks",
-    hint: "STARMERCS.Settings.ShowCommsLinksHint",
+    name: "Show Comms Links",
+    hint: "Display communications link lines between units on the canvas.",
     scope: "client",
     config: false,
     type: Boolean,
@@ -193,6 +193,12 @@ Hooks.on("refreshToken", () => {
 Hooks.on("preUpdateToken", (tokenDoc, changes, options, userId) => {
   if (!("x" in changes) && !("y" in changes)) return true;
 
+  // GM override: Alt+drag bypasses all movement restrictions
+  if (game.user.isGM && game.keyboard?.isModifierActive(KeyboardManager.MODIFIER_KEYS.ALT)) {
+    options._starMercsGMOverride = true;
+    return true;
+  }
+
   const combat = game.combat;
   if (!combat?.started) return true;
 
@@ -224,7 +230,7 @@ Hooks.on("preUpdateToken", (tokenDoc, changes, options, userId) => {
     const speed = actor.system.speed ?? 0;
     if (speed > 0 && (movementUsed + hexesMoved) > speed) {
       ui.notifications.warn(
-        game.i18n.format("STARMERCS.Phase.MovementExhausted", { speed })
+        `This unit has used all ${speed} hexes of movement this phase.`
       );
       return false;
     }
@@ -255,9 +261,9 @@ Hooks.on("updateToken", (tokenDoc, changes, options) => {
     game.starmercs?.commsLinkLayer?.drawLinks();
   }
 
-  // Track movement during tactical phase
+  // Track movement during tactical phase (skip for GM override moves)
   if (("x" in changes || "y" in changes) && game.combat?.started
-      && game.combat.phase === "tactical") {
+      && game.combat.phase === "tactical" && !options?._starMercsGMOverride) {
     const actor = tokenDoc.actor;
     if (actor?.type === "unit") {
       const hexesMoved = options?._starMercsHexesMoved ?? 1;
@@ -365,6 +371,26 @@ Hooks.on("renderCombatTracker", (app, html, data) => {
   }
 });
 
+/* ============================================ */
+/*  Chat Message Hooks                         */
+/* ============================================ */
+
+/** Handle morale button click in consolidation chat cards. */
+Hooks.on("renderChatMessage", (message, html) => {
+  html.find(".roll-morale-btn").on("click", async (event) => {
+    event.preventDefault();
+    const combatId = event.currentTarget.dataset.combatId;
+    const combat = game.combats.get(combatId);
+    if (!combat) return;
+    // Disable button after click
+    const btn = event.currentTarget;
+    btn.disabled = true;
+    btn.textContent = "Rolling...";
+    await combat.rollMoraleChecks();
+    btn.textContent = "Morale Checks Complete";
+  });
+});
+
 /** Add the targeting arrows toggle button to the scene controls. */
 Hooks.on("getSceneControlButtons", (controls) => {
   // v13: controls is an object keyed by name; v12: controls is an array
@@ -374,7 +400,7 @@ Hooks.on("getSceneControlButtons", (controls) => {
 
   const tool = {
     name: "targetingArrows",
-    title: "STARMERCS.Controls.TargetingArrows",
+    title: "Targeting Arrows",
     icon: "fas fa-location-arrow",
     visible: true,
     toggle: true,
@@ -389,7 +415,7 @@ Hooks.on("getSceneControlButtons", (controls) => {
 
   const commsTool = {
     name: "commsLinks",
-    title: "STARMERCS.Controls.CommsLinks",
+    title: "Comms Links",
     icon: "fas fa-broadcast-tower",
     visible: true,
     toggle: true,

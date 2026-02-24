@@ -84,9 +84,17 @@ export function calculateAccuracy(weapon, attacker, target = null) {
     standDownMod = -2;
   }
 
-  const effective = Math.max(2, Math.min(10, base - accurateMod + inaccurateMod + readinessMod + ewarMod + disorderedMod + standDownMod));
+  // Order accuracy penalty (e.g., Maneuver = +1 to threshold)
+  let orderAccuracyMod = 0;
+  const orderKey = attacker.system.currentOrder;
+  const orderConfig = CONFIG.STARMERCS.orders?.[orderKey];
+  if (orderConfig?.accuracyPenalty) {
+    orderAccuracyMod = orderConfig.accuracyPenalty;
+  }
 
-  return { effective, base, readinessMod, ewarMod, accurateMod, inaccurateMod, disorderedMod, standDownMod };
+  const effective = Math.max(2, Math.min(10, base - accurateMod + inaccurateMod + readinessMod + ewarMod + disorderedMod + standDownMod + orderAccuracyMod));
+
+  return { effective, base, readinessMod, ewarMod, accurateMod, inaccurateMod, disorderedMod, standDownMod, orderAccuracyMod };
 }
 
 /**

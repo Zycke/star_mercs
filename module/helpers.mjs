@@ -26,15 +26,6 @@ export function registerHandlebarsHelpers() {
   Handlebars.registerHelper("lte", function(a, b) {
     return a <= b;
   });
-
-  // Localize a config enum value (e.g., "soft" → "Soft Attack")
-  Handlebars.registerHelper("localizeConfig", function(configKey, value) {
-    const map = CONFIG.STARMERCS?.[configKey];
-    if (!map || !value) return value;
-    const i18nKey = map[value];
-    if (!i18nKey) return value;
-    return game.i18n.localize(i18nKey);
-  });
 }
 
 /**
@@ -50,9 +41,11 @@ export async function preloadHandlebarsTemplates() {
     "systems/star-mercs/templates/actors/parts/unit-traits.hbs",
     "systems/star-mercs/templates/actors/parts/unit-orders.hbs",
     "systems/star-mercs/templates/actors/parts/unit-supply.hbs",
+    "systems/star-mercs/templates/actors/parts/unit-log.hbs",
     // Chat card templates
     "systems/star-mercs/templates/chat/attack-result.hbs",
-    "systems/star-mercs/templates/chat/skill-check.hbs"
+    "systems/star-mercs/templates/chat/skill-check.hbs",
+    "systems/star-mercs/templates/chat/morale-button.hbs"
   ];
   return loadTemplates(templatePaths);
 }
