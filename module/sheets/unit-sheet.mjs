@@ -39,6 +39,15 @@ export default class StarMercsUnitSheet extends ActorSheet {
       isDestroyed: this.actor.system.isDestroyed
     };
 
+    // Ownership flag for template guards
+    context.isOwner = this.actor.isOwner;
+
+    // Detection range (derived): range vs a standard signature-2 target
+    const sensors = this.actor.system.sensors ?? 0;
+    const defaultSig = 2;
+    context.detectionRangeLOS = sensors + defaultSig;
+    context.detectionRangeNoLOS = Math.floor(sensors / 2) + defaultSig;
+
     // Rating choices for the dropdown
     context.ratingChoices = {
       green: "Green (+0)",
@@ -374,6 +383,20 @@ export default class StarMercsUnitSheet extends ActorSheet {
         `${item.name} is out of range (${item.system.range} hex max, target is ${distance} hexes away).`
       );
       return;
+    }
+
+    // Detection check: unit must be able to detect the target (visible level)
+    const det = game.starmercs?.detection;
+    if (det) {
+      const detLevel = det.getDetectionLevel(myToken, targetToken);
+      if (detLevel !== "visible") {
+        ui.notifications.warn(
+          detLevel === "blip"
+            ? `Cannot assign target — ${targetToken.name} is only a sensor blip (not positively identified).`
+            : `Cannot assign target — ${targetToken.name} is beyond detection range.`
+        );
+        return;
+      }
     }
 
     // Line of Sight / comms chain validation

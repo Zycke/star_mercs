@@ -2,6 +2,7 @@ import StarMercsActor from "./actor.mjs";
 import { snapToHexCenter, hexKey, getAdjacentHexCenters, getTokensAtHex,
   areAdjacent, getAdjacentEnemies, isEngaged, computeHexPath,
   validatePath, findBestAdjacentHex, getLastSafeHex } from "../hex-utils.mjs";
+import { getDetectionLevel } from "../detection.mjs";
 
 /**
  * Extended Combat class for Star Mercs that implements phase-based rounds.
@@ -1593,6 +1594,9 @@ export default class StarMercsCombat extends Combat {
       );
 
       if (hasWeaponInRange) {
+        // Detection gate: overwatch only triggers if the target is detected (visible level)
+        const detLevel = getDetectionLevel(token, movingToken);
+        if (detLevel !== "visible") continue;
         triggers.push(token);
       }
     }

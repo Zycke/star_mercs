@@ -244,6 +244,43 @@ export function findBestAdjacentHex(targetToken, attackerToken) {
   return best;
 }
 
+/* ---------------------------------------- */
+/*  Terrain Query Utilities                 */
+/* ---------------------------------------- */
+
+/**
+ * Get the terrain type key for a hex, reading from the scene's terrainMap flag.
+ * @param {{x: number, y: number}} hexCenter - A hex center point (will be snapped).
+ * @returns {string|null} Terrain type key (e.g., "forest") or null if none assigned.
+ */
+export function getHexTerrain(hexCenter) {
+  const terrainMap = canvas.scene?.getFlag("star-mercs", "terrainMap");
+  if (!terrainMap) return null;
+  const key = hexKey(snapToHexCenter(hexCenter));
+  return terrainMap[key] ?? null;
+}
+
+/**
+ * Get the full terrain config object for a hex.
+ * @param {{x: number, y: number}} hexCenter
+ * @returns {object|null} Terrain config from CONFIG.STARMERCS.terrain, or null.
+ */
+export function getHexTerrainConfig(hexCenter) {
+  const type = getHexTerrain(hexCenter);
+  if (!type) return null;
+  return CONFIG.STARMERCS.terrain[type] ?? null;
+}
+
+/**
+ * Get the elevation level for a hex (from its terrain type).
+ * @param {{x: number, y: number}} hexCenter
+ * @returns {number} Elevation level (0 = flat, 1 = hill, 2 = mountain).
+ */
+export function getHexElevation(hexCenter) {
+  const config = getHexTerrainConfig(hexCenter);
+  return config?.elevation ?? 0;
+}
+
 /**
  * Get the last safe hex along a path (for losers of hex contests).
  * Returns the hex just before the contested hex.

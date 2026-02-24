@@ -13,6 +13,7 @@
   <div class="status-block order-block">
     <label>Current Order</label>
     {{#if isOrdersPhase}}
+      {{#if isOwner}}
       {{!-- Interactive dropdown during Orders phase --}}
       <select class="order-select">
         <option value="">-- Select Order --</option>
@@ -57,6 +58,12 @@
             <span class="order-detail-value">{{orderDetails.supplyModifier}}</span>
           </div>
         </div>
+      {{/if}}
+      {{else}}
+      {{!-- Non-owner sees read-only order during Orders phase --}}
+      <span class="status-value">
+        {{#if currentOrderKey}}{{currentOrderData.labelText}}{{else}}Awaiting orders...{{/if}}
+      </span>
       {{/if}}
     {{else}}
       {{!-- Read-only display outside Orders phase --}}

@@ -220,6 +220,9 @@ STARMERCS.terrainTypes = {
 STARMERCS.terrain = {
   forest: {
     label: "Forest",
+    color: 0x228B22,
+    icon: "fas fa-tree",
+    elevation: 0,
     movementCost: 2,
     signatureMod: -1,
     infantryCover: true,
@@ -234,6 +237,9 @@ STARMERCS.terrain = {
   },
   plain: {
     label: "Plain",
+    color: 0xC2B280,
+    icon: "fas fa-seedling",
+    elevation: 0,
     movementCost: 1,
     signatureMod: 0,
     infantryCover: false,
@@ -248,6 +254,9 @@ STARMERCS.terrain = {
   },
   hill: {
     label: "Hill",
+    color: 0x8B7355,
+    icon: "fas fa-mountain",
+    elevation: 1,
     movementCost: 1,
     signatureMod: 0,
     infantryCover: false,
@@ -262,6 +271,9 @@ STARMERCS.terrain = {
   },
   mountain: {
     label: "Mountain",
+    color: 0x696969,
+    icon: "fas fa-mountain",
+    elevation: 2,
     movementCost: 3,
     signatureMod: -1,
     infantryCover: false,
@@ -276,6 +288,9 @@ STARMERCS.terrain = {
   },
   swamp: {
     label: "Swamp",
+    color: 0x556B2F,
+    icon: "fas fa-water",
+    elevation: 0,
     movementCost: 2,
     signatureMod: 0,
     infantryCover: false,
@@ -290,6 +305,9 @@ STARMERCS.terrain = {
   },
   river: {
     label: "River",
+    color: 0x4682B4,
+    icon: "fas fa-water",
+    elevation: 0,
     movementCost: 2,
     signatureMod: 0,
     infantryCover: false,
@@ -304,6 +322,9 @@ STARMERCS.terrain = {
   },
   lake: {
     label: "Lake",
+    color: 0x1E90FF,
+    icon: "fas fa-water",
+    elevation: 0,
     movementCost: 2,
     signatureMod: 0,
     infantryCover: false,
@@ -318,6 +339,9 @@ STARMERCS.terrain = {
   },
   ocean: {
     label: "Ocean",
+    color: 0x000080,
+    icon: "fas fa-water",
+    elevation: 0,
     movementCost: 2,
     signatureMod: 0,
     infantryCover: false,
@@ -332,6 +356,9 @@ STARMERCS.terrain = {
   },
   urbanDense: {
     label: "Urban (Dense)",
+    color: 0x808080,
+    icon: "fas fa-city",
+    elevation: 0,
     movementCost: 1,
     signatureMod: -2,
     infantryCover: false,
@@ -346,6 +373,9 @@ STARMERCS.terrain = {
   },
   urbanLight: {
     label: "Urban (Light)",
+    color: 0xA9A9A9,
+    icon: "fas fa-building",
+    elevation: 0,
     movementCost: 1,
     signatureMod: -1,
     infantryCover: true,
