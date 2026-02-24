@@ -453,37 +453,19 @@ export default class StarMercsCombat extends Combat {
   }
 
   /**
-   * Check comms range and Command trait proximity for a unit.
-   * @param {TokenDocument} token
-   * @param {StarMercsActor} actor
-   * @param {Map} tokensByTeam
-   * @returns {{withinCommsRange: boolean, hasCommandNearby: boolean}}
+   * Get comms chain status for a unit using the CommsLinkManager.
+   * @param {string} tokenId - The token's ID.
+   * @returns {{isIsolated: boolean, hasCommandInChain: boolean}}
    * @private
    */
-  _checkCommsStatus(token, actor, tokensByTeam) {
-    const team = actor.system.team ?? "a";
-    const friendlies = tokensByTeam.get(team) ?? [];
-    const commsRange = actor.system.comms ?? 3;
-    let withinCommsRange = false;
-    let hasCommandNearby = false;
-
-    const myCanvasToken = canvas?.tokens?.get(token.id);
-    for (const { token: friendlyToken, actor: friendlyActor } of friendlies) {
-      if (friendlyToken.id === token.id) continue;
-      if (friendlyActor.system.strength.value <= 0) continue;
-      const friendlyCanvasToken = canvas?.tokens?.get(friendlyToken.id);
-      if (!myCanvasToken || !friendlyCanvasToken) continue;
-
-      const distance = StarMercsActor.getHexDistance(myCanvasToken, friendlyCanvasToken);
-      const friendlyComms = friendlyActor.system.comms ?? 3;
-      if (distance <= Math.max(commsRange, friendlyComms)) {
-        withinCommsRange = true;
-        if (friendlyActor.hasTrait("Command")) {
-          hasCommandNearby = true;
-        }
-      }
-    }
-    return { withinCommsRange, hasCommandNearby };
+  _getCommsChainStatus(tokenId) {
+    const manager = game.starmercs?.commsLinkManager;
+    if (!manager) return { isIsolated: true, hasCommandInChain: false };
+    manager.refresh();
+    return {
+      isIsolated: manager.isIsolated(tokenId),
+      hasCommandInChain: manager.hasCommandInChain(tokenId)
+    };
   }
 
   /**
@@ -491,19 +473,17 @@ export default class StarMercsCombat extends Combat {
    * Natural 1 on the die always fails regardless of modifiers.
    * @param {number} dieResult - Raw d10 result.
    * @param {number} damageTaken - Strength damage taken this turn.
-   * @param {boolean} commsIsolated - True if no friendly units in comms range.
    * @param {number} readiness - Current readiness value.
    * @returns {{total: number, passed: boolean, autoFail: boolean}}
    * @private
    */
-  _evaluateMoraleRoll(dieResult, damageTaken, commsIsolated, readiness) {
+  _evaluateMoraleRoll(dieResult, damageTaken, readiness) {
     // Natural 1 always fails
     if (dieResult === 1) {
       return { total: dieResult, passed: false, autoFail: true };
     }
     let total = dieResult;
     total -= damageTaken;
-    if (commsIsolated) total -= 2;
     const passed = total > readiness;
     return { total, passed, autoFail: false };
   }
@@ -521,18 +501,15 @@ export default class StarMercsCombat extends Combat {
    *   Breaking + succeed morale → recover
    *   Breaking + fail morale → Surrender (removed from game)
    *
-   * Modifiers:
-   *   - Subtract damage taken this turn from roll
-   *   - -2 if comms isolated
-   *   - Natural 1 always fails
-   *   - Command trait nearby allows one re-roll
+   * Comms chain effects:
+   *   - Isolated (chain size 1): re-roll successful morale (forced to use worse result)
+   *   - Command in chain: re-roll failed morale (get a second chance)
+   *   - Natural 1 always fails (no re-roll can save it for isolation; Command still re-rolls)
    *
    * @param {Map<string, number>} damageTakenMap - Token ID → strength damage taken this turn.
    * @private
    */
   async _runMoraleChecks(damageTakenMap) {
-    const tokensByTeam = this._buildTokensByTeam();
-
     for (const combatant of this.combatants) {
       const actor = combatant.actor;
       if (!actor || actor.type !== "unit") continue;
@@ -567,39 +544,54 @@ export default class StarMercsCombat extends Combat {
 
         // They took damage while Breaking/Broken — must roll morale again
         const currentReadiness = actor.system.readiness.value;
-        const { withinCommsRange, hasCommandNearby } = this._checkCommsStatus(token, actor, tokensByTeam);
-        const commsIsolated = !withinCommsRange;
+        const { isIsolated, hasCommandInChain } = this._getCommsChainStatus(token.id);
 
         const roll = new Roll("1d10");
         await roll.evaluate();
-        const result = this._evaluateMoraleRoll(roll.total, damageTaken, commsIsolated, currentReadiness);
+        const result = this._evaluateMoraleRoll(roll.total, damageTaken, currentReadiness);
 
-        // Command re-roll if failed
-        let rerolled = false;
+        const allRolls = [roll];
+        let rerollType = null;
         let rerollRollObj = null;
         let rerollEval = null;
-        if (!result.passed && hasCommandNearby) {
-          rerolled = true;
+        let finalPassed = result.passed;
+
+        // Isolation re-roll: if passed but isolated, forced re-roll (use re-roll result)
+        if (result.passed && isIsolated) {
+          rerollType = "isolation";
           rerollRollObj = new Roll("1d10");
           await rerollRollObj.evaluate();
-          rerollEval = this._evaluateMoraleRoll(rerollRollObj.total, damageTaken, commsIsolated, currentReadiness);
+          allRolls.push(rerollRollObj);
+          rerollEval = this._evaluateMoraleRoll(rerollRollObj.total, damageTaken, currentReadiness);
+          finalPassed = rerollEval.passed;
+        }
+        // Command re-roll: if failed and Command in chain, re-roll (use re-roll if it passes)
+        else if (!result.passed && hasCommandInChain) {
+          rerollType = "command";
+          rerollRollObj = new Roll("1d10");
+          await rerollRollObj.evaluate();
+          allRolls.push(rerollRollObj);
+          rerollEval = this._evaluateMoraleRoll(rerollRollObj.total, damageTaken, currentReadiness);
+          finalPassed = rerollEval.passed;
         }
 
-        const finalPassed = result.passed || (rerolled && rerollEval?.passed);
         const statusLabel = isBreaking ? "Breaking" : "Broken";
 
         let html = `<div class="star-mercs chat-card morale-check">`;
         html += `<div class="summary-header"><i class="fas fa-brain"></i> <strong>${token.name}</strong> — Morale Check (${statusLabel})</div>`;
         html += `<div class="morale-details">RDY: ${currentReadiness} | Roll: ${roll.total}`;
         if (damageTaken > 0) html += ` -${damageTaken} dmg`;
-        if (commsIsolated) html += ` -2 isolated`;
         if (result.autoFail) html += ` (NAT 1 AUTO-FAIL)`;
-        html += ` = ${result.total} vs ${currentReadiness}+</div>`;
+        html += ` = ${result.total} vs ${currentReadiness}+ — ${result.passed ? "Passed" : "Failed"}</div>`;
 
-        if (rerolled) {
-          html += `<div class="morale-reroll">Command re-roll: ${rerollRollObj.total}`;
+        if (rerollType === "isolation") {
+          html += `<div class="morale-reroll isolation">Isolation re-roll (no comms link): ${rerollRollObj.total}`;
           if (damageTaken > 0) html += ` -${damageTaken}`;
-          if (commsIsolated) html += ` -2`;
+          if (rerollEval.autoFail) html += ` (NAT 1)`;
+          html += ` = ${rerollEval.total} — ${rerollEval.passed ? "Passed" : "Failed"}</div>`;
+        } else if (rerollType === "command") {
+          html += `<div class="morale-reroll command">Command re-roll: ${rerollRollObj.total}`;
+          if (damageTaken > 0) html += ` -${damageTaken}`;
           if (rerollEval.autoFail) html += ` (NAT 1)`;
           html += ` = ${rerollEval.total} — ${rerollEval.passed ? "Passed" : "Failed"}</div>`;
         }
@@ -620,7 +612,7 @@ export default class StarMercsCombat extends Combat {
         await ChatMessage.create({
           content: html,
           speaker: { alias: "Star Mercs" },
-          rolls: rerolled && rerollRollObj ? [roll, rerollRollObj] : [roll]
+          rolls: allRolls
         });
         continue;
       }
@@ -629,38 +621,52 @@ export default class StarMercsCombat extends Combat {
       const currentReadiness = actor.system.readiness.value;
       if (currentReadiness >= 10) continue;
 
-      const { withinCommsRange, hasCommandNearby } = this._checkCommsStatus(token, actor, tokensByTeam);
-      const commsIsolated = !withinCommsRange;
+      const { isIsolated, hasCommandInChain } = this._getCommsChainStatus(token.id);
 
       const roll = new Roll("1d10");
       await roll.evaluate();
-      const result = this._evaluateMoraleRoll(roll.total, damageTaken, commsIsolated, currentReadiness);
+      const result = this._evaluateMoraleRoll(roll.total, damageTaken, currentReadiness);
 
-      // Command re-roll if failed
-      let rerolled = false;
+      const allRolls = [roll];
+      let rerollType = null;
       let rerollRollObj = null;
       let rerollEval = null;
-      if (!result.passed && hasCommandNearby) {
-        rerolled = true;
+      let finalPassed = result.passed;
+
+      // Isolation re-roll: if passed but isolated, forced re-roll
+      if (result.passed && isIsolated) {
+        rerollType = "isolation";
         rerollRollObj = new Roll("1d10");
         await rerollRollObj.evaluate();
-        rerollEval = this._evaluateMoraleRoll(rerollRollObj.total, damageTaken, commsIsolated, currentReadiness);
+        allRolls.push(rerollRollObj);
+        rerollEval = this._evaluateMoraleRoll(rerollRollObj.total, damageTaken, currentReadiness);
+        finalPassed = rerollEval.passed;
       }
-
-      const finalPassed = result.passed || (rerolled && rerollEval?.passed);
+      // Command re-roll: if failed and Command in chain, re-roll
+      else if (!result.passed && hasCommandInChain) {
+        rerollType = "command";
+        rerollRollObj = new Roll("1d10");
+        await rerollRollObj.evaluate();
+        allRolls.push(rerollRollObj);
+        rerollEval = this._evaluateMoraleRoll(rerollRollObj.total, damageTaken, currentReadiness);
+        finalPassed = rerollEval.passed;
+      }
 
       let html = `<div class="star-mercs chat-card morale-check">`;
       html += `<div class="summary-header"><i class="fas fa-brain"></i> <strong>${token.name}</strong> — Morale Check</div>`;
       html += `<div class="morale-details">RDY: ${currentReadiness} | Roll: ${roll.total}`;
       if (damageTaken > 0) html += ` -${damageTaken} dmg`;
-      if (commsIsolated) html += ` -2 isolated`;
       if (result.autoFail) html += ` (NAT 1 AUTO-FAIL)`;
-      html += ` = ${result.total} vs ${currentReadiness}+</div>`;
+      html += ` = ${result.total} vs ${currentReadiness}+ — ${result.passed ? "Passed" : "Failed"}</div>`;
 
-      if (rerolled) {
-        html += `<div class="morale-reroll">Command re-roll: ${rerollRollObj.total}`;
+      if (rerollType === "isolation") {
+        html += `<div class="morale-reroll isolation">Isolation re-roll (no comms link): ${rerollRollObj.total}`;
         if (damageTaken > 0) html += ` -${damageTaken}`;
-        if (commsIsolated) html += ` -2`;
+        if (rerollEval.autoFail) html += ` (NAT 1)`;
+        html += ` = ${rerollEval.total} — ${rerollEval.passed ? "Passed" : "Failed"}</div>`;
+      } else if (rerollType === "command") {
+        html += `<div class="morale-reroll command">Command re-roll: ${rerollRollObj.total}`;
+        if (damageTaken > 0) html += ` -${damageTaken}`;
         if (rerollEval.autoFail) html += ` (NAT 1)`;
         html += ` = ${rerollEval.total} — ${rerollEval.passed ? "Passed" : "Failed"}</div>`;
       }
@@ -675,7 +681,7 @@ export default class StarMercsCombat extends Combat {
       await ChatMessage.create({
         content: html,
         speaker: { alias: "Star Mercs" },
-        rolls: rerolled && rerollRollObj ? [roll, rerollRollObj] : [roll]
+        rolls: allRolls
       });
 
       // Apply Breaking status
@@ -694,6 +700,10 @@ export default class StarMercsCombat extends Combat {
    *
    * Both the assaulting unit and the defender roll morale.
    * Modifiers: damage taken this turn, natural 1 auto-fail.
+   *
+   * Comms chain effects apply to both sides:
+   *   - Isolated: re-roll successful morale
+   *   - Command in chain: re-roll failed morale
    *
    * Outcomes:
    *   - Attacker fails → gains Breaking, loses 2 readiness
@@ -734,37 +744,113 @@ export default class StarMercsCombat extends Combat {
       const attackerReadiness = actor.system.readiness.value;
       const defenderReadiness = targetActor.system.readiness.value;
 
+      // Get comms chain status for both sides
+      const attackerComms = this._getCommsChainStatus(token.id);
+      const defenderComms = this._getCommsChainStatus(defenderToken?.id ?? assaultTargetId);
+
       // Roll morale for both
       const assaultRoll = new Roll("1d10");
       await assaultRoll.evaluate();
-      const aResult = this._evaluateMoraleRoll(assaultRoll.total, attackerDmg, false, attackerReadiness);
+      const aResult = this._evaluateMoraleRoll(assaultRoll.total, attackerDmg, attackerReadiness);
 
       const defenderRoll = new Roll("1d10");
       await defenderRoll.evaluate();
-      const dResult = this._evaluateMoraleRoll(defenderRoll.total, defenderDmg, false, defenderReadiness);
+      const dResult = this._evaluateMoraleRoll(defenderRoll.total, defenderDmg, defenderReadiness);
+
+      const allRolls = [assaultRoll, defenderRoll];
+
+      // Apply isolation/command re-rolls for attacker
+      let aRerollType = null;
+      let aRerollObj = null;
+      let aRerollEval = null;
+      let aFinalPassed = aResult.passed;
+
+      if (aResult.passed && attackerComms.isIsolated) {
+        aRerollType = "isolation";
+        aRerollObj = new Roll("1d10");
+        await aRerollObj.evaluate();
+        allRolls.push(aRerollObj);
+        aRerollEval = this._evaluateMoraleRoll(aRerollObj.total, attackerDmg, attackerReadiness);
+        aFinalPassed = aRerollEval.passed;
+      } else if (!aResult.passed && attackerComms.hasCommandInChain) {
+        aRerollType = "command";
+        aRerollObj = new Roll("1d10");
+        await aRerollObj.evaluate();
+        allRolls.push(aRerollObj);
+        aRerollEval = this._evaluateMoraleRoll(aRerollObj.total, attackerDmg, attackerReadiness);
+        aFinalPassed = aRerollEval.passed;
+      }
+
+      // Apply isolation/command re-rolls for defender
+      let dRerollType = null;
+      let dRerollObj = null;
+      let dRerollEval = null;
+      let dFinalPassed = dResult.passed;
+
+      if (dResult.passed && defenderComms.isIsolated) {
+        dRerollType = "isolation";
+        dRerollObj = new Roll("1d10");
+        await dRerollObj.evaluate();
+        allRolls.push(dRerollObj);
+        dRerollEval = this._evaluateMoraleRoll(dRerollObj.total, defenderDmg, defenderReadiness);
+        dFinalPassed = dRerollEval.passed;
+      } else if (!dResult.passed && defenderComms.hasCommandInChain) {
+        dRerollType = "command";
+        dRerollObj = new Roll("1d10");
+        await dRerollObj.evaluate();
+        allRolls.push(dRerollObj);
+        dRerollEval = this._evaluateMoraleRoll(dRerollObj.total, defenderDmg, defenderReadiness);
+        dFinalPassed = dRerollEval.passed;
+      }
 
       // Build chat message
       let html = `<div class="star-mercs chat-card assault-morale">`;
       html += `<div class="summary-header"><i class="fas fa-fist-raised"></i> Assault Resolution: <strong>${token.name}</strong> vs <strong>${targetCanvasToken.name}</strong></div>`;
+
+      // Attacker roll details
       html += `<div class="morale-details">${token.name}: Roll ${assaultRoll.total}`;
       if (attackerDmg > 0) html += ` -${attackerDmg} dmg`;
       if (aResult.autoFail) html += ` (NAT 1)`;
       html += ` = ${aResult.total} vs ${attackerReadiness}+ — ${aResult.passed ? "Passed" : "Failed"}</div>`;
+      if (aRerollType === "isolation") {
+        html += `<div class="morale-reroll isolation">${token.name} Isolation re-roll: ${aRerollObj.total}`;
+        if (attackerDmg > 0) html += ` -${attackerDmg}`;
+        if (aRerollEval.autoFail) html += ` (NAT 1)`;
+        html += ` = ${aRerollEval.total} — ${aRerollEval.passed ? "Passed" : "Failed"}</div>`;
+      } else if (aRerollType === "command") {
+        html += `<div class="morale-reroll command">${token.name} Command re-roll: ${aRerollObj.total}`;
+        if (attackerDmg > 0) html += ` -${attackerDmg}`;
+        if (aRerollEval.autoFail) html += ` (NAT 1)`;
+        html += ` = ${aRerollEval.total} — ${aRerollEval.passed ? "Passed" : "Failed"}</div>`;
+      }
+
+      // Defender roll details
       html += `<div class="morale-details">${targetCanvasToken.name}: Roll ${defenderRoll.total}`;
       if (defenderDmg > 0) html += ` -${defenderDmg} dmg`;
       if (dResult.autoFail) html += ` (NAT 1)`;
       html += ` = ${dResult.total} vs ${defenderReadiness}+ — ${dResult.passed ? "Passed" : "Failed"}</div>`;
+      if (dRerollType === "isolation") {
+        html += `<div class="morale-reroll isolation">${targetCanvasToken.name} Isolation re-roll: ${dRerollObj.total}`;
+        if (defenderDmg > 0) html += ` -${defenderDmg}`;
+        if (dRerollEval.autoFail) html += ` (NAT 1)`;
+        html += ` = ${dRerollEval.total} — ${dRerollEval.passed ? "Passed" : "Failed"}</div>`;
+      } else if (dRerollType === "command") {
+        html += `<div class="morale-reroll command">${targetCanvasToken.name} Command re-roll: ${dRerollObj.total}`;
+        if (defenderDmg > 0) html += ` -${defenderDmg}`;
+        if (dRerollEval.autoFail) html += ` (NAT 1)`;
+        html += ` = ${dRerollEval.total} — ${dRerollEval.passed ? "Passed" : "Failed"}</div>`;
+      }
 
-      if (aResult.passed && dResult.passed) {
+      if (aFinalPassed && dFinalPassed) {
         // Both pass: stalemate
         html += `<div class="status-update morale-passed"><i class="fas fa-handshake"></i> Stalemate — both sides hold their ground.</div>`;
-      } else if (!aResult.passed && dResult.passed) {
+      } else if (!aFinalPassed && dFinalPassed) {
         // Attacker fails, defender passes: attacker Breaking, loses 2 RDY
         const newRdy = Math.max(0, actor.system.readiness.value - 2);
         await actor.update({ "system.readiness.value": newRdy });
         await token.setFlag("star-mercs", "breaking", true);
         html += `<div class="status-alert morale-failed"><i class="fas fa-shield-alt"></i> Assault repelled! ${token.name} is Breaking, loses 2 readiness.</div>`;
-      } else if (aResult.passed && !dResult.passed) {
+      } else if (aFinalPassed && !dFinalPassed) {
         // Attacker passes, defender fails → Routing → must move 1 hex or surrender
         const newRdy = Math.max(0, targetActor.system.readiness.value - 2);
         await targetActor.update({ "system.readiness.value": newRdy });
@@ -796,7 +882,7 @@ export default class StarMercsCombat extends Combat {
       await ChatMessage.create({
         content: html,
         speaker: { alias: "Star Mercs" },
-        rolls: [assaultRoll, defenderRoll]
+        rolls: allRolls
       });
     }
   }
@@ -846,6 +932,10 @@ export default class StarMercsCombat extends Combat {
    * On failure: Disordered — enemies get +1 to hit, +1 damage, and unit
    * loses 1 extra readiness in consolidation.
    *
+   * Comms chain effects:
+   *   - Isolated: re-roll successful morale
+   *   - Command in chain: re-roll failed morale
+   *
    * @private
    */
   async _runWithdrawMorale() {
@@ -859,20 +949,56 @@ export default class StarMercsCombat extends Combat {
       if (!token) continue;
 
       const currentReadiness = actor.system.readiness.value;
+      const { isIsolated, hasCommandInChain } = this._getCommsChainStatus(token.id);
 
       const roll = new Roll("1d10");
       await roll.evaluate();
 
       // No damage modifier for withdraw test (damage hasn't happened yet this turn)
-      const result = this._evaluateMoraleRoll(roll.total, 0, false, currentReadiness);
+      const result = this._evaluateMoraleRoll(roll.total, 0, currentReadiness);
+
+      const allRolls = [roll];
+      let rerollType = null;
+      let rerollRollObj = null;
+      let rerollEval = null;
+      let finalPassed = result.passed;
+
+      // Isolation re-roll: if passed but isolated, forced re-roll
+      if (result.passed && isIsolated) {
+        rerollType = "isolation";
+        rerollRollObj = new Roll("1d10");
+        await rerollRollObj.evaluate();
+        allRolls.push(rerollRollObj);
+        rerollEval = this._evaluateMoraleRoll(rerollRollObj.total, 0, currentReadiness);
+        finalPassed = rerollEval.passed;
+      }
+      // Command re-roll: if failed and Command in chain, re-roll
+      else if (!result.passed && hasCommandInChain) {
+        rerollType = "command";
+        rerollRollObj = new Roll("1d10");
+        await rerollRollObj.evaluate();
+        allRolls.push(rerollRollObj);
+        rerollEval = this._evaluateMoraleRoll(rerollRollObj.total, 0, currentReadiness);
+        finalPassed = rerollEval.passed;
+      }
 
       let html = `<div class="star-mercs chat-card morale-check withdraw-morale">`;
       html += `<div class="summary-header"><i class="fas fa-running"></i> <strong>${token.name}</strong> — Withdraw Morale Test</div>`;
       html += `<div class="morale-details">RDY: ${currentReadiness} | Roll: ${roll.total}`;
       if (result.autoFail) html += ` (NAT 1 AUTO-FAIL)`;
-      html += ` = ${result.total} vs ${currentReadiness}+</div>`;
+      html += ` = ${result.total} vs ${currentReadiness}+ — ${result.passed ? "Passed" : "Failed"}</div>`;
 
-      if (result.passed) {
+      if (rerollType === "isolation") {
+        html += `<div class="morale-reroll isolation">Isolation re-roll (no comms link): ${rerollRollObj.total}`;
+        if (rerollEval.autoFail) html += ` (NAT 1)`;
+        html += ` = ${rerollEval.total} — ${rerollEval.passed ? "Passed" : "Failed"}</div>`;
+      } else if (rerollType === "command") {
+        html += `<div class="morale-reroll command">Command re-roll: ${rerollRollObj.total}`;
+        if (rerollEval.autoFail) html += ` (NAT 1)`;
+        html += ` = ${rerollEval.total} — ${rerollEval.passed ? "Passed" : "Failed"}</div>`;
+      }
+
+      if (finalPassed) {
         html += `<div class="status-update morale-passed"><i class="fas fa-check"></i> Orderly withdrawal — may move normally.</div>`;
       } else {
         await token.setFlag("star-mercs", "disordered", true);
@@ -883,7 +1009,7 @@ export default class StarMercsCombat extends Combat {
       await ChatMessage.create({
         content: html,
         speaker: { alias: "Star Mercs" },
-        rolls: [roll]
+        rolls: allRolls
       });
     }
   }

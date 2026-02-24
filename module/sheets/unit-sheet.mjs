@@ -336,12 +336,36 @@ export default class StarMercsUnitSheet extends ActorSheet {
       return;
     }
 
-    // Line of Sight check (unless weapon has Indirect trait)
-    if (!item.system.indirect) {
-      const myToken = this.actor.getActiveTokens()?.[0];
-      if (myToken && !StarMercsActor.hasLineOfSight(myToken, targetToken)) {
-        ui.notifications.warn(`${item.name} requires Line of Sight — target is not visible. (Indirect weapons bypass this.)`);
-        return;
+    // Line of Sight / comms chain validation
+    const myToken = this.actor.getActiveTokens()?.[0];
+    if (myToken) {
+      const hasDirectLOS = StarMercsActor.hasLineOfSight(myToken, targetToken);
+      const manager = game.starmercs?.commsLinkManager;
+
+      if (item.system.indirect) {
+        // Indirect weapons: require LOS from firing unit OR any comms chain member
+        if (!hasDirectLOS) {
+          const canSeeViaChain = manager?.canSeeViaChain(myToken.id, targetToken.id) ?? false;
+          if (!canSeeViaChain) {
+            ui.notifications.warn(`${item.name} requires a spotter — no unit in comms chain has Line of Sight to target.`);
+            return;
+          }
+        }
+      } else if (item.system.aircraft) {
+        // Aircraft weapons: require chain LOS OR Satellite Uplink in chain
+        if (!hasDirectLOS) {
+          const canSeeForAirstrike = manager?.canSeeForAirstrike(myToken.id, targetToken.id) ?? false;
+          if (!canSeeForAirstrike) {
+            ui.notifications.warn(`${item.name} requires a spotter or Satellite Uplink in comms chain to acquire target.`);
+            return;
+          }
+        }
+      } else {
+        // Standard weapons: require direct LOS
+        if (!hasDirectLOS) {
+          ui.notifications.warn(`${item.name} requires Line of Sight — target is not visible.`);
+          return;
+        }
       }
     }
 
