@@ -12,6 +12,8 @@ import * as combat from "./module/combat.mjs";
 import * as dice from "./module/dice.mjs";
 import { preloadHandlebarsTemplates, registerHandlebarsHelpers } from "./module/helpers.mjs";
 import TargetingArrowLayer from "./module/canvas/targeting-layer.mjs";
+import CommsLinkManager from "./module/comms-link-manager.mjs";
+import CommsLinkLayer from "./module/canvas/comms-link-layer.mjs";
 
 /* ============================================ */
 /*  Foundry VTT Initialization                  */
@@ -26,7 +28,8 @@ Hooks.once("init", () => {
     StarMercsItem: documents.StarMercsItem,
     StarMercsCombat: documents.StarMercsCombat,
     combat,
-    dice
+    dice,
+    commsLinkManager: new CommsLinkManager()
   };
 
   // Assign system configuration object
@@ -92,6 +95,18 @@ Hooks.once("init", () => {
       game.starmercs?.targetingArrowLayer?.drawArrows();
     }
   });
+
+  game.settings.register("star-mercs", "showCommsLinks", {
+    name: "STARMERCS.Settings.ShowCommsLinks",
+    hint: "STARMERCS.Settings.ShowCommsLinksHint",
+    scope: "client",
+    config: false,
+    type: Boolean,
+    default: true,
+    onChange: () => {
+      game.starmercs?.commsLinkLayer?.drawLinks();
+    }
+  });
 });
 
 /* ============================================ */
@@ -153,11 +168,22 @@ Hooks.on("canvasReady", () => {
   game.starmercs.targetingArrowLayer = layer;
   canvas.interface.addChild(layer);
   layer.drawArrows();
+
+  // Comms link overlay
+  const previousCommsLayer = game.starmercs.commsLinkLayer;
+  if (previousCommsLayer) {
+    previousCommsLayer.destroy({ children: true });
+  }
+  const commsLayer = new CommsLinkLayer();
+  game.starmercs.commsLinkLayer = commsLayer;
+  canvas.interface.addChild(commsLayer);
+  commsLayer.drawLinks();
 });
 
 /** Redraw arrows when a token is visually refreshed (position change, etc.). */
 Hooks.on("refreshToken", () => {
   game.starmercs?.targetingArrowLayer?.drawArrows();
+  game.starmercs?.commsLinkLayer?.drawLinks();
 });
 
 /**
@@ -180,7 +206,7 @@ Hooks.on("preUpdateToken", (tokenDoc, changes, options, userId) => {
     return false;
   }
 
-  // Tactical phase: enforce speed limit
+  // Tactical phase: enforce speed limit and fuel check
   if (combat.phase === "tactical") {
     const movementUsed = tokenDoc.getFlag("star-mercs", "movementUsed") ?? 0;
     const speed = actor.system.speed ?? 0;
@@ -190,6 +216,17 @@ Hooks.on("preUpdateToken", (tokenDoc, changes, options, userId) => {
       );
       return false;
     }
+
+    // Check if unit has fuel to move
+    const fuelPerHex = actor.system.fuelPerHex ?? 0;
+    if (fuelPerHex > 0) {
+      const fuelRemaining = actor.system.supply?.fuel?.current ?? 0;
+      const fuelNeeded = (movementUsed + 1) * fuelPerHex;
+      if (fuelNeeded > fuelRemaining) {
+        ui.notifications.warn("Cannot move — not enough fuel remaining.");
+        return false;
+      }
+    }
   }
 
   return true;
@@ -197,9 +234,10 @@ Hooks.on("preUpdateToken", (tokenDoc, changes, options, userId) => {
 
 /** Redraw arrows and track movement on token position changes. */
 Hooks.on("updateToken", (tokenDoc, changes) => {
-  // Redraw targeting arrows
+  // Redraw targeting arrows and comms links
   if ("x" in changes || "y" in changes || "elevation" in changes) {
     game.starmercs?.targetingArrowLayer?.drawArrows();
+    game.starmercs?.commsLinkLayer?.drawLinks();
   }
 
   // Track movement during tactical phase
@@ -253,8 +291,9 @@ Hooks.on("updateCombat", (combat, changes) => {
     }
   }
 
-  // Redraw arrows (movement destination arrows appear/disappear based on phase)
+  // Redraw arrows and comms links (movement destination arrows appear/disappear based on phase)
   game.starmercs?.targetingArrowLayer?.drawArrows();
+  game.starmercs?.commsLinkLayer?.drawLinks();
 
   // Re-render all open unit sheets so phase indicators and order dropdown update
   for (const app of Object.values(ui.windows)) {
@@ -319,10 +358,28 @@ Hooks.on("getSceneControlButtons", (controls) => {
     }
   };
 
+  const commsTool = {
+    name: "commsLinks",
+    title: "STARMERCS.Controls.CommsLinks",
+    icon: "fas fa-broadcast-tower",
+    visible: true,
+    toggle: true,
+    active: game.settings.get("star-mercs", "showCommsLinks"),
+    onChange: (event, active) => {
+      game.settings.set("star-mercs", "showCommsLinks", active);
+    },
+    onClick: (toggled) => {
+      game.settings.set("star-mercs", "showCommsLinks", toggled);
+    }
+  };
+
   if (isV13) {
     tool.order = Object.keys(tokenControls.tools).length;
     tokenControls.tools.targetingArrows = tool;
+    commsTool.order = Object.keys(tokenControls.tools).length;
+    tokenControls.tools.commsLinks = commsTool;
   } else {
     tokenControls.tools.push(tool);
+    tokenControls.tools.push(commsTool);
   }
 });

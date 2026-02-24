@@ -140,6 +140,7 @@
   "STARMERCS.Order.MeteoricAssault": "Meteoric Assault",
   "STARMERCS.Order.SupplyOrder": "Supply",
   "STARMERCS.Order.Deploy": "Deploy",
+  "STARMERCS.Order.StandDown": "Stand Down",
 
   "STARMERCS.OrderDetail.Movement": "Movement",
   "STARMERCS.OrderDetail.Attack": "Attack",
@@ -158,5 +159,9 @@
 
   "STARMERCS.Settings.ShowTargetingArrows": "Show Targeting Arrows",
   "STARMERCS.Settings.ShowTargetingArrowsHint": "Display colored arrows on the canvas from units to their weapon targets.",
-  "STARMERCS.Controls.TargetingArrows": "Toggle Targeting Arrows"
+  "STARMERCS.Controls.TargetingArrows": "Toggle Targeting Arrows",
+
+  "STARMERCS.Settings.ShowCommsLinks": "Show Comms Links",
+  "STARMERCS.Settings.ShowCommsLinksHint": "Display colored dotted lines between units with communications links.",
+  "STARMERCS.Controls.CommsLinks": "Toggle Comms Links"
 }

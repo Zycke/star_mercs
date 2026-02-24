@@ -63,6 +63,19 @@ export default class StarMercsActor extends Actor {
     return this.items.filter(i => i.type === "trait" && i.system.active);
   }
 
+  /**
+   * Determine which supply category a weapon consumes.
+   * @param {Item} weapon - A weapon item.
+   * @returns {"smallArms"|"heavyWeapons"|"ordnance"}
+   */
+  _getWeaponSupplyType(weapon) {
+    if (weapon.system.attackType === "antiAir" || weapon.system.artillery || weapon.system.aircraft) {
+      return "ordnance";
+    }
+    if (weapon.system.attackType === "hard") return "heavyWeapons";
+    return "smallArms";
+  }
+
   /* ---------------------------------------- */
   /*  Combat: Phase Enforcement               */
   /* ---------------------------------------- */
@@ -72,12 +85,16 @@ export default class StarMercsActor extends Actor {
    * @returns {{allowed: boolean, reason: string|null}}
    */
   _checkAttackAllowed() {
-    // Zero supply: cannot attack
-    if (this.type === "unit" && (this.system.supply?.current ?? 1) <= 0) {
-      return {
-        allowed: false,
-        reason: game.i18n.localize("STARMERCS.NoSupplyAttack")
-      };
+    // Zero ammo supply: cannot attack if all ammo categories are empty
+    if (this.type === "unit") {
+      const sup = this.system.supply ?? {};
+      const totalAmmo = (sup.smallArms?.current ?? 0) + (sup.heavyWeapons?.current ?? 0) + (sup.ordnance?.current ?? 0);
+      if (totalAmmo <= 0) {
+        return {
+          allowed: false,
+          reason: game.i18n.localize("STARMERCS.NoSupplyAttack")
+        };
+      }
     }
 
     const combat = game.combat;
@@ -243,7 +260,8 @@ export default class StarMercsActor extends Actor {
       accurateMod: result.accuracy.accurateMod ?? 0,
       inaccurateMod: result.accuracy.inaccurateMod ?? 0,
       disorderedMod: result.accuracy.disorderedMod ?? 0,
-      hasAccuracyMods: (result.accuracy.ewarMod > 0 || result.accuracy.readinessMod > 0 || (result.accuracy.accurateMod ?? 0) > 0 || (result.accuracy.inaccurateMod ?? 0) > 0 || (result.accuracy.disorderedMod ?? 0) !== 0),
+      standDownMod: result.accuracy.standDownMod ?? 0,
+      hasAccuracyMods: (result.accuracy.ewarMod > 0 || result.accuracy.readinessMod > 0 || (result.accuracy.accurateMod ?? 0) > 0 || (result.accuracy.inaccurateMod ?? 0) > 0 || (result.accuracy.disorderedMod ?? 0) !== 0 || (result.accuracy.standDownMod ?? 0) !== 0),
       hitType: result.hitResult.type,
       hitLabel: HIT_LABELS[result.hitResult.type],
       isHit: result.hitResult.hit,
@@ -270,10 +288,12 @@ export default class StarMercsActor extends Actor {
       templateData
     );
 
-    // Track weapons fired for supply consumption
+    // Track weapons fired by supply category
     if (game.combat?.started && attackerToken) {
-      const fired = attackerToken.document.getFlag("star-mercs", "weaponsFired") ?? 0;
-      await attackerToken.document.setFlag("star-mercs", "weaponsFired", fired + 1);
+      const supplyType = this._getWeaponSupplyType(weapon);
+      const flagKey = `weaponsFired_${supplyType}`;
+      const fired = attackerToken.document.getFlag("star-mercs", flagKey) ?? 0;
+      await attackerToken.document.setFlag("star-mercs", flagKey, fired + 1);
     }
 
     return ChatMessage.create({
@@ -338,6 +358,7 @@ export default class StarMercsActor extends Actor {
       accurateMod: accuracy.accurateMod ?? 0,
       inaccurateMod: accuracy.inaccurateMod ?? 0,
       disorderedMod: 0,
+      standDownMod: 0,
       hasAccuracyMods: (accuracy.readinessMod > 0 || (accuracy.accurateMod ?? 0) > 0 || (accuracy.inaccurateMod ?? 0) > 0),
       hitType: hitResult.type,
       hitLabel: HIT_LABELS[hitResult.type],
@@ -588,11 +609,22 @@ export default class StarMercsActor extends Actor {
       });
     }
 
-    // Track weapons fired for supply consumption
+    // Track weapons fired by supply category
     const validResults = results.filter(r => r.valid);
     if (game.combat?.started && attackerToken && validResults.length > 0) {
-      const fired = attackerToken.document.getFlag("star-mercs", "weaponsFired") ?? 0;
-      await attackerToken.document.setFlag("star-mercs", "weaponsFired", fired + validResults.length);
+      // Count per supply type
+      const counts = { smallArms: 0, heavyWeapons: 0, ordnance: 0 };
+      for (const r of validResults) {
+        const supplyType = this._getWeaponSupplyType(r.weapon);
+        counts[supplyType]++;
+      }
+      for (const [type, count] of Object.entries(counts)) {
+        if (count > 0) {
+          const flagKey = `weaponsFired_${type}`;
+          const prev = attackerToken.document.getFlag("star-mercs", flagKey) ?? 0;
+          await attackerToken.document.setFlag("star-mercs", flagKey, prev + count);
+        }
+      }
     }
 
     // Phase 5: Clear all weapon targets after firing
@@ -681,31 +713,61 @@ export default class StarMercsActor extends Actor {
   }
 
   /**
-   * Transfer supply to another unit.
-   * @param {StarMercsActor} targetActor - The target unit to receive supply.
-   * @param {number} amount - Amount of supply to transfer.
-   * @returns {Promise<boolean>} True if transfer succeeded.
+   * Supply category keys for iteration.
    */
-  async transferSupply(targetActor, amount) {
+  static SUPPLY_CATEGORIES = ["smallArms", "heavyWeapons", "ordnance", "fuel", "materials", "parts", "basicSupplies"];
+
+  /**
+   * Supply category display labels.
+   */
+  static SUPPLY_LABELS = {
+    smallArms: "Small Arms",
+    heavyWeapons: "Heavy Weapons",
+    ordnance: "Ordnance",
+    fuel: "Fuel",
+    materials: "Materials",
+    parts: "Parts",
+    basicSupplies: "Basic Supplies"
+  };
+
+  /**
+   * Transfer supply to another unit, per category.
+   * @param {StarMercsActor} targetActor - The target unit to receive supply.
+   * @param {Object} transfers - Amounts per category, e.g. { smallArms: 5, fuel: 3 }.
+   * @returns {Promise<boolean>} True if any transfer succeeded.
+   */
+  async transferSupply(targetActor, transfers) {
     if (!targetActor || targetActor.type !== "unit") return false;
 
-    const currentSupply = this.system.supply.current;
-    const targetSupply = targetActor.system.supply.current;
-    const targetCapacity = targetActor.system.supply.capacity;
+    const sourceUpdate = {};
+    const targetUpdate = {};
+    const transferredParts = [];
 
-    // Clamp amount to what we have and what they can receive
-    const actualAmount = Math.min(amount, currentSupply, targetCapacity - targetSupply);
-    if (actualAmount <= 0) return false;
+    for (const cat of StarMercsActor.SUPPLY_CATEGORIES) {
+      const amount = transfers[cat] ?? 0;
+      if (amount <= 0) continue;
 
-    // Execute transfer
-    await this.update({ "system.supply.current": currentSupply - actualAmount });
-    await targetActor.update({ "system.supply.current": targetSupply + actualAmount });
+      const sourceCat = this.system.supply[cat];
+      const targetCat = targetActor.system.supply[cat];
+      if (!sourceCat || !targetCat) continue;
 
-    // Post to chat
+      const actual = Math.min(amount, sourceCat.current, targetCat.capacity - targetCat.current);
+      if (actual <= 0) continue;
+
+      sourceUpdate[`system.supply.${cat}.current`] = sourceCat.current - actual;
+      targetUpdate[`system.supply.${cat}.current`] = targetCat.current + actual;
+      transferredParts.push(`${StarMercsActor.SUPPLY_LABELS[cat]}: ${actual}`);
+    }
+
+    if (transferredParts.length === 0) return false;
+
+    await this.update(sourceUpdate);
+    await targetActor.update(targetUpdate);
+
     await ChatMessage.create({
       content: `<div class="star-mercs chat-card supply-transfer">
         <div class="summary-header"><i class="fas fa-truck"></i> <strong>${this.name}</strong> &rarr; <strong>${targetActor.name}</strong></div>
-        <div class="summary-damage">${game.i18n.format("STARMERCS.TransferSuccess", { amount: actualAmount, target: targetActor.name })}</div>
+        <div class="status-update">${transferredParts.join(" | ")}</div>
       </div>`,
       speaker: ChatMessage.getSpeaker({ actor: this })
     });

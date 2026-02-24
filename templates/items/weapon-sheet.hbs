@@ -46,6 +46,20 @@
       </div>
     </div>
     <div class="form-row">
+      <div class="form-group checkbox-group">
+        <label>
+          <input type="checkbox" name="system.artillery" {{checked system.artillery}}/>
+          Artillery
+        </label>
+      </div>
+      <div class="form-group checkbox-group">
+        <label>
+          <input type="checkbox" name="system.aircraft" {{checked system.aircraft}}/>
+          Aircraft
+        </label>
+      </div>
+    </div>
+    <div class="form-row">
       <div class="form-group">
         <label>Accurate [X]</label>
         <input type="number" name="system.accurate" value="{{system.accurate}}" min="0"/>
