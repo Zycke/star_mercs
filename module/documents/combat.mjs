@@ -1,4 +1,8 @@
 import StarMercsActor from "./actor.mjs";
+import { snapToHexCenter, hexKey, getAdjacentHexCenters, getTokensAtHex,
+  areAdjacent, getAdjacentEnemies, isEngaged, computeHexPath,
+  validatePath, findBestAdjacentHex, getLastSafeHex } from "../hex-utils.mjs";
+import { getDetectionLevel } from "../detection.mjs";
 
 /**
  * Extended Combat class for Star Mercs that implements phase-based rounds.
@@ -13,6 +17,17 @@ export default class StarMercsCombat extends Combat {
 
   /** Ordered phase keys. */
   static PHASES = ["preparation", "orders", "tactical", "consolidation"];
+
+  /** Tactical sub-step definitions, executed in order during the tactical phase. */
+  static TACTICAL_STEPS = [
+    { key: "withdraw_morale", label: "Withdraw Morale Checks" },
+    { key: "artillery",       label: "Artillery Fire" },
+    { key: "airstrikes",      label: "Air Strikes" },
+    { key: "weapons_fire",    label: "Weapons Fire" },
+    { key: "assault",         label: "Assault Resolution" },
+    { key: "movement",        label: "Unit Movement" },
+    { key: "maneuver_fire",   label: "Maneuvering Unit Fire" }
+  ];
 
   /** Per-phase permission rules. */
   static PHASE_RULES = {
@@ -64,21 +79,53 @@ export default class StarMercsCombat extends Combat {
   /** @override — Advance to the next phase; if all 4 done, advance round. */
   async nextTurn() {
     const currentIndex = this.phaseIndex;
-    const nextIndex = currentIndex + 1;
 
-    // Entering tactical — run withdraw morale tests
-    if (nextIndex === 2) {
-      await this._runWithdrawMorale();
+    // If currently IN tactical, advance sub-step instead of phase
+    if (currentIndex === 2) {
+      const currentStep = this.getFlag("star-mercs", "tacticalStep") ?? 0;
+      const nextStep = currentStep + 1;
+
+      if (nextStep < StarMercsCombat.TACTICAL_STEPS.length) {
+        await this.setFlag("star-mercs", "tacticalStep", nextStep);
+        await this._executeTacticalStep(nextStep);
+        return this;
+      }
+
+      // All tactical steps done — proceed to consolidation
+      await this._runConsolidationEffects();
+      await this.update({
+        "flags.star-mercs.phase": "consolidation",
+        "flags.star-mercs.phaseIndex": 3
+      });
+      this._announcePhase();
+      return this;
     }
 
-    // Entering consolidation — apply damage, readiness costs, supply consumption
-    if (nextIndex === 3) {
-      await this._runConsolidationEffects();
+    const nextIndex = currentIndex + 1;
+
+    // Entering tactical — start sub-step sequence
+    if (nextIndex === 2) {
+      // Apply assault +1 incoming damage flag at the start of tactical phase
+      await this._applyAssaultIncomingDamageFlags();
+
+      await this.update({
+        "flags.star-mercs.phase": "tactical",
+        "flags.star-mercs.phaseIndex": 2,
+        "flags.star-mercs.tacticalStep": 0
+      });
+      this._announcePhase();
+      await this._executeTacticalStep(0);
+      return this;
     }
 
     // Leaving consolidation — clear targets, destinations, orders
     if (currentIndex === 3) {
       await this._runConsolidationCleanup();
+    }
+
+    // Entering consolidation — apply damage, readiness costs, supply consumption
+    if (nextIndex === 3) {
+      await this._runConsolidationEffects();
     }
 
     // All phases done — next round resets to preparation
@@ -1090,6 +1137,683 @@ export default class StarMercsCombat extends Combat {
   }
 
   /* ---------------------------------------- */
+  /*  Tactical Sub-Step System                */
+  /* ---------------------------------------- */
+
+  /**
+   * Dispatch execution to the appropriate tactical sub-step handler.
+   * After execution, posts a "Next Step" chat button or advances to consolidation.
+   * @param {number} stepIndex - Index into TACTICAL_STEPS.
+   * @private
+   */
+  async _executeTacticalStep(stepIndex) {
+    const step = StarMercsCombat.TACTICAL_STEPS[stepIndex];
+
+    switch (step.key) {
+      case "withdraw_morale":
+        await this._runWithdrawMorale();
+        break;
+      case "artillery":
+        await this._runArtilleryFire();
+        break;
+      case "airstrikes":
+        await this._runAirStrikeFire();
+        break;
+      case "weapons_fire":
+        await this._runStandardWeaponsFire();
+        break;
+      case "assault":
+        await this._runAssaultStep();
+        break;
+      case "movement":
+        await this._runMovementStep();
+        break;
+      case "maneuver_fire":
+        await this._runManeuverFire();
+        break;
+    }
+
+    // Post "Next Step" button if more steps remain
+    if (stepIndex < StarMercsCombat.TACTICAL_STEPS.length - 1) {
+      await this._postNextStepButton(stepIndex);
+    } else {
+      await this._postStepComplete();
+    }
+  }
+
+  /**
+   * At the start of the tactical phase, flag all assaulting units so they
+   * take +1 damage from all sources (checked in calculateDamage via currentOrder).
+   * The assault order is already set on the actor, so the damage modifier
+   * in combat.mjs (line "target.system.currentOrder === 'assault'") will apply
+   * to all incoming fire during the entire tactical phase.
+   * This method posts a chat notification for each assaulting unit.
+   * @private
+   */
+  async _applyAssaultIncomingDamageFlags() {
+    const assaultingUnits = [];
+    for (const combatant of this.combatants) {
+      const actor = combatant.actor;
+      if (!actor || actor.type !== "unit") continue;
+      if (actor.system.currentOrder !== "assault") continue;
+      if (actor.system.strength.value <= 0) continue;
+      assaultingUnits.push(combatant.token?.name ?? actor.name);
+    }
+
+    if (assaultingUnits.length > 0) {
+      await ChatMessage.create({
+        content: `<div class="star-mercs chat-card tactical-step">
+          <div class="summary-header"><i class="fas fa-fist-raised"></i> Assault Modifier Active</div>
+          <div class="status-update">The following units take <strong>+1 damage from all sources</strong> this phase:</div>
+          <div class="status-update">${assaultingUnits.join(", ")}</div>
+        </div>`,
+        speaker: { alias: "Star Mercs" }
+      });
+    }
+  }
+
+  /* ---------------------------------------- */
+  /*  Tactical Steps: Auto-Fire               */
+  /* ---------------------------------------- */
+
+  /**
+   * Auto-fire all artillery weapons with assigned targets.
+   * @private
+   */
+  async _runArtilleryFire() {
+    let firedCount = 0;
+    for (const combatant of this.combatants) {
+      const actor = combatant.actor;
+      if (!actor || actor.type !== "unit") continue;
+      if (actor.system.strength.value <= 0) continue;
+
+      const artilleryWeapons = actor.items.filter(
+        i => i.type === "weapon" && i.system.artillery && i.system.targetId
+      );
+      if (artilleryWeapons.length === 0) continue;
+
+      for (const weapon of artilleryWeapons) {
+        const targetToken = canvas.tokens.get(weapon.system.targetId);
+        if (!targetToken?.actor) continue;
+        await actor.rollAttack(weapon, targetToken.actor);
+        firedCount++;
+      }
+    }
+
+    await ChatMessage.create({
+      content: `<div class="star-mercs chat-card tactical-step">
+        <div class="summary-header"><i class="fas fa-bullseye"></i> Artillery Fire Complete</div>
+        <div class="status-update">${firedCount} artillery weapon${firedCount !== 1 ? "s" : ""} fired.</div>
+      </div>`,
+      speaker: { alias: "Star Mercs" }
+    });
+  }
+
+  /**
+   * Auto-fire all aircraft weapons with assigned targets.
+   * @private
+   */
+  async _runAirStrikeFire() {
+    let firedCount = 0;
+    for (const combatant of this.combatants) {
+      const actor = combatant.actor;
+      if (!actor || actor.type !== "unit") continue;
+      if (actor.system.strength.value <= 0) continue;
+
+      const aircraftWeapons = actor.items.filter(
+        i => i.type === "weapon" && i.system.aircraft && i.system.targetId
+      );
+      if (aircraftWeapons.length === 0) continue;
+
+      for (const weapon of aircraftWeapons) {
+        const targetToken = canvas.tokens.get(weapon.system.targetId);
+        if (!targetToken?.actor) continue;
+        await actor.rollAttack(weapon, targetToken.actor);
+        firedCount++;
+      }
+    }
+
+    await ChatMessage.create({
+      content: `<div class="star-mercs chat-card tactical-step">
+        <div class="summary-header"><i class="fas fa-plane"></i> Air Strikes Complete</div>
+        <div class="status-update">${firedCount} aircraft weapon${firedCount !== 1 ? "s" : ""} fired.</div>
+      </div>`,
+      speaker: { alias: "Star Mercs" }
+    });
+  }
+
+  /**
+   * Auto-fire all non-artillery, non-aircraft weapons with assigned targets,
+   * for units whose order allows attacking (excluding Maneuver — they fire later).
+   * @private
+   */
+  async _runStandardWeaponsFire() {
+    let firedCount = 0;
+    for (const combatant of this.combatants) {
+      const actor = combatant.actor;
+      if (!actor || actor.type !== "unit") continue;
+      if (actor.system.strength.value <= 0) continue;
+
+      const order = this._getActorOrder(actor);
+      if (order && !order.system.allowsAttack) continue;
+
+      // Maneuver units fire in the maneuver_fire step (after movement)
+      if (actor.system.currentOrder === "move") continue;
+
+      const weapons = actor.items.filter(
+        i => i.type === "weapon" && i.system.targetId
+          && !i.system.artillery && !i.system.aircraft
+      );
+      if (weapons.length === 0) continue;
+
+      for (const weapon of weapons) {
+        const targetToken = canvas.tokens.get(weapon.system.targetId);
+        if (!targetToken?.actor) continue;
+        await actor.rollAttack(weapon, targetToken.actor);
+        firedCount++;
+      }
+    }
+
+    await ChatMessage.create({
+      content: `<div class="star-mercs chat-card tactical-step">
+        <div class="summary-header"><i class="fas fa-crosshairs"></i> Weapons Fire Complete</div>
+        <div class="status-update">${firedCount} weapon${firedCount !== 1 ? "s" : ""} fired.</div>
+      </div>`,
+      speaker: { alias: "Star Mercs" }
+    });
+  }
+
+  /* ---------------------------------------- */
+  /*  Tactical Steps: Assault                 */
+  /* ---------------------------------------- */
+
+  /**
+   * Execute the assault step: move assaulting units adjacent to their targets.
+   * Deducts -1 readiness per hex moved.
+   * @private
+   */
+  async _runAssaultStep() {
+    let assaultCount = 0;
+    for (const combatant of this.combatants) {
+      const actor = combatant.actor;
+      if (!actor || actor.type !== "unit") continue;
+      if (actor.system.currentOrder !== "assault") continue;
+      if (actor.system.strength.value <= 0) continue;
+
+      const token = combatant.token;
+      if (!token) continue;
+
+      const assaultTargetId = token.getFlag("star-mercs", "assaultTarget");
+      if (!assaultTargetId) continue;
+
+      const attackerToken = canvas.tokens.get(token.id);
+      const targetToken = canvas.tokens.get(assaultTargetId);
+      if (!attackerToken || !targetToken) continue;
+
+      // Already adjacent — no movement needed
+      if (areAdjacent(attackerToken, targetToken)) {
+        assaultCount++;
+        continue;
+      }
+
+      // Find the best adjacent hex to the target
+      const adjacentHex = findBestAdjacentHex(targetToken, attackerToken);
+      if (!adjacentHex) {
+        await ChatMessage.create({
+          content: `<div class="star-mercs chat-card tactical-step">
+            <div class="status-alert"><i class="fas fa-exclamation-triangle"></i> <strong>${token.name}</strong> cannot reach assault target — all adjacent hexes blocked.</div>
+          </div>`,
+          speaker: { alias: "Star Mercs" }
+        });
+        continue;
+      }
+
+      // Calculate hex distance moved
+      const distance = StarMercsActor.getHexDistance(attackerToken, targetToken);
+      const hexesMoved = Math.max(0, distance - 1);
+
+      // Move the token
+      const topLeft = canvas.grid.getTopLeftPoint(adjacentHex);
+      await token.update({ x: topLeft.x, y: topLeft.y });
+
+      // Track movement for fuel consumption
+      await token.setFlag("star-mercs", "movementUsed", hexesMoved);
+
+      // Deduct readiness: -1 per hex moved
+      if (hexesMoved > 0) {
+        const newRdy = Math.max(0, actor.system.readiness.value - hexesMoved);
+        await actor.update({ "system.readiness.value": newRdy });
+
+        await ChatMessage.create({
+          content: `<div class="star-mercs chat-card tactical-step">
+            <div class="summary-header"><i class="fas fa-fist-raised"></i> <strong>${token.name}</strong> — Assault Movement</div>
+            <div class="status-update">Moved ${hexesMoved} hex${hexesMoved > 1 ? "es" : ""} to assault target. -${hexesMoved} readiness.</div>
+          </div>`,
+          speaker: { alias: "Star Mercs" }
+        });
+      }
+
+      // Fire weapons at the assault target
+      const weapons = actor.items.filter(
+        i => i.type === "weapon" && !i.system.artillery && !i.system.aircraft
+      );
+      for (const weapon of weapons) {
+        // Check range from new position
+        const newAttackerToken = canvas.tokens.get(token.id);
+        if (!newAttackerToken) break;
+        const dist = StarMercsActor.getHexDistance(newAttackerToken, targetToken);
+        if (dist <= weapon.system.range) {
+          await actor.rollAttack(weapon, targetToken.actor);
+        }
+      }
+
+      assaultCount++;
+    }
+
+    await ChatMessage.create({
+      content: `<div class="star-mercs chat-card tactical-step">
+        <div class="summary-header"><i class="fas fa-fist-raised"></i> Assault Step Complete</div>
+        <div class="status-update">${assaultCount} assault${assaultCount !== 1 ? "s" : ""} resolved.</div>
+      </div>`,
+      speaker: { alias: "Star Mercs" }
+    });
+  }
+
+  /* ---------------------------------------- */
+  /*  Tactical Steps: Movement                */
+  /* ---------------------------------------- */
+
+  /**
+   * Auto-move all maneuvering units to their set destinations.
+   * Handles overwatch triggers, hex contest detection/resolution.
+   * @private
+   */
+  async _runMovementStep() {
+    // 1. Collect all units that need to move
+    const movers = [];
+    for (const combatant of this.combatants) {
+      const actor = combatant.actor;
+      if (!actor || actor.type !== "unit") continue;
+      if (actor.system.strength.value <= 0) continue;
+
+      const token = combatant.token;
+      if (!token) continue;
+
+      const order = actor.system.currentOrder;
+      const orderConfig = CONFIG.STARMERCS.orders?.[order];
+      if (!orderConfig?.allowsMovement) continue;
+      if (order === "assault") continue; // Already handled
+      if (order === "withdraw") continue; // Withdraw movement is manual
+
+      const dest = token.getFlag("star-mercs", "moveDestination");
+      if (!dest) continue;
+
+      movers.push({ combatant, actor, token, dest, contestLost: false });
+    }
+
+    if (movers.length === 0) {
+      await ChatMessage.create({
+        content: `<div class="star-mercs chat-card tactical-step">
+          <div class="summary-header"><i class="fas fa-arrows-alt"></i> Movement Complete</div>
+          <div class="status-update">No units to move.</div>
+        </div>`,
+        speaker: { alias: "Star Mercs" }
+      });
+      return;
+    }
+
+    // 2. Detect hex contests (two opposing units targeting the same hex)
+    const destMap = new Map();
+    for (const m of movers) {
+      const snapped = snapToHexCenter(m.dest);
+      const key = hexKey(snapped);
+      if (!destMap.has(key)) destMap.set(key, []);
+      destMap.get(key).push(m);
+    }
+
+    // 3. Resolve contests
+    for (const [, contestants] of destMap) {
+      if (contestants.length < 2) continue;
+
+      // Group by team
+      const teams = {};
+      for (const m of contestants) {
+        const team = m.actor.system.team ?? "a";
+        if (!teams[team]) teams[team] = [];
+        teams[team].push(m);
+      }
+      const teamKeys = Object.keys(teams);
+
+      if (teamKeys.length >= 2) {
+        // Opposing teams contesting same hex
+        const unitA = teams[teamKeys[0]][0];
+        const unitB = teams[teamKeys[1]][0];
+
+        const canvasTokenA = canvas.tokens.get(unitA.token.id);
+        const canvasTokenB = canvas.tokens.get(unitB.token.id);
+
+        if (canvasTokenA && canvasTokenB) {
+          const { loser } = await this._resolveHexContest(canvasTokenA, canvasTokenB);
+          // Mark the loser so they stop early
+          const loserMover = (loser === canvasTokenA) ? unitA : unitB;
+          loserMover.contestLost = true;
+        }
+      }
+
+      // Same-team conflict: block all but the first mover to that hex
+      for (const teamKey of teamKeys) {
+        const teamMovers = teams[teamKey];
+        for (let i = 1; i < teamMovers.length; i++) {
+          teamMovers[i].contestLost = true;
+        }
+      }
+    }
+
+    // 4. Execute movements with overwatch checks
+    let movedCount = 0;
+    for (const mover of movers) {
+      const canvasToken = canvas.tokens.get(mover.token.id);
+      if (!canvasToken) continue;
+
+      const path = computeHexPath(canvasToken.center, mover.dest);
+
+      if (mover.contestLost) {
+        // Move to last hex before the contested destination
+        const safePath = path.slice(0, -1);
+        if (safePath.length > 0) {
+          const safeHex = safePath[safePath.length - 1];
+          const topLeft = canvas.grid.getTopLeftPoint(safeHex);
+          await mover.token.update({ x: topLeft.x, y: topLeft.y });
+          await mover.token.setFlag("star-mercs", "movementUsed", safePath.length);
+        }
+        movedCount++;
+        continue;
+      }
+
+      // Check each step for overwatch triggers
+      for (const step of path) {
+        const overwatchTriggers = this._checkOverwatchTriggers(canvasToken, step);
+        for (const owToken of overwatchTriggers) {
+          await this._postOverwatchCard(owToken, canvasToken, step);
+        }
+      }
+
+      // Move token to final destination
+      if (path.length > 0) {
+        const finalHex = path[path.length - 1];
+        const topLeft = canvas.grid.getTopLeftPoint(finalHex);
+        await mover.token.update({ x: topLeft.x, y: topLeft.y });
+        await mover.token.setFlag("star-mercs", "movementUsed", path.length);
+      }
+      movedCount++;
+    }
+
+    // 5. Refresh engagement status for all tokens
+    this._refreshEngagementStatus();
+
+    await ChatMessage.create({
+      content: `<div class="star-mercs chat-card tactical-step">
+        <div class="summary-header"><i class="fas fa-arrows-alt"></i> Movement Complete</div>
+        <div class="status-update">${movedCount} unit${movedCount !== 1 ? "s" : ""} moved.</div>
+      </div>`,
+      speaker: { alias: "Star Mercs" }
+    });
+  }
+
+  /**
+   * Check for overwatch-capable units that can see a moving token at a given position.
+   * @param {Token} movingToken - The moving unit.
+   * @param {{x: number, y: number}} stepPosition - The hex center the mover is passing through.
+   * @returns {Token[]} Array of overwatch tokens that can fire.
+   * @private
+   */
+  _checkOverwatchTriggers(movingToken, stepPosition) {
+    const triggers = [];
+    const movingTeam = movingToken.actor?.system?.team ?? "a";
+
+    for (const token of canvas.tokens.placeables) {
+      if (token === movingToken) continue;
+      if (!token.actor || token.actor.type !== "unit") continue;
+      if (token.actor.system.strength.value <= 0) continue;
+      if (token.actor.system.currentOrder !== "overwatch") continue;
+
+      const owTeam = token.actor.system.team ?? "a";
+      if (owTeam === movingTeam) continue;
+
+      // Check if any weapon is in range of the step position
+      const owCenter = snapToHexCenter(token.center);
+      const stepSnapped = snapToHexCenter(stepPosition);
+      const dx = owCenter.x - stepSnapped.x;
+      const dy = owCenter.y - stepSnapped.y;
+      const pixelDist = Math.sqrt(dx * dx + dy * dy);
+      const gridSize = canvas.grid.size || 100;
+      const hexDist = Math.round(pixelDist / gridSize);
+
+      const hasWeaponInRange = token.actor.items.some(
+        w => w.type === "weapon" && w.system.range >= hexDist
+      );
+
+      if (hasWeaponInRange) {
+        // Detection gate: overwatch only triggers if the target is detected (visible level)
+        const detLevel = getDetectionLevel(token, movingToken);
+        if (detLevel !== "visible") continue;
+        triggers.push(token);
+      }
+    }
+    return triggers;
+  }
+
+  /**
+   * Post an overwatch trigger chat card with Fire/Hold buttons.
+   * @param {Token} overwatchToken - The overwatch unit.
+   * @param {Token} movingToken - The unit triggering overwatch.
+   * @param {{x: number, y: number}} triggerPosition - Where the trigger occurred.
+   * @private
+   */
+  async _postOverwatchCard(overwatchToken, movingToken, triggerPosition) {
+    const html = `<div class="star-mercs chat-card overwatch-trigger">
+      <div class="summary-header"><i class="fas fa-eye"></i> Overwatch Triggered!</div>
+      <div class="status-update"><strong>${overwatchToken.name}</strong> spots
+        <strong>${movingToken.name}</strong> entering weapon range.</div>
+      <div class="overwatch-actions">
+        <button class="overwatch-fire-btn"
+          data-attacker-id="${overwatchToken.document.id}"
+          data-target-id="${movingToken.document.id}"
+          data-combat-id="${this.id}">
+          <i class="fas fa-crosshairs"></i> Fire Overwatch
+        </button>
+        <button class="overwatch-skip-btn">
+          <i class="fas fa-hand-paper"></i> Hold Fire
+        </button>
+      </div>
+    </div>`;
+
+    await ChatMessage.create({ content: html, speaker: { alias: "Star Mercs" } });
+  }
+
+  /**
+   * Resolve a contested hex: two opposing units both trying to move into the same hex.
+   * Both roll morale (d10 vs readiness). Larger margin (readiness - roll) wins.
+   * Ties are re-rolled up to 10 rounds.
+   * @param {Token} token1 - First unit's canvas token.
+   * @param {Token} token2 - Second unit's canvas token.
+   * @returns {Promise<{winner: Token, loser: Token}>}
+   * @private
+   */
+  async _resolveHexContest(token1, token2) {
+    let winner = null;
+    let loser = null;
+    const allRolls = [];
+    let rounds = 0;
+    let roundDetails = [];
+
+    while (!winner && rounds < 10) {
+      rounds++;
+      const roll1 = new Roll("1d10");
+      await roll1.evaluate();
+      const roll2 = new Roll("1d10");
+      await roll2.evaluate();
+      allRolls.push(roll1, roll2);
+
+      const rdy1 = token1.actor.system.readiness.value;
+      const rdy2 = token2.actor.system.readiness.value;
+      const margin1 = rdy1 - roll1.total;
+      const margin2 = rdy2 - roll2.total;
+
+      roundDetails.push(`Round ${rounds}: ${token1.name} (RDY ${rdy1} - ${roll1.total} = ${margin1}) vs ${token2.name} (RDY ${rdy2} - ${roll2.total} = ${margin2})`);
+
+      if (margin1 > margin2) { winner = token1; loser = token2; }
+      else if (margin2 > margin1) { winner = token2; loser = token1; }
+    }
+
+    // Fallback if still tied after 10 rounds
+    if (!winner) {
+      if (Math.random() < 0.5) { winner = token1; loser = token2; }
+      else { winner = token2; loser = token1; }
+      roundDetails.push("Tiebreaker: random pick");
+    }
+
+    // Post chat result
+    let html = `<div class="star-mercs chat-card hex-contest">`;
+    html += `<div class="summary-header"><i class="fas fa-flag"></i> Hex Contest!</div>`;
+    html += `<div class="status-update"><strong>${token1.name}</strong> vs <strong>${token2.name}</strong> both target the same hex.</div>`;
+    for (const detail of roundDetails) {
+      html += `<div class="morale-details">${detail}</div>`;
+    }
+    html += `<div class="status-alert"><strong>${winner.name}</strong> wins the hex! <strong>${loser.name}</strong> stops short.</div>`;
+    html += `</div>`;
+
+    await ChatMessage.create({
+      content: html,
+      speaker: { alias: "Star Mercs" },
+      rolls: allRolls
+    });
+
+    return { winner, loser };
+  }
+
+  /**
+   * Refresh engagement status effects on all tokens.
+   * @private
+   */
+  _refreshEngagementStatus() {
+    const engagedEffect = CONFIG.statusEffects.find(e => e.id === "engaged");
+    if (!engagedEffect || !canvas?.tokens?.placeables) return;
+
+    for (const token of canvas.tokens.placeables) {
+      if (!token.actor || token.actor.type !== "unit") continue;
+      if (token.actor.system.strength.value <= 0) continue;
+
+      const engaged = isEngaged(token);
+      const hasEffect = token.document.hasStatusEffect("engaged");
+      if (engaged && !hasEffect) {
+        token.document.toggleActiveEffect(engagedEffect, { active: true });
+      } else if (!engaged && hasEffect) {
+        token.document.toggleActiveEffect(engagedEffect, { active: false });
+      }
+    }
+  }
+
+  /* ---------------------------------------- */
+  /*  Tactical Steps: Maneuver Fire           */
+  /* ---------------------------------------- */
+
+  /**
+   * Post chat cards for maneuvering units that may fire after movement.
+   * Per user requirement, maneuvering units choose targets AFTER moving,
+   * so this posts a card with a "Fire" button for each eligible unit.
+   * @private
+   */
+  async _runManeuverFire() {
+    let eligibleCount = 0;
+    for (const combatant of this.combatants) {
+      const actor = combatant.actor;
+      if (!actor || actor.type !== "unit") continue;
+      if (actor.system.currentOrder !== "move") continue;
+      if (actor.system.strength.value <= 0) continue;
+
+      const token = combatant.token;
+      if (!token) continue;
+
+      // Check if this unit has non-artillery, non-aircraft weapons
+      const weapons = actor.items.filter(
+        i => i.type === "weapon" && !i.system.artillery && !i.system.aircraft
+      );
+      if (weapons.length === 0) continue;
+
+      // Post a chat card with a fire button for this unit
+      const weaponList = weapons.map(w => `${w.name} (D${w.system.damage}/R${w.system.range})`).join(", ");
+
+      await ChatMessage.create({
+        content: `<div class="star-mercs chat-card maneuver-fire-card">
+          <div class="summary-header"><i class="fas fa-running"></i> <strong>${token.name}</strong> — Maneuver Fire</div>
+          <div class="status-update">Weapons: ${weaponList}</div>
+          <div class="status-update">Select targets using Foundry targeting (T + click), then click Fire.</div>
+          <div class="status-update"><em>Accuracy penalty: +1 (Maneuver order)</em></div>
+          <button class="maneuver-fire-btn"
+            data-token-id="${token.id}"
+            data-combat-id="${this.id}">
+            <i class="fas fa-crosshairs"></i> Fire Weapons
+          </button>
+        </div>`,
+        speaker: { alias: "Star Mercs" }
+      });
+
+      eligibleCount++;
+    }
+
+    if (eligibleCount === 0) {
+      await ChatMessage.create({
+        content: `<div class="star-mercs chat-card tactical-step">
+          <div class="summary-header"><i class="fas fa-running"></i> Maneuver Fire Complete</div>
+          <div class="status-update">No maneuvering units eligible to fire.</div>
+        </div>`,
+        speaker: { alias: "Star Mercs" }
+      });
+    }
+  }
+
+  /* ---------------------------------------- */
+  /*  Tactical Steps: Chat Navigation         */
+  /* ---------------------------------------- */
+
+  /**
+   * Post a "Next Step" button to chat for the GM to advance.
+   * @param {number} currentStepIndex
+   * @private
+   */
+  async _postNextStepButton(currentStepIndex) {
+    const nextStep = StarMercsCombat.TACTICAL_STEPS[currentStepIndex + 1];
+    const totalSteps = StarMercsCombat.TACTICAL_STEPS.length;
+
+    await ChatMessage.create({
+      content: `<div class="star-mercs chat-card tactical-step-nav">
+        <div class="summary-header"><i class="fas fa-forward"></i> Tactical Phase</div>
+        <div class="status-update">Step ${currentStepIndex + 1}/${totalSteps} complete.</div>
+        <div class="status-update">Next: <strong>${nextStep.label}</strong></div>
+        <button class="next-tactical-step-btn" data-combat-id="${this.id}">
+          <i class="fas fa-play"></i> Execute: ${nextStep.label}
+        </button>
+      </div>`,
+      speaker: { alias: "Star Mercs" }
+    });
+  }
+
+  /**
+   * Post a completion message and advance to consolidation.
+   * @private
+   */
+  async _postStepComplete() {
+    await ChatMessage.create({
+      content: `<div class="star-mercs chat-card tactical-step-nav">
+        <div class="summary-header"><i class="fas fa-check-circle"></i> Tactical Phase Complete</div>
+        <div class="status-update">All tactical steps resolved. Click "Next Phase" to advance to Consolidation.</div>
+      </div>`,
+      speaker: { alias: "Star Mercs" }
+    });
+  }
+
+  /* ---------------------------------------- */
   /*  Helpers                                 */
   /* ---------------------------------------- */
 
@@ -1140,8 +1864,11 @@ export default class StarMercsCombat extends Combat {
         }
       }
 
-      // 6. Clear current order
+      // 7. Clear current order
       await actor.update({ "system.currentOrder": "" });
     }
+
+    // Clear tactical step counter
+    await this.unsetFlag("star-mercs", "tacticalStep");
   }
 }

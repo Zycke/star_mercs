@@ -1,0 +1,31 @@
+<form class="star-mercs team-settings-form">
+  <div class="form-group">
+    <label>
+      <input type="checkbox" name="enabled" {{#if enabled}}checked{{/if}} />
+      Enable Team Ownership Enforcement
+    </label>
+    <p class="notes">When enabled, actor ownership is automatically synced based on team assignments below.</p>
+  </div>
+
+  <hr/>
+
+  <h3>Player Assignments</h3>
+  {{#each users as |user|}}
+  <div class="form-group">
+    <label>{{user.name}}</label>
+    <select name="team-{{user.id}}">
+      <option value="spectator" {{#if (eq user.team "spectator")}}selected{{/if}}>Spectator</option>
+      <option value="a" {{#if (eq user.team "a")}}selected{{/if}}>Team A</option>
+      <option value="b" {{#if (eq user.team "b")}}selected{{/if}}>Team B</option>
+    </select>
+  </div>
+  {{/each}}
+
+  {{#unless users.length}}
+    <p class="notes">No non-GM players found. Players must join the game first.</p>
+  {{/unless}}
+
+  <footer class="sheet-footer">
+    <button type="submit"><i class="fas fa-save"></i> Save & Sync</button>
+  </footer>
+</form>

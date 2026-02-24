@@ -1,0 +1,26 @@
+<form class="star-mercs terrain-painter-form">
+  <div class="form-group">
+    <label>Terrain Type</label>
+    <select name="selectedTerrain">
+      {{selectOptions terrainChoices selected=selectedTerrain}}
+    </select>
+  </div>
+
+  <div class="form-group terrain-painter-buttons">
+    <button type="button" class="toggle-painting {{#if isActive}}active{{/if}}">
+      <i class="fas {{#if isActive}}fa-stop{{else}}fa-paint-brush{{/if}}"></i>
+      {{#if isActive}}Stop Painting{{else}}Start Painting{{/if}}
+    </button>
+  </div>
+
+  <div class="form-group">
+    <button type="button" class="clear-all-terrain">
+      <i class="fas fa-trash"></i> Clear All Terrain
+    </button>
+  </div>
+
+  <p class="notes">
+    <strong>Left-click</strong> a hex to paint terrain.<br/>
+    <strong>Right-click</strong> a hex to erase terrain.
+  </p>
+</form>

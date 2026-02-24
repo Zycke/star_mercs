@@ -14,6 +14,12 @@ import { preloadHandlebarsTemplates, registerHandlebarsHelpers } from "./module/
 import TargetingArrowLayer from "./module/canvas/targeting-layer.mjs";
 import CommsLinkManager from "./module/comms-link-manager.mjs";
 import CommsLinkLayer from "./module/canvas/comms-link-layer.mjs";
+import * as hexUtils from "./module/hex-utils.mjs";
+import TerrainLayer from "./module/canvas/terrain-layer.mjs";
+import TerrainPainter from "./module/apps/terrain-painter.mjs";
+import TeamSettingsForm from "./module/apps/team-settings.mjs";
+import * as detection from "./module/detection.mjs";
+import DetectionLayer from "./module/canvas/detection-layer.mjs";
 
 /* ============================================ */
 /*  Foundry VTT Initialization                  */
@@ -29,7 +35,8 @@ Hooks.once("init", () => {
     StarMercsCombat: documents.StarMercsCombat,
     combat,
     dice,
-    commsLinkManager: new CommsLinkManager()
+    commsLinkManager: new CommsLinkManager(),
+    hexUtils
   };
 
   // Assign system configuration object
@@ -46,6 +53,11 @@ Hooks.once("init", () => {
       id: "breaking",
       label: "Breaking",
       icon: "icons/svg/skull.svg"
+    },
+    {
+      id: "engaged",
+      label: "Engaged",
+      icon: "icons/svg/sword.svg"
     }
   );
 
@@ -121,6 +133,55 @@ Hooks.once("init", () => {
       game.starmercs?.commsLinkLayer?.drawLinks();
     }
   });
+
+  game.settings.register("star-mercs", "showTerrainOverlay", {
+    name: "Show Terrain Overlay",
+    hint: "Display colored hex overlays showing terrain types on the canvas.",
+    scope: "client",
+    config: false,
+    type: Boolean,
+    default: true,
+    onChange: () => {
+      game.starmercs?.terrainLayer?.drawTerrain();
+    }
+  });
+
+  game.settings.register("star-mercs", "showDetectionOverlay", {
+    name: "Show Detection Overlay",
+    hint: "Display detection range rings and blip markers on the canvas.",
+    scope: "client",
+    config: false,
+    type: Boolean,
+    default: true,
+    onChange: () => {
+      game.starmercs?.detectionLayer?.drawDetection();
+    }
+  });
+
+  // --- World Settings (GM only) ---
+  game.settings.register("star-mercs", "teamAssignments", {
+    name: "Team Assignments",
+    hint: "Maps user IDs to teams.",
+    scope: "world",
+    config: false,
+    type: Object,
+    default: {},
+    onChange: () => {
+      syncAllOwnership();
+    }
+  });
+
+  game.settings.register("star-mercs", "teamAssignmentsEnabled", {
+    name: "Enable Team Ownership Enforcement",
+    hint: "When enabled, actor ownership is automatically synced based on team assignments.",
+    scope: "world",
+    config: false,
+    type: Boolean,
+    default: false,
+    onChange: () => {
+      syncAllOwnership();
+    }
+  });
 });
 
 /* ============================================ */
@@ -192,6 +253,26 @@ Hooks.on("canvasReady", () => {
   game.starmercs.commsLinkLayer = commsLayer;
   canvas.interface.addChild(commsLayer);
   commsLayer.drawLinks();
+
+  // Terrain overlay
+  const previousTerrainLayer = game.starmercs.terrainLayer;
+  if (previousTerrainLayer) {
+    previousTerrainLayer.destroy({ children: true });
+  }
+  const terrainLayer = new TerrainLayer();
+  game.starmercs.terrainLayer = terrainLayer;
+  canvas.interface.addChild(terrainLayer);
+  terrainLayer.drawTerrain();
+
+  // Detection overlay
+  const previousDetectionLayer = game.starmercs.detectionLayer;
+  if (previousDetectionLayer) {
+    previousDetectionLayer.destroy({ children: true });
+  }
+  const detectionLayer = new DetectionLayer();
+  game.starmercs.detectionLayer = detectionLayer;
+  canvas.interface.addChild(detectionLayer);
+  detectionLayer.drawDetection();
 });
 
 /** Redraw arrows when a token is visually refreshed (position change, etc.). */
@@ -267,6 +348,27 @@ Hooks.on("preUpdateToken", (tokenDoc, changes, options, userId) => {
       }
     }
 
+    // --- Hex blocking: cannot end in an occupied hex or pass through enemy hexes ---
+    const destCenter = { x: newX + (currentToken.w / 2), y: newY + (currentToken.h / 2) };
+    const destSnapped = hexUtils.snapToHexCenter(destCenter);
+
+    // Cannot end in a hex occupied by another living unit
+    const tokensAtDest = hexUtils.getTokensAtHex(destSnapped);
+    const otherAtDest = tokensAtDest.filter(t => t !== currentToken);
+    if (otherAtDest.length > 0) {
+      ui.notifications.warn("Cannot move into a hex occupied by another unit.");
+      return false;
+    }
+
+    // Cannot maneuver through a hex containing an enemy unit
+    const myTeam = actor.system.team ?? "a";
+    const path = hexUtils.computeHexPath(currentCenter, destSnapped);
+    const pathValidation = hexUtils.validatePath(currentToken, path);
+    if (!pathValidation.valid) {
+      ui.notifications.warn(pathValidation.reason);
+      return false;
+    }
+
     // Pass computed distance to updateToken hook via options
     options._starMercsHexesMoved = hexesMoved;
   }
@@ -290,6 +392,28 @@ Hooks.on("updateToken", (tokenDoc, changes, options) => {
       const hexesMoved = options?._starMercsHexesMoved ?? 1;
       const movementUsed = tokenDoc.getFlag("star-mercs", "movementUsed") ?? 0;
       tokenDoc.setFlag("star-mercs", "movementUsed", movementUsed + hexesMoved);
+    }
+  }
+});
+
+/** Refresh engagement status effects on all tokens after any movement. */
+Hooks.on("updateToken", (tokenDoc, changes) => {
+  if (!("x" in changes) && !("y" in changes)) return;
+  if (!canvas?.tokens?.placeables) return;
+
+  const engagedEffect = CONFIG.statusEffects.find(e => e.id === "engaged");
+  if (!engagedEffect) return;
+
+  for (const token of canvas.tokens.placeables) {
+    if (!token.actor || token.actor.type !== "unit") continue;
+    if (token.actor.system.strength.value <= 0) continue;
+
+    const engaged = hexUtils.isEngaged(token);
+    const hasEffect = token.document.hasStatusEffect("engaged");
+    if (engaged && !hasEffect) {
+      token.document.toggleActiveEffect(engagedEffect, { active: true });
+    } else if (!engaged && hasEffect) {
+      token.document.toggleActiveEffect(engagedEffect, { active: false });
     }
   }
 });
@@ -419,14 +543,231 @@ Hooks.on("renderChatMessage", (message, html) => {
     const combatId = event.currentTarget.dataset.combatId;
     const combat = game.combats.get(combatId);
     if (!combat) return;
-    // Disable button after click
     const btn = event.currentTarget;
     btn.disabled = true;
     btn.textContent = "Rolling...";
     await combat.rollMoraleChecks();
     btn.textContent = "Morale Checks Complete";
   });
+
+  // Tactical sub-step: "Next Step" button
+  html.find(".next-tactical-step-btn").on("click", async (event) => {
+    event.preventDefault();
+    const combatId = event.currentTarget.dataset.combatId;
+    const combat = game.combats.get(combatId);
+    if (!combat) return;
+    const btn = event.currentTarget;
+    btn.disabled = true;
+    btn.textContent = "Processing...";
+    await combat.nextTurn();
+  });
+
+  // Overwatch fire button
+  html.find(".overwatch-fire-btn").on("click", async (event) => {
+    event.preventDefault();
+    const btn = event.currentTarget;
+    const attackerDocId = btn.dataset.attackerId;
+    const targetDocId = btn.dataset.targetId;
+
+    const attackerToken = canvas.tokens.placeables.find(t => t.document.id === attackerDocId);
+    const targetToken = canvas.tokens.placeables.find(t => t.document.id === targetDocId);
+    if (!attackerToken?.actor || !targetToken?.actor) return;
+
+    btn.disabled = true;
+    btn.textContent = "Firing...";
+    html.find(".overwatch-skip-btn").prop("disabled", true);
+
+    // Fire all in-range weapons at the target
+    for (const weapon of attackerToken.actor.items) {
+      if (weapon.type !== "weapon") continue;
+      if (!weapon.system.range) continue;
+      const dist = documents.StarMercsActor.getHexDistance(attackerToken, targetToken);
+      if (dist <= weapon.system.range) {
+        await attackerToken.actor.rollAttack(weapon, targetToken.actor);
+      }
+    }
+
+    btn.textContent = "Fired!";
+  });
+
+  // Overwatch skip button
+  html.find(".overwatch-skip-btn").on("click", (event) => {
+    event.preventDefault();
+    const btn = event.currentTarget;
+    btn.disabled = true;
+    btn.textContent = "Held";
+    html.find(".overwatch-fire-btn").prop("disabled", true).text("Passed");
+  });
+
+  // Maneuver fire: target selection button
+  html.find(".maneuver-fire-btn").on("click", async (event) => {
+    event.preventDefault();
+    const btn = event.currentTarget;
+    const tokenDocId = btn.dataset.tokenId;
+    const combatId = btn.dataset.combatId;
+    const combat = game.combats.get(combatId);
+    if (!combat) return;
+
+    const token = canvas.tokens.placeables.find(t => t.document.id === tokenDocId);
+    if (!token?.actor) return;
+
+    btn.disabled = true;
+    btn.textContent = "Firing...";
+
+    // Fire all weapons at currently targeted enemies (set via Foundry targeting)
+    const targets = Array.from(game.user.targets);
+    if (targets.length === 0) {
+      ui.notifications.warn("Select targets first using Foundry's targeting (T key + click).");
+      btn.disabled = false;
+      btn.textContent = "Fire Weapons";
+      return;
+    }
+
+    for (const weapon of token.actor.items) {
+      if (weapon.type !== "weapon") continue;
+      if (weapon.system.artillery || weapon.system.aircraft) continue;
+      if (!weapon.system.range) continue;
+
+      // Fire at the first in-range target
+      for (const targetToken of targets) {
+        if (!targetToken.actor || targetToken.actor.system.team === token.actor.system.team) continue;
+        const dist = documents.StarMercsActor.getHexDistance(token, targetToken);
+        if (dist <= weapon.system.range) {
+          await token.actor.rollAttack(weapon, targetToken.actor);
+          break;
+        }
+      }
+    }
+
+    btn.textContent = "Fired!";
+  });
 });
+
+/* ============================================ */
+/*  Team Ownership Sync                        */
+/* ============================================ */
+
+/**
+ * Sync a single actor's ownership based on team assignments.
+ * Same-team players get Owner, opposing team gets None, spectators get Observer.
+ * @param {Actor} actor
+ */
+async function syncActorOwnership(actor) {
+  if (!game.user.isGM) return;
+  if (!actor || actor.type !== "unit") return;
+  if (!game.settings.get("star-mercs", "teamAssignmentsEnabled")) return;
+
+  const assignments = game.settings.get("star-mercs", "teamAssignments") ?? {};
+  const actorTeam = actor.system.team ?? "a";
+  const ownership = foundry.utils.deepClone(actor.ownership);
+  let changed = false;
+
+  for (const user of game.users) {
+    if (user.isGM) continue;
+    const userTeam = assignments[user.id];
+    let level;
+
+    if (!userTeam || userTeam === "spectator") {
+      level = CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER;
+    } else if (userTeam === actorTeam) {
+      level = CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER;
+    } else {
+      level = CONST.DOCUMENT_OWNERSHIP_LEVELS.NONE;
+    }
+
+    if (ownership[user.id] !== level) {
+      ownership[user.id] = level;
+      changed = true;
+    }
+  }
+
+  if (changed) {
+    await actor.update({ ownership });
+  }
+}
+
+/**
+ * Bulk-sync ownership for all unit actors.
+ */
+async function syncAllOwnership() {
+  if (!game.user.isGM) return;
+  for (const actor of game.actors) {
+    if (actor.type === "unit") {
+      await syncActorOwnership(actor);
+    }
+  }
+}
+
+// Expose sync functions on game.starmercs (set after init)
+Hooks.once("ready", () => {
+  game.starmercs.syncActorOwnership = syncActorOwnership;
+  game.starmercs.syncAllOwnership = syncAllOwnership;
+  game.starmercs.detection = detection;
+});
+
+/** Sync ownership when a unit's team changes. */
+Hooks.on("updateActor", (actor, changes) => {
+  if (foundry.utils.hasProperty(changes, "system.team")) {
+    syncActorOwnership(actor);
+  }
+});
+
+/** Sync ownership when a new unit is created. */
+Hooks.on("createActor", (actor) => {
+  if (actor.type === "unit") {
+    syncActorOwnership(actor);
+  }
+});
+
+/* ============================================ */
+/*  Detection Visibility Enforcement           */
+/* ============================================ */
+
+/**
+ * Enforce detection-based visibility on token refresh.
+ * Enemy tokens are hidden, shown as blips, or fully visible based on detection.
+ */
+Hooks.on("refreshToken", (token) => {
+  if (!canvas?.tokens?.placeables) return;
+  if (game.user.isGM) return; // GM sees everything
+  if (!game.settings.get("star-mercs", "teamAssignmentsEnabled")) return;
+
+  const actor = token.actor;
+  if (!actor || actor.type !== "unit") return;
+
+  // Determine which team the current user is on
+  const assignments = game.settings.get("star-mercs", "teamAssignments") ?? {};
+  const myTeam = assignments[game.user.id];
+  if (!myTeam || myTeam === "spectator") return; // Spectators see all
+
+  const tokenTeam = actor.system.team ?? "a";
+  if (tokenTeam === myTeam) return; // Friendly token — always visible
+
+  // Enemy token — compute detection level
+  const level = detection.computeBestDetectionLevel(myTeam, token);
+
+  if (level === "visible") {
+    if (token.mesh) token.mesh.alpha = 1.0;
+    token.visible = true;
+  } else if (level === "blip") {
+    // Dim the token and let the detection layer draw a "?" marker
+    if (token.mesh) token.mesh.alpha = 0.15;
+    token.visible = true;
+  } else {
+    // hidden
+    if (token.mesh) token.mesh.alpha = 0;
+    token.visible = false;
+  }
+});
+
+/** Redraw detection overlay on token movement. */
+Hooks.on("refreshToken", () => {
+  game.starmercs?.detectionLayer?.drawDetection();
+});
+
+/* ============================================ */
+/*  Scene Control Buttons                      */
+/* ============================================ */
 
 /** Add the targeting arrows toggle button to the scene controls. */
 Hooks.on("getSceneControlButtons", (controls) => {
@@ -465,13 +806,77 @@ Hooks.on("getSceneControlButtons", (controls) => {
     }
   };
 
+  const terrainTool = {
+    name: "terrainOverlay",
+    title: "Terrain Overlay",
+    icon: "fas fa-map",
+    visible: true,
+    toggle: true,
+    active: game.settings.get("star-mercs", "showTerrainOverlay"),
+    onChange: (event, active) => {
+      game.settings.set("star-mercs", "showTerrainOverlay", active);
+    },
+    onClick: (toggled) => {
+      game.settings.set("star-mercs", "showTerrainOverlay", toggled);
+    }
+  };
+
+  const terrainPaintTool = {
+    name: "terrainPainter",
+    title: "Terrain Painter",
+    icon: "fas fa-paint-brush",
+    visible: game.user.isGM,
+    toggle: false,
+    onClick: () => {
+      new TerrainPainter().render(true);
+    }
+  };
+
+  const detectionTool = {
+    name: "detectionOverlay",
+    title: "Detection Overlay",
+    icon: "fas fa-satellite-dish",
+    visible: true,
+    toggle: true,
+    active: game.settings.get("star-mercs", "showDetectionOverlay"),
+    onChange: (event, active) => {
+      game.settings.set("star-mercs", "showDetectionOverlay", active);
+    },
+    onClick: (toggled) => {
+      game.settings.set("star-mercs", "showDetectionOverlay", toggled);
+    }
+  };
+
+  const teamSettingsTool = {
+    name: "teamSettings",
+    title: "Team Settings",
+    icon: "fas fa-users-cog",
+    visible: game.user.isGM,
+    toggle: false,
+    onClick: () => {
+      new TeamSettingsForm().render(true);
+    }
+  };
+
   if (isV13) {
     tool.order = Object.keys(tokenControls.tools).length;
     tokenControls.tools.targetingArrows = tool;
     commsTool.order = Object.keys(tokenControls.tools).length;
     tokenControls.tools.commsLinks = commsTool;
+    terrainTool.order = Object.keys(tokenControls.tools).length;
+    tokenControls.tools.terrainOverlay = terrainTool;
+    terrainPaintTool.order = Object.keys(tokenControls.tools).length;
+    tokenControls.tools.terrainPainter = terrainPaintTool;
+    detectionTool.order = Object.keys(tokenControls.tools).length;
+    tokenControls.tools.detectionOverlay = detectionTool;
+    teamSettingsTool.order = Object.keys(tokenControls.tools).length;
+    tokenControls.tools.teamSettings = teamSettingsTool;
   } else {
     tokenControls.tools.push(tool);
     tokenControls.tools.push(commsTool);
+    tokenControls.tools.push(terrainTool);
+    tokenControls.tools.push(terrainPaintTool);
+    tokenControls.tools.push(detectionTool);
+    tokenControls.tools.push(teamSettingsTool);
   }
 });

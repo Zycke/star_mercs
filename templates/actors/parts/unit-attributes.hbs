@@ -59,6 +59,14 @@
       <input type="number" name="system.signature" value="{{system.signature}}"/>
     </div>
 
+    {{!-- Detection Range (derived, read-only) --}}
+    <div class="attribute-block">
+      <label>Detection Range</label>
+      <span class="derived-value" title="Range this unit can detect a standard (sig 2) target (with LOS / without LOS)">
+        {{detectionRangeLOS}} / {{detectionRangeNoLOS}} hexes
+      </span>
+    </div>
+
     {{!-- EWAR --}}
     <div class="attribute-block">
       <label>EWAR</label>
