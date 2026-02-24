@@ -192,8 +192,14 @@ export default class TargetingArrowLayer extends PIXI.Container {
       const dest = token.document.getFlag("star-mercs", "moveDestination");
       if (!dest) continue;
 
+      // Re-snap destination to hex center for accurate arrow endpoint
+      const snapped = canvas.grid.getSnappedPoint(
+        { x: dest.x, y: dest.y },
+        { mode: CONST.GRID_SNAPPING_MODES.CENTER }
+      );
+
       const from = token.center;
-      const to = { x: dest.x, y: dest.y };
+      const to = { x: snapped.x, y: snapped.y };
       this._drawArrow(from, to, TargetingArrowLayer.MOVE_ARROW_COLOR, 0);
     }
   }
@@ -216,8 +222,14 @@ export default class TargetingArrowLayer extends PIXI.Container {
       const dest = token.document.getFlag("star-mercs", "moveDestination");
       if (!dest) continue;
 
-      // Get the hex grid top-left point for the destination
-      const topLeft = canvas.grid.getTopLeftPoint({ x: dest.x, y: dest.y });
+      // Re-snap destination to hex center to ensure proper grid alignment
+      const snapped = canvas.grid.getSnappedPoint(
+        { x: dest.x, y: dest.y },
+        { mode: CONST.GRID_SNAPPING_MODES.CENTER }
+      );
+
+      // Get the hex grid top-left point for the snapped destination
+      const topLeft = canvas.grid.getTopLeftPoint({ x: snapped.x, y: snapped.y });
 
       // Get hex shape vertices (relative to top-left)
       const shape = canvas.grid.getShape();

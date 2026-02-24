@@ -182,8 +182,17 @@ export default class StarMercsActor extends Actor {
    * @private
    */
   async _rollTargetedAttack(weapon, target) {
-    // Range check: find both tokens and measure hex distance
+    // Check if this weapon has already fired this tactical phase
     const attackerToken = canvas?.tokens?.placeables.find(t => t.actor === this);
+    if (game.combat?.started && attackerToken?.document) {
+      const firedWeapons = attackerToken.document.getFlag("star-mercs", "firedWeapons") ?? [];
+      if (firedWeapons.includes(weapon.id)) {
+        ui.notifications.warn(`${weapon.name} has already fired this tactical phase.`);
+        return null;
+      }
+    }
+
+    // Range check: find both tokens and measure hex distance
     const targetToken = canvas?.tokens?.placeables.find(t => t.actor === target);
     if (attackerToken && targetToken && weapon.system.range > 0) {
       const distance = StarMercsActor.getHexDistance(attackerToken, targetToken);
@@ -295,12 +304,25 @@ export default class StarMercsActor extends Actor {
       templateData
     );
 
-    // Track weapons fired by supply category
+    // Track weapons fired by supply category and per-weapon fired list
     if (game.combat?.started && attackerToken) {
       const supplyType = this._getWeaponSupplyType(weapon);
       const flagKey = `weaponsFired_${supplyType}`;
       const fired = attackerToken.document.getFlag("star-mercs", flagKey) ?? 0;
       await attackerToken.document.setFlag("star-mercs", flagKey, fired + 1);
+
+      // Track this specific weapon as fired
+      const firedWeapons = attackerToken.document.getFlag("star-mercs", "firedWeapons") ?? [];
+      if (!firedWeapons.includes(weapon.id)) {
+        firedWeapons.push(weapon.id);
+        await attackerToken.document.setFlag("star-mercs", "firedWeapons", firedWeapons);
+      }
+
+      // Toggle "Fired" visual status effect on the token
+      const firedEffect = CONFIG.statusEffects.find(e => e.id === "fired");
+      if (firedEffect && !attackerToken.document.hasStatusEffect("fired")) {
+        await attackerToken.document.toggleActiveEffect(firedEffect, { active: true });
+      }
     }
 
     return ChatMessage.create({
@@ -421,9 +443,17 @@ export default class StarMercsActor extends Actor {
 
     // Collect weapons with assigned targets (targetId stores token IDs)
     const attackerToken = canvas?.tokens?.placeables.find(t => t.actor === this);
+    const firedWeapons = (game.combat?.started && attackerToken?.document)
+      ? (attackerToken.document.getFlag("star-mercs", "firedWeapons") ?? [])
+      : [];
     const targetedWeapons = [];
     for (const item of this.items) {
       if (item.type === "weapon" && item.system.targetId) {
+        // Skip weapons that have already fired this tactical phase
+        if (firedWeapons.includes(item.id)) {
+          ui.notifications.warn(`${item.name} has already fired this tactical phase.`);
+          continue;
+        }
         const targetToken = canvas?.tokens?.get(item.system.targetId);
         if (targetToken?.actor) {
           // Range check
@@ -631,7 +661,7 @@ export default class StarMercsActor extends Actor {
       });
     }
 
-    // Track weapons fired by supply category
+    // Track weapons fired by supply category and per-weapon fired list
     const validResults = results.filter(r => r.valid);
     if (game.combat?.started && attackerToken && validResults.length > 0) {
       // Count per supply type
@@ -646,6 +676,21 @@ export default class StarMercsActor extends Actor {
           const prev = attackerToken.document.getFlag("star-mercs", flagKey) ?? 0;
           await attackerToken.document.setFlag("star-mercs", flagKey, prev + count);
         }
+      }
+
+      // Track each weapon as fired this phase
+      const updatedFiredWeapons = attackerToken.document.getFlag("star-mercs", "firedWeapons") ?? [];
+      for (const r of validResults) {
+        if (!updatedFiredWeapons.includes(r.weapon.id)) {
+          updatedFiredWeapons.push(r.weapon.id);
+        }
+      }
+      await attackerToken.document.setFlag("star-mercs", "firedWeapons", updatedFiredWeapons);
+
+      // Toggle "Fired" visual status effect on the token
+      const firedEffect = CONFIG.statusEffects.find(e => e.id === "fired");
+      if (firedEffect && !attackerToken.document.hasStatusEffect("fired")) {
+        await attackerToken.document.toggleActiveEffect(firedEffect, { active: true });
       }
     }
 
@@ -774,6 +819,14 @@ export default class StarMercsActor extends Actor {
    */
   async transferSupply(targetActor, transfers) {
     if (!targetActor || targetActor.type !== "unit") return false;
+
+    // Team check: can only transfer to same-team units
+    const myTeam = this.system.team ?? "a";
+    const targetTeam = targetActor.system.team ?? "a";
+    if (myTeam !== targetTeam) {
+      ui.notifications.warn("Cannot transfer supply to a unit on a different team.");
+      return false;
+    }
 
     const sourceUpdate = {};
     const targetUpdate = {};
