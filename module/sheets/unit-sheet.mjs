@@ -338,7 +338,11 @@ export default class StarMercsUnitSheet extends ActorSheet {
 
     // Line of Sight / comms chain validation
     const myToken = this.actor.getActiveTokens()?.[0];
-    if (myToken) {
+    if (!myToken) {
+      ui.notifications.warn("Unit must be placed on the map to assign targets.");
+      return;
+    }
+    {
       const hasDirectLOS = StarMercsActor.hasLineOfSight(myToken, targetToken);
       const manager = game.starmercs?.commsLinkManager;
 
