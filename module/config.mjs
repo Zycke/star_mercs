@@ -46,9 +46,9 @@ STARMERCS.orders = {
     category: "standard",
     allowsMovement: false,
     allowsAttack: true,
-    readinessCost: 1,
+    readinessCost: 0,
     supplyModifier: "1x",
-    description: "Unit holds position and engages targets. Recovers readiness."
+    description: "May fire weapons at enemies within range."
   },
   move: {
     label: "Maneuver",
@@ -56,55 +56,49 @@ STARMERCS.orders = {
     allowsMovement: true,
     allowsAttack: true,
     accuracyPenalty: 1,
-    readinessCost: 0,
-    supplyModifier: "1x",
-    description: "Unit maneuvers and may fire at -1 accuracy penalty."
-  },
-  advance: {
-    label: "Advance",
-    category: "standard",
-    allowsMovement: true,
-    allowsAttack: true,
     readinessCost: -1,
     supplyModifier: "1x",
-    description: "Unit moves toward the enemy and engages."
+    description: "Unit maneuvers to target hex. May stop and fire at -1 accuracy if enemies are in range."
   },
-  dig_in: {
-    label: "Dig In",
+  entrench: {
+    label: "Entrench",
     category: "standard",
     allowsMovement: false,
     allowsAttack: false,
     readinessCost: 1,
     supplyModifier: "1x",
-    description: "Unit fortifies position and recovers readiness."
+    description: "Unit fortifies position. Gains Entrenched trait during Consolidation if it remains in the same hex."
+  },
+  forced_march: {
+    label: "Forced March",
+    category: "standard",
+    allowsMovement: true,
+    allowsAttack: false,
+    readinessCost: -2,
+    supplyModifier: "2x",
+    speedMultiplier: 2,
+    noReturnFire: true,
+    description: "Unit moves at 2x speed. Cannot fire. Does not return fire if attacked."
   },
   withdraw: {
     label: "Withdraw",
     category: "standard",
     allowsMovement: true,
-    allowsAttack: false,
+    allowsAttack: true,
+    accuracyPenalty: 1,
+    damagePenalty: 1,
     readinessCost: -1,
     supplyModifier: "1x",
-    description: "Unit retreats from combat. Movement away from enemy."
-  },
-  recon: {
-    label: "Recon",
-    category: "standard",
-    allowsMovement: true,
-    allowsAttack: false,
-    readinessCost: -1,
-    supplyModifier: "1x",
-    description: "Unit scouts ahead. May reveal hidden enemies."
+    description: "Unit retreats from combat. May fire with -1 accuracy and -1 damage. Must pass morale check or become Disordered."
   },
   assault: {
     label: "Assault",
-    category: "special",
-    requiredTrait: "Assault",
+    category: "standard",
     allowsMovement: true,
     allowsAttack: true,
     readinessCost: -2,
-    supplyModifier: "2x",
-    description: "Aggressive charge into enemy positions."
+    supplyModifier: "3x",
+    description: "Attempt to displace an enemy unit. +1 damage dealt and received. -1 readiness per hex moved to target. Consumes extra fuel."
   },
   overwatch: {
     label: "Overwatch",
@@ -113,7 +107,16 @@ STARMERCS.orders = {
     allowsAttack: true,
     readinessCost: -1,
     supplyModifier: "1x",
-    description: "Unit watches an area and fires on enemies that enter."
+    description: "Engage any enemy that moves within weapon range."
+  },
+  stand_down: {
+    label: "Stand Down",
+    category: "standard",
+    allowsMovement: false,
+    allowsAttack: false,
+    readinessCost: 3,
+    supplyModifier: "0x",
+    description: "Unit powers down and conserves resources. Recovers 3 readiness. Attackers gain +2 to hit and +2 damage. Vehicles do not consume baseline fuel."
   },
   fortify: {
     label: "Fortify",
@@ -164,15 +167,6 @@ STARMERCS.orders = {
     readinessCost: -1,
     supplyModifier: "1x",
     description: "Unit deploys into combat readiness, enabling abilities and weapons."
-  },
-  stand_down: {
-    label: "Stand Down",
-    category: "standard",
-    allowsMovement: false,
-    allowsAttack: false,
-    readinessCost: 3,
-    supplyModifier: "0x",
-    description: "Unit powers down and conserves resources. Recovers 3 readiness. Attackers gain +2 to hit and +2 damage against this unit. Vehicles do not consume baseline fuel."
   }
 };
 

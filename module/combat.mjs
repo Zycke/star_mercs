@@ -162,6 +162,14 @@ export function calculateDamage(weapon, attacker, target, hitType) {
     modifiers.push({ label: "Low Readiness", value: readinessDmg });
   }
 
+  // Order damage penalty (e.g., Withdraw: -1 damage)
+  const attackerOrderConfig = CONFIG.STARMERCS.orders?.[attacker.system.currentOrder];
+  if (attackerOrderConfig?.damagePenalty) {
+    const penalty = attackerOrderConfig.damagePenalty;
+    damage -= penalty;
+    modifiers.push({ label: `${attackerOrderConfig.label} Penalty`, value: -penalty });
+  }
+
   // Assault order: +1 damage dealt to assault target
   if (attacker.system.currentOrder === "assault") {
     const attackerToken = canvas?.tokens?.placeables.find(t => t.actor === attacker);

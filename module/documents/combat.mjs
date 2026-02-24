@@ -321,6 +321,7 @@ export default class StarMercsCombat extends Combat {
 
       // 2. Deduct readiness cost from the unit's current order
       const order = this._getActorOrder(actor);
+      const supplyMod = order ? this._parseSupplyMultiplier(order.system.supplyModifier) : 1;
       if (order && order.system.readinessCost !== 0) {
         const cost = order.system.readinessCost;
         const currentRdy = actor.system.readiness.value;
@@ -334,6 +335,25 @@ export default class StarMercsCombat extends Combat {
             </div>`,
             speaker: { alias: "Star Mercs" }
           });
+        }
+      }
+
+      // 2b. Entrench: grant Entrenched trait if unit stayed in same hex
+      if (order && order.key === "entrench") {
+        const movementUsed = token ? (token.getFlag("star-mercs", "movementUsed") ?? 0) : 0;
+        if (movementUsed === 0) {
+          const entrenchedTrait = actor.items.find(
+            i => i.type === "trait" && i.name.toLowerCase() === "entrenched"
+          );
+          if (entrenchedTrait && !entrenchedTrait.system.active) {
+            await entrenchedTrait.update({ "system.active": true });
+            await ChatMessage.create({
+              content: `<div class="star-mercs chat-card consolidation-readiness">
+                <div class="summary-header"><i class="fas fa-shield-alt"></i> <strong>${token?.name ?? actor.name}</strong> — Gained Entrenched</div>
+              </div>`,
+              speaker: { alias: "Star Mercs" }
+            });
+          }
         }
       }
 
@@ -360,47 +380,60 @@ export default class StarMercsCombat extends Combat {
       const supplyUpdate = {};
       const consumedParts = [];
 
-      // 4a. Ammo consumption based on weapons fired
+      // 4a. Ammo consumption based on weapons fired (multiplied by order supply modifier)
       if (token) {
         const smallArmsFired = token.getFlag("star-mercs", "weaponsFired_smallArms") ?? 0;
         const heavyFired = token.getFlag("star-mercs", "weaponsFired_heavyWeapons") ?? 0;
         const ordnanceFired = token.getFlag("star-mercs", "weaponsFired_ordnance") ?? 0;
 
-        if (smallArmsFired > 0 && supply.smallArms.current > 0) {
-          const used = Math.min(smallArmsFired, supply.smallArms.current);
+        const smallArmsUse = smallArmsFired * supplyMod;
+        const heavyUse = heavyFired * supplyMod;
+        const ordnanceUse = ordnanceFired * supplyMod;
+
+        if (smallArmsUse > 0 && supply.smallArms.current > 0) {
+          const used = Math.min(smallArmsUse, supply.smallArms.current);
           supplyUpdate["system.supply.smallArms.current"] = supply.smallArms.current - used;
-          consumedParts.push(`Small Arms: -${used}`);
+          consumedParts.push(`Small Arms: -${used}${supplyMod > 1 ? ` (${smallArmsFired}×${supplyMod})` : ""}`);
         }
-        if (heavyFired > 0 && supply.heavyWeapons.current > 0) {
-          const used = Math.min(heavyFired, supply.heavyWeapons.current);
+        if (heavyUse > 0 && supply.heavyWeapons.current > 0) {
+          const used = Math.min(heavyUse, supply.heavyWeapons.current);
           supplyUpdate["system.supply.heavyWeapons.current"] = supply.heavyWeapons.current - used;
-          consumedParts.push(`Heavy Wpns: -${used}`);
+          consumedParts.push(`Heavy Wpns: -${used}${supplyMod > 1 ? ` (${heavyFired}×${supplyMod})` : ""}`);
         }
-        if (ordnanceFired > 0 && supply.ordnance.current > 0) {
-          const used = Math.min(ordnanceFired, supply.ordnance.current);
+        if (ordnanceUse > 0 && supply.ordnance.current > 0) {
+          const used = Math.min(ordnanceUse, supply.ordnance.current);
           supplyUpdate["system.supply.ordnance.current"] = supply.ordnance.current - used;
-          consumedParts.push(`Ordnance: -${used}`);
+          consumedParts.push(`Ordnance: -${used}${supplyMod > 1 ? ` (${ordnanceFired}×${supplyMod})` : ""}`);
         }
       }
 
-      // 4b. Fuel consumption: movement + Vehicle baseline
+      // 4b. Fuel consumption: movement + assault surcharge + Vehicle baseline
       {
         const movementUsed = token ? (token.getFlag("star-mercs", "movementUsed") ?? 0) : 0;
         const fuelPerHex = actor.system.fuelPerHex ?? 0;
-        let fuelUsed = movementUsed * fuelPerHex;
-
-        // Vehicle trait baseline: 1 fuel/turn unless Stand Down order
         const orderKey = actor.system.currentOrder;
-        if (actor.hasTrait("Vehicle") && orderKey !== "stand_down") {
-          fuelUsed += 1;
+
+        // Base movement fuel + assault surcharge (flat fuelPerHex extra for assault)
+        let moveFuel = movementUsed * fuelPerHex;
+        if (orderKey === "assault" && fuelPerHex > 0) {
+          moveFuel += fuelPerHex;
         }
+
+        // Apply supply modifier to movement/assault fuel
+        const modifiedMoveFuel = moveFuel * supplyMod;
+
+        // Vehicle trait baseline: 1 fuel/turn unless Stand Down order (not modified by supply multiplier)
+        const vehicleBaseline = (actor.hasTrait("Vehicle") && orderKey !== "stand_down") ? 1 : 0;
+        const fuelUsed = modifiedMoveFuel + vehicleBaseline;
 
         if (fuelUsed > 0 && supply.fuel.current > 0) {
           const used = Math.min(fuelUsed, supply.fuel.current);
           supplyUpdate["system.supply.fuel.current"] = supply.fuel.current - used;
           const fuelDetails = [];
           if (movementUsed > 0) fuelDetails.push(`${movementUsed} hex × ${fuelPerHex}`);
-          if (actor.hasTrait("Vehicle") && orderKey !== "stand_down") fuelDetails.push("+1 vehicle baseline");
+          if (orderKey === "assault" && fuelPerHex > 0) fuelDetails.push(`+${fuelPerHex} assault`);
+          if (supplyMod > 1) fuelDetails.push(`×${supplyMod} supply mod`);
+          if (vehicleBaseline > 0) fuelDetails.push("+1 vehicle baseline");
           consumedParts.push(`Fuel: -${used} (${fuelDetails.join(", ")})`);
         }
       }
@@ -1099,6 +1132,12 @@ export default class StarMercsCombat extends Combat {
         await token.unsetFlag("star-mercs", "disordered");
         // 5. Clear firedAtThisTurn flag
         await token.unsetFlag("star-mercs", "firedAtThisTurn");
+        // 6. Clear per-weapon fired list and "Fired" status effect
+        await token.unsetFlag("star-mercs", "firedWeapons");
+        if (token.hasStatusEffect("fired")) {
+          const firedEffect = CONFIG.statusEffects.find(e => e.id === "fired");
+          if (firedEffect) await token.toggleActiveEffect(firedEffect, { active: false });
+        }
       }
 
       // 6. Clear current order

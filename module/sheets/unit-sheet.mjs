@@ -75,7 +75,7 @@ export default class StarMercsUnitSheet extends ActorSheet {
     const hasNoSupply = (sup.smallArms?.current ?? 0) <= 0
       && (sup.heavyWeapons?.current ?? 0) <= 0
       && (sup.ordnance?.current ?? 0) <= 0;
-    const zeroSupplyOrders = ["hold", "move", "withdraw"];
+    const zeroSupplyOrders = ["hold", "move", "withdraw", "entrench", "stand_down", "forced_march"];
 
     // Check Breaking/Broken status from token flags
     const activeToken = this.actor.getActiveTokens()?.[0];
@@ -457,11 +457,15 @@ export default class StarMercsUnitSheet extends ActorSheet {
       await this.actor.addLogEntry(`Order: ${orderConfig.label}`, "order");
     }
 
-    // Clear any previous assault target
+    // Clear any previous assault target and movement destination
     const token = this.actor.getActiveTokens()?.[0];
     if (token?.document) {
       await token.document.unsetFlag("star-mercs", "assaultTarget");
+      await token.document.unsetFlag("star-mercs", "moveDestination");
     }
+
+    // Redraw arrows to remove stale movement arrows
+    game.starmercs?.targetingArrowLayer?.drawArrows();
 
     // If assault order selected, prompt for target selection
     if (selectedOrderKey === "assault") {
@@ -627,11 +631,16 @@ export default class StarMercsUnitSheet extends ActorSheet {
       return;
     }
 
-    // Find nearby friendly units within range that have space for at least one category
+    // Find nearby friendly units within range (same team) that have space for at least one category
+    const myTeam = this.actor.system.team ?? "a";
     const nearbyTargets = [];
     for (const token of canvas.tokens.placeables) {
       if (token === myToken) continue;
       if (!token.actor || token.actor.type !== "unit") continue;
+
+      // Only allow transfer to same-team units
+      const otherTeam = token.actor.system.team ?? "a";
+      if (otherTeam !== myTeam) continue;
 
       const distance = StarMercsActor.getHexDistance(myToken, token);
       if (distance <= transferRange) {

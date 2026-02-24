@@ -35,6 +35,20 @@ Hooks.once("init", () => {
   // Assign system configuration object
   CONFIG.STARMERCS = STARMERCS;
 
+  // --- Register Custom Status Effects ---
+  CONFIG.statusEffects.push(
+    {
+      id: "fired",
+      label: "Fired",
+      icon: "icons/svg/explosion.svg"
+    },
+    {
+      id: "breaking",
+      label: "Breaking",
+      icon: "icons/svg/skull.svg"
+    }
+  );
+
   // --- Register Document Classes ---
   CONFIG.Actor.documentClass = documents.StarMercsActor;
   CONFIG.Item.documentClass = documents.StarMercsItem;
@@ -227,7 +241,14 @@ Hooks.on("preUpdateToken", (tokenDoc, changes, options, userId) => {
     const hexesMoved = Math.max(1, Math.round(distance / gridDistance));
 
     const movementUsed = tokenDoc.getFlag("star-mercs", "movementUsed") ?? 0;
-    const speed = actor.system.speed ?? 0;
+    let speed = actor.system.speed ?? 0;
+
+    // Forced March and other orders with speedMultiplier
+    const orderConfig = CONFIG.STARMERCS.orders?.[actor.system.currentOrder];
+    if (orderConfig?.speedMultiplier) {
+      speed *= orderConfig.speedMultiplier;
+    }
+
     if (speed > 0 && (movementUsed + hexesMoved) > speed) {
       ui.notifications.warn(
         `This unit has used all ${speed} hexes of movement this phase.`
@@ -269,6 +290,22 @@ Hooks.on("updateToken", (tokenDoc, changes, options) => {
       const hexesMoved = options?._starMercsHexesMoved ?? 1;
       const movementUsed = tokenDoc.getFlag("star-mercs", "movementUsed") ?? 0;
       tokenDoc.setFlag("star-mercs", "movementUsed", movementUsed + hexesMoved);
+    }
+  }
+});
+
+/** Sync "Breaking" status effect icon with the breaking token flag. */
+Hooks.on("updateToken", (tokenDoc, changes) => {
+  if (foundry.utils.hasProperty(changes, "flags.star-mercs.breaking")) {
+    const isBreaking = foundry.utils.getProperty(changes, "flags.star-mercs.breaking");
+    const breakingEffect = CONFIG.statusEffects.find(e => e.id === "breaking");
+    if (breakingEffect) {
+      const hasEffect = tokenDoc.hasStatusEffect("breaking");
+      if (isBreaking && !hasEffect) {
+        tokenDoc.toggleActiveEffect(breakingEffect, { active: true });
+      } else if (!isBreaking && hasEffect) {
+        tokenDoc.toggleActiveEffect(breakingEffect, { active: false });
+      }
     }
   }
 });
