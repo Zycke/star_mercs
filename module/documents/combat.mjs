@@ -36,10 +36,9 @@ export default class StarMercsCombat extends Combat {
     return this.getFlag("star-mercs", "phaseIndex") ?? 0;
   }
 
-  /** Localized display name of the current phase. */
+  /** Display name of the current phase. */
   get phaseLabel() {
-    const key = CONFIG.STARMERCS.phases[this.phase];
-    return key ? game.i18n.localize(key) : this.phase;
+    return CONFIG.STARMERCS.phases[this.phase] ?? this.phase;
   }
 
   /** Rules for the current phase. */
@@ -149,7 +148,7 @@ export default class StarMercsCombat extends Combat {
     if (!rules.allowsMovement) {
       return {
         allowed: false,
-        reason: game.i18n.format("STARMERCS.Phase.NoMovement", { phase: this.phaseLabel })
+        reason: `Movement is not allowed during the ${this.phaseLabel} phase.`
       };
     }
 
@@ -159,7 +158,7 @@ export default class StarMercsCombat extends Combat {
       if (order && !order.system.allowsMovement) {
         return {
           allowed: false,
-          reason: game.i18n.format("STARMERCS.Phase.OrderBlocksMovement", { order: order.name })
+          reason: `${order.name} order does not allow movement.`
         };
       }
     }
@@ -178,7 +177,7 @@ export default class StarMercsCombat extends Combat {
     if (!rules.allowsAttack) {
       return {
         allowed: false,
-        reason: game.i18n.format("STARMERCS.Phase.NoAttack", { phase: this.phaseLabel })
+        reason: `Attacks are not allowed during the ${this.phaseLabel} phase.`
       };
     }
 
@@ -188,7 +187,7 @@ export default class StarMercsCombat extends Combat {
       if (order && !order.system.allowsAttack) {
         return {
           allowed: false,
-          reason: game.i18n.format("STARMERCS.Phase.OrderBlocksAttack", { order: order.name })
+          reason: `${order.name} order does not allow attacks.`
         };
       }
     }
@@ -236,7 +235,7 @@ export default class StarMercsCombat extends Combat {
     if (!orderData) return null;
     return {
       key: orderKey,
-      name: game.i18n.localize(orderData.label),
+      name: orderData.label,
       system: orderData
     };
   }
@@ -302,6 +301,10 @@ export default class StarMercsCombat extends Combat {
           const destroyed = newStrength <= 0;
           let statusText = `STR ${newStrength} | RDY ${newReadiness}`;
           if (destroyed) statusText = "DESTROYED";
+
+          // Log damage to unit's history
+          const hitsDesc = pending.hits?.map(h => `${h.source} (${h.weapon})`).join(", ") ?? "unknown";
+          await actor.addLogEntry(`Took -${pending.strength} STR, -${pending.readiness} RDY from: ${hitsDesc}`, "damage");
 
           await ChatMessage.create({
             content: `<div class="star-mercs chat-card consolidation-damage">
@@ -422,11 +425,42 @@ export default class StarMercsCombat extends Combat {
       }
     }
 
-    // 5. Morale checks (after all damage and readiness changes)
-    await this._runMoraleChecks(damageTakenMap);
+    // 5. Store damage-taken map as a combat flag so the morale button can access it
+    const dmgMapObj = {};
+    for (const [tokenId, dmg] of damageTakenMap) {
+      dmgMapObj[tokenId] = dmg;
+    }
+    await this.setFlag("star-mercs", "damageTakenThisTurn", dmgMapObj);
 
-    // 6. Assault morale resolution
+    // 6. Post morale button chat card instead of auto-running morale
+    const moraleContent = await renderTemplate(
+      "systems/star-mercs/templates/chat/morale-button.hbs",
+      { combatId: this.id }
+    );
+    await ChatMessage.create({
+      content: moraleContent,
+      speaker: { alias: "Star Mercs" }
+    });
+  }
+
+  /* ---------------------------------------- */
+  /*  Morale: Public API (Button-triggered)   */
+  /* ---------------------------------------- */
+
+  /**
+   * Run morale checks and assault morale resolution.
+   * Called by the morale button in the consolidation chat card.
+   */
+  async rollMoraleChecks() {
+    // Retrieve persisted damage-taken map
+    const dmgMapObj = this.getFlag("star-mercs", "damageTakenThisTurn") ?? {};
+    const damageTakenMap = new Map(Object.entries(dmgMapObj).map(([k, v]) => [k, Number(v)]));
+
+    await this._runMoraleChecks(damageTakenMap);
     await this._runAssaultMorale(damageTakenMap);
+
+    // Clean up the stored damage map
+    await this.unsetFlag("star-mercs", "damageTakenThisTurn");
   }
 
   /* ---------------------------------------- */
@@ -561,18 +595,18 @@ export default class StarMercsCombat extends Combat {
         let html = `<div class="star-mercs chat-card morale-check">`;
         html += `<div class="summary-header"><i class="fas fa-brain"></i> <strong>${token.name}</strong> — Morale Check (${statusLabel})</div>`;
         html += `<div class="morale-details">RDY: ${currentReadiness} | Roll: ${roll.total}`;
-        if (damageTaken > 0) html += ` -${damageTaken} dmg`;
+        if (damageTaken > 0) html += ` +${damageTaken} dmg`;
         if (result.autoFail) html += ` (NAT 1 AUTO-FAIL)`;
-        html += ` = ${result.total} vs ${currentReadiness}+ — ${result.passed ? "Passed" : "Failed"}</div>`;
+        html += ` = ${result.total} vs RDY ${currentReadiness} — ${result.passed ? "Passed" : "Failed"}</div>`;
 
         if (rerollType === "isolation") {
           html += `<div class="morale-reroll isolation">Isolation re-roll (no comms link): ${rerollRollObj.total}`;
-          if (damageTaken > 0) html += ` -${damageTaken}`;
+          if (damageTaken > 0) html += ` +${damageTaken}`;
           if (rerollEval.autoFail) html += ` (NAT 1)`;
           html += ` = ${rerollEval.total} — ${rerollEval.passed ? "Passed" : "Failed"}</div>`;
         } else if (rerollType === "command") {
           html += `<div class="morale-reroll command">Command re-roll: ${rerollRollObj.total}`;
-          if (damageTaken > 0) html += ` -${damageTaken}`;
+          if (damageTaken > 0) html += ` +${damageTaken}`;
           if (rerollEval.autoFail) html += ` (NAT 1)`;
           html += ` = ${rerollEval.total} — ${rerollEval.passed ? "Passed" : "Failed"}</div>`;
         }
@@ -598,9 +632,15 @@ export default class StarMercsCombat extends Combat {
         continue;
       }
 
-      // --- Normal units: morale check if readiness < 10 ---
+      // --- Normal units: morale check if fired at or damaged this turn ---
       const currentReadiness = actor.system.readiness.value;
-      if (currentReadiness >= 10) continue;
+      const wasFiredAt = token.getFlag("star-mercs", "firedAtThisTurn") ?? false;
+
+      // Skip units that were not engaged this turn
+      if (!wasFiredAt && damageTaken === 0) continue;
+
+      // Skip if it's mathematically impossible to fail (max d10 + damage can't exceed readiness)
+      if (10 + damageTaken <= currentReadiness) continue;
 
       const { isIsolated, hasCommandInChain } = this._getCommsChainStatus(token.id);
 
@@ -636,18 +676,18 @@ export default class StarMercsCombat extends Combat {
       let html = `<div class="star-mercs chat-card morale-check">`;
       html += `<div class="summary-header"><i class="fas fa-brain"></i> <strong>${token.name}</strong> — Morale Check</div>`;
       html += `<div class="morale-details">RDY: ${currentReadiness} | Roll: ${roll.total}`;
-      if (damageTaken > 0) html += ` -${damageTaken} dmg`;
+      if (damageTaken > 0) html += ` +${damageTaken} dmg`;
       if (result.autoFail) html += ` (NAT 1 AUTO-FAIL)`;
-      html += ` = ${result.total} vs ${currentReadiness}+ — ${result.passed ? "Passed" : "Failed"}</div>`;
+      html += ` = ${result.total} vs RDY ${currentReadiness} — ${result.passed ? "Passed" : "Failed"}</div>`;
 
       if (rerollType === "isolation") {
         html += `<div class="morale-reroll isolation">Isolation re-roll (no comms link): ${rerollRollObj.total}`;
-        if (damageTaken > 0) html += ` -${damageTaken}`;
+        if (damageTaken > 0) html += ` +${damageTaken}`;
         if (rerollEval.autoFail) html += ` (NAT 1)`;
         html += ` = ${rerollEval.total} — ${rerollEval.passed ? "Passed" : "Failed"}</div>`;
       } else if (rerollType === "command") {
         html += `<div class="morale-reroll command">Command re-roll: ${rerollRollObj.total}`;
-        if (damageTaken > 0) html += ` -${damageTaken}`;
+        if (damageTaken > 0) html += ` +${damageTaken}`;
         if (rerollEval.autoFail) html += ` (NAT 1)`;
         html += ` = ${rerollEval.total} — ${rerollEval.passed ? "Passed" : "Failed"}</div>`;
       }
@@ -665,9 +705,12 @@ export default class StarMercsCombat extends Combat {
         rolls: allRolls
       });
 
-      // Apply Breaking status
+      // Apply Breaking status and log
       if (!finalPassed) {
         await token.setFlag("star-mercs", "breaking", true);
+        await actor.addLogEntry(`Morale FAILED: rolled ${roll.total} +${damageTaken} dmg = ${result.total} vs RDY ${currentReadiness} — BREAKING`, "morale");
+      } else {
+        await actor.addLogEntry(`Morale passed: rolled ${roll.total} +${damageTaken} dmg = ${result.total} vs RDY ${currentReadiness}`, "morale");
       }
     }
   }
@@ -710,6 +753,7 @@ export default class StarMercsCombat extends Combat {
       const assaultTargetId = token.getFlag("star-mercs", "assaultTarget");
       if (!assaultTargetId) continue;
 
+      const attackerCanvasToken = canvas?.tokens?.get(token.id);
       const targetCanvasToken = canvas?.tokens?.get(assaultTargetId);
       if (!targetCanvasToken?.actor) continue;
       const targetActor = targetCanvasToken.actor;
@@ -717,6 +761,23 @@ export default class StarMercsCombat extends Combat {
 
       // Find defender's token document
       const defenderToken = targetCanvasToken.document;
+
+      // Assault readiness cost: lose 1 readiness per hex moved to reach adjacency
+      if (attackerCanvasToken && targetCanvasToken) {
+        const distanceToTarget = StarMercsActor.getHexDistance(attackerCanvasToken, targetCanvasToken);
+        const hexesMoved = Math.max(0, distanceToTarget - 1);
+        if (hexesMoved > 0) {
+          const newRdy = Math.max(0, actor.system.readiness.value - hexesMoved);
+          await actor.update({ "system.readiness.value": newRdy });
+          await actor.addLogEntry(`Assault movement: -${hexesMoved} readiness (${hexesMoved} hex${hexesMoved > 1 ? "es" : ""} to target)`, "damage");
+          await ChatMessage.create({
+            content: `<div class="star-mercs chat-card consolidation-readiness">
+              <div class="summary-header"><i class="fas fa-fist-raised"></i> <strong>${token.name}</strong> — Assault Movement: -${hexesMoved} readiness (${distanceToTarget} hex${distanceToTarget > 1 ? "es" : ""} to target)</div>
+            </div>`,
+            speaker: { alias: "Star Mercs" }
+          });
+        }
+      }
 
       // Get damage taken this turn
       const attackerDmg = damageTakenMap.get(token.id) ?? 0;
@@ -790,34 +851,34 @@ export default class StarMercsCombat extends Combat {
 
       // Attacker roll details
       html += `<div class="morale-details">${token.name}: Roll ${assaultRoll.total}`;
-      if (attackerDmg > 0) html += ` -${attackerDmg} dmg`;
+      if (attackerDmg > 0) html += ` +${attackerDmg} dmg`;
       if (aResult.autoFail) html += ` (NAT 1)`;
-      html += ` = ${aResult.total} vs ${attackerReadiness}+ — ${aResult.passed ? "Passed" : "Failed"}</div>`;
+      html += ` = ${aResult.total} vs RDY ${attackerReadiness} — ${aResult.passed ? "Passed" : "Failed"}</div>`;
       if (aRerollType === "isolation") {
         html += `<div class="morale-reroll isolation">${token.name} Isolation re-roll: ${aRerollObj.total}`;
-        if (attackerDmg > 0) html += ` -${attackerDmg}`;
+        if (attackerDmg > 0) html += ` +${attackerDmg}`;
         if (aRerollEval.autoFail) html += ` (NAT 1)`;
         html += ` = ${aRerollEval.total} — ${aRerollEval.passed ? "Passed" : "Failed"}</div>`;
       } else if (aRerollType === "command") {
         html += `<div class="morale-reroll command">${token.name} Command re-roll: ${aRerollObj.total}`;
-        if (attackerDmg > 0) html += ` -${attackerDmg}`;
+        if (attackerDmg > 0) html += ` +${attackerDmg}`;
         if (aRerollEval.autoFail) html += ` (NAT 1)`;
         html += ` = ${aRerollEval.total} — ${aRerollEval.passed ? "Passed" : "Failed"}</div>`;
       }
 
       // Defender roll details
       html += `<div class="morale-details">${targetCanvasToken.name}: Roll ${defenderRoll.total}`;
-      if (defenderDmg > 0) html += ` -${defenderDmg} dmg`;
+      if (defenderDmg > 0) html += ` +${defenderDmg} dmg`;
       if (dResult.autoFail) html += ` (NAT 1)`;
-      html += ` = ${dResult.total} vs ${defenderReadiness}+ — ${dResult.passed ? "Passed" : "Failed"}</div>`;
+      html += ` = ${dResult.total} vs RDY ${defenderReadiness} — ${dResult.passed ? "Passed" : "Failed"}</div>`;
       if (dRerollType === "isolation") {
         html += `<div class="morale-reroll isolation">${targetCanvasToken.name} Isolation re-roll: ${dRerollObj.total}`;
-        if (defenderDmg > 0) html += ` -${defenderDmg}`;
+        if (defenderDmg > 0) html += ` +${defenderDmg}`;
         if (dRerollEval.autoFail) html += ` (NAT 1)`;
         html += ` = ${dRerollEval.total} — ${dRerollEval.passed ? "Passed" : "Failed"}</div>`;
       } else if (dRerollType === "command") {
         html += `<div class="morale-reroll command">${targetCanvasToken.name} Command re-roll: ${dRerollObj.total}`;
-        if (defenderDmg > 0) html += ` -${defenderDmg}`;
+        if (defenderDmg > 0) html += ` +${defenderDmg}`;
         if (dRerollEval.autoFail) html += ` (NAT 1)`;
         html += ` = ${dRerollEval.total} — ${dRerollEval.passed ? "Passed" : "Failed"}</div>`;
       }
@@ -967,7 +1028,7 @@ export default class StarMercsCombat extends Combat {
       html += `<div class="summary-header"><i class="fas fa-running"></i> <strong>${token.name}</strong> — Withdraw Morale Test</div>`;
       html += `<div class="morale-details">RDY: ${currentReadiness} | Roll: ${roll.total}`;
       if (result.autoFail) html += ` (NAT 1 AUTO-FAIL)`;
-      html += ` = ${result.total} vs ${currentReadiness}+ — ${result.passed ? "Passed" : "Failed"}</div>`;
+      html += ` = ${result.total} vs RDY ${currentReadiness} — ${result.passed ? "Passed" : "Failed"}</div>`;
 
       if (rerollType === "isolation") {
         html += `<div class="morale-reroll isolation">Isolation re-roll (no comms link): ${rerollRollObj.total}`;
@@ -1036,9 +1097,11 @@ export default class StarMercsCombat extends Combat {
         await token.unsetFlag("star-mercs", "weaponsFired_ordnance");
         // 4. Clear disordered flag (resets each turn)
         await token.unsetFlag("star-mercs", "disordered");
+        // 5. Clear firedAtThisTurn flag
+        await token.unsetFlag("star-mercs", "firedAtThisTurn");
       }
 
-      // 5. Clear current order
+      // 6. Clear current order
       await actor.update({ "system.currentOrder": "" });
     }
   }

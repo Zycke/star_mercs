@@ -1634,3 +1634,185 @@
   font-style: italic;
   margin-top: 2px;
 }
+
+/* ---------------------------------------- */
+/*  Unit Log Tab                            */
+/* ---------------------------------------- */
+
+.unit-log .log-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.unit-log .log-header h3 {
+  margin: 0;
+}
+
+.unit-log .clear-log-btn {
+  background: var(--sm-bg-dark);
+  border: 1px solid var(--sm-border);
+  color: var(--sm-text-muted);
+  padding: 2px 8px;
+  border-radius: var(--sm-radius);
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.unit-log .clear-log-btn:hover {
+  color: var(--sm-danger-light);
+  border-color: var(--sm-danger);
+}
+
+.unit-log .log-entries {
+  max-height: 450px;
+  overflow-y: auto;
+  border: 1px solid var(--sm-border);
+  border-radius: var(--sm-radius);
+  background: var(--sm-bg-dark);
+}
+
+.unit-log .log-entry {
+  display: flex;
+  gap: 8px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--sm-border);
+  font-size: 12px;
+  line-height: 1.4;
+  word-wrap: break-word;
+}
+
+.unit-log .log-entry:last-child {
+  border-bottom: none;
+}
+
+.unit-log .log-turn {
+  font-weight: bold;
+  color: var(--sm-accent);
+  min-width: 30px;
+  flex-shrink: 0;
+}
+
+.unit-log .log-text {
+  flex: 1;
+  color: var(--sm-text);
+}
+
+.unit-log .log-entry.log-damage {
+  border-left: 3px solid var(--sm-danger);
+}
+
+.unit-log .log-entry.log-morale {
+  border-left: 3px solid var(--sm-accent);
+}
+
+.unit-log .log-entry.log-order {
+  border-left: 3px solid var(--sm-primary-light);
+}
+
+.unit-log .log-entry.log-supply {
+  border-left: 3px solid #33aa33;
+}
+
+.unit-log .empty {
+  padding: 12px;
+  text-align: center;
+  color: var(--sm-text-dim);
+  font-style: italic;
+}
+
+/* ---------------------------------------- */
+/*  GM Overrides                            */
+/* ---------------------------------------- */
+
+.gm-overrides {
+  margin-top: 12px;
+  padding: 8px;
+  border: 1px dashed var(--sm-accent);
+  border-radius: var(--sm-radius);
+  background: rgba(201, 162, 39, 0.05);
+}
+
+.gm-overrides h3 {
+  color: var(--sm-accent) !important;
+  font-size: 12px !important;
+  margin-bottom: 6px !important;
+  border-bottom: 1px solid var(--sm-accent) !important;
+}
+
+.gm-override-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.gm-override-row label {
+  font-size: 12px;
+  color: var(--sm-text);
+}
+
+.gm-override-row select {
+  flex: 1;
+  font-size: 11px;
+}
+
+.gm-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+
+/* ---------------------------------------- */
+/*  Morale Button Chat Card                 */
+/* ---------------------------------------- */
+
+.morale-button-card {
+  text-align: center;
+}
+
+.morale-button-card p {
+  margin: 6px 0 10px;
+  font-size: 12px;
+  color: var(--sm-text-muted);
+}
+
+.morale-button-card .roll-morale-btn {
+  background: var(--sm-primary);
+  border: 1px solid var(--sm-primary-light);
+  color: var(--sm-text);
+  padding: 6px 16px;
+  border-radius: var(--sm-radius);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: bold;
+  transition: background 0.15s;
+}
+
+.morale-button-card .roll-morale-btn:hover {
+  background: var(--sm-primary-light);
+}
+
+.morale-button-card .roll-morale-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ---------------------------------------- */
+/*  Text Wrapping Fixes                     */
+/* ---------------------------------------- */
+
+.star-mercs.chat-card {
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+.star-mercs .damage-breakdown {
+  flex-wrap: wrap;
+}
+
+.star-mercs .accuracy-details {
+  flex-wrap: wrap;
+}

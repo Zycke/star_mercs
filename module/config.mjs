@@ -7,28 +7,28 @@ export const STARMERCS = {};
  * Unit rating levels and their associated skill check bonuses.
  */
 STARMERCS.ratings = {
-  green: { label: "STARMERCS.Rating.Green", bonus: 0, accuracy: 7 },
-  trained: { label: "STARMERCS.Rating.Trained", bonus: 1, accuracy: 6 },
-  experienced: { label: "STARMERCS.Rating.Experienced", bonus: 2, accuracy: 5 },
-  veteran: { label: "STARMERCS.Rating.Veteran", bonus: 3, accuracy: 4 },
-  elite: { label: "STARMERCS.Rating.Elite", bonus: 5, accuracy: 3 }
+  green: { label: "Green", bonus: 0, accuracy: 7 },
+  trained: { label: "Trained", bonus: 1, accuracy: 6 },
+  experienced: { label: "Experienced", bonus: 2, accuracy: 5 },
+  veteran: { label: "Veteran", bonus: 3, accuracy: 4 },
+  elite: { label: "Elite", bonus: 5, accuracy: 3 }
 };
 
 /**
  * Weapon attack types and their targeting rules.
  */
 STARMERCS.attackTypes = {
-  soft: "STARMERCS.AttackType.Soft",
-  hard: "STARMERCS.AttackType.Hard",
-  antiAir: "STARMERCS.AttackType.AntiAir"
+  soft: "Soft Attack",
+  hard: "Hard Attack",
+  antiAir: "Anti-Air"
 };
 
 /**
  * Order categories.
  */
 STARMERCS.orderCategories = {
-  standard: "STARMERCS.OrderCategory.Standard",
-  special: "STARMERCS.OrderCategory.Special"
+  standard: "Standard",
+  special: "Special"
 };
 
 /**
@@ -42,7 +42,7 @@ STARMERCS.orderCategories = {
  */
 STARMERCS.orders = {
   hold: {
-    label: "STARMERCS.Order.Hold",
+    label: "Hold",
     category: "standard",
     allowsMovement: false,
     allowsAttack: true,
@@ -51,16 +51,17 @@ STARMERCS.orders = {
     description: "Unit holds position and engages targets. Recovers readiness."
   },
   move: {
-    label: "STARMERCS.Order.Move",
+    label: "Maneuver",
     category: "standard",
     allowsMovement: true,
-    allowsAttack: false,
+    allowsAttack: true,
+    accuracyPenalty: 1,
     readinessCost: 0,
     supplyModifier: "1x",
-    description: "Unit moves without engaging the enemy."
+    description: "Unit maneuvers and may fire at -1 accuracy penalty."
   },
   advance: {
-    label: "STARMERCS.Order.Advance",
+    label: "Advance",
     category: "standard",
     allowsMovement: true,
     allowsAttack: true,
@@ -69,7 +70,7 @@ STARMERCS.orders = {
     description: "Unit moves toward the enemy and engages."
   },
   dig_in: {
-    label: "STARMERCS.Order.DigIn",
+    label: "Dig In",
     category: "standard",
     allowsMovement: false,
     allowsAttack: false,
@@ -78,7 +79,7 @@ STARMERCS.orders = {
     description: "Unit fortifies position and recovers readiness."
   },
   withdraw: {
-    label: "STARMERCS.Order.Withdraw",
+    label: "Withdraw",
     category: "standard",
     allowsMovement: true,
     allowsAttack: false,
@@ -87,7 +88,7 @@ STARMERCS.orders = {
     description: "Unit retreats from combat. Movement away from enemy."
   },
   recon: {
-    label: "STARMERCS.Order.Recon",
+    label: "Recon",
     category: "standard",
     allowsMovement: true,
     allowsAttack: false,
@@ -96,7 +97,7 @@ STARMERCS.orders = {
     description: "Unit scouts ahead. May reveal hidden enemies."
   },
   assault: {
-    label: "STARMERCS.Order.Assault",
+    label: "Assault",
     category: "special",
     requiredTrait: "Assault",
     allowsMovement: true,
@@ -106,7 +107,7 @@ STARMERCS.orders = {
     description: "Aggressive charge into enemy positions."
   },
   overwatch: {
-    label: "STARMERCS.Order.Overwatch",
+    label: "Overwatch",
     category: "standard",
     allowsMovement: false,
     allowsAttack: true,
@@ -115,7 +116,7 @@ STARMERCS.orders = {
     description: "Unit watches an area and fires on enemies that enter."
   },
   fortify: {
-    label: "STARMERCS.Order.Fortify",
+    label: "Fortify",
     category: "special",
     requiredTrait: "Engineer",
     allowsMovement: false,
@@ -125,7 +126,7 @@ STARMERCS.orders = {
     description: "Engineer unit constructs fortifications at its position."
   },
   construct: {
-    label: "STARMERCS.Order.Construct",
+    label: "Construct",
     category: "special",
     requiredTrait: "Engineer",
     allowsMovement: false,
@@ -135,7 +136,7 @@ STARMERCS.orders = {
     description: "Engineer unit constructs field structures."
   },
   meteoric_assault: {
-    label: "STARMERCS.Order.MeteoricAssault",
+    label: "Meteoric Assault",
     category: "special",
     requiredTrait: "Meteoric Assault",
     allowsMovement: true,
@@ -145,7 +146,7 @@ STARMERCS.orders = {
     description: "Unit performs a devastating drop assault from orbit or high altitude."
   },
   supply_order: {
-    label: "STARMERCS.Order.SupplyOrder",
+    label: "Supply",
     category: "special",
     requiredTrait: "Supply",
     allowsMovement: true,
@@ -155,7 +156,7 @@ STARMERCS.orders = {
     description: "Unit focuses on supply distribution to nearby friendlies."
   },
   deploy: {
-    label: "STARMERCS.Order.Deploy",
+    label: "Deploy",
     category: "special",
     requiredTrait: "Deploy",
     allowsMovement: false,
@@ -165,7 +166,7 @@ STARMERCS.orders = {
     description: "Unit deploys into combat readiness, enabling abilities and weapons."
   },
   stand_down: {
-    label: "STARMERCS.Order.StandDown",
+    label: "Stand Down",
     category: "standard",
     allowsMovement: false,
     allowsAttack: false,
@@ -179,10 +180,10 @@ STARMERCS.orders = {
  * Turn phases.
  */
 STARMERCS.phases = {
-  preparation: "STARMERCS.Phase.Preparation",
-  orders: "STARMERCS.Phase.Orders",
-  tactical: "STARMERCS.Phase.Tactical",
-  consolidation: "STARMERCS.Phase.Consolidation"
+  preparation: "Preparation",
+  orders: "Orders",
+  tactical: "Tactical",
+  consolidation: "Consolidation"
 };
 
 /**
@@ -194,16 +195,16 @@ STARMERCS.phaseOrder = ["preparation", "orders", "tactical", "consolidation"];
  * Terrain types — labels for dropdowns.
  */
 STARMERCS.terrainTypes = {
-  forest: "STARMERCS.Terrain.Forest",
-  plain: "STARMERCS.Terrain.Plain",
-  hill: "STARMERCS.Terrain.Hill",
-  mountain: "STARMERCS.Terrain.Mountain",
-  swamp: "STARMERCS.Terrain.Swamp",
-  river: "STARMERCS.Terrain.River",
-  lake: "STARMERCS.Terrain.Lake",
-  ocean: "STARMERCS.Terrain.Ocean",
-  urbanDense: "STARMERCS.Terrain.UrbanDense",
-  urbanLight: "STARMERCS.Terrain.UrbanLight"
+  forest: "Forest",
+  plain: "Plain",
+  hill: "Hill",
+  mountain: "Mountain",
+  swamp: "Swamp",
+  river: "River",
+  lake: "Lake",
+  ocean: "Ocean",
+  urbanDense: "Urban (Dense)",
+  urbanLight: "Urban (Light)"
 };
 
 /**
@@ -224,7 +225,7 @@ STARMERCS.terrainTypes = {
  */
 STARMERCS.terrain = {
   forest: {
-    label: "STARMERCS.Terrain.Forest",
+    label: "Forest",
     movementCost: 2,
     signatureMod: -1,
     infantryCover: true,
@@ -238,7 +239,7 @@ STARMERCS.terrain = {
     blocksLOS: true
   },
   plain: {
-    label: "STARMERCS.Terrain.Plain",
+    label: "Plain",
     movementCost: 1,
     signatureMod: 0,
     infantryCover: false,
@@ -252,7 +253,7 @@ STARMERCS.terrain = {
     blocksLOS: false
   },
   hill: {
-    label: "STARMERCS.Terrain.Hill",
+    label: "Hill",
     movementCost: 1,
     signatureMod: 0,
     infantryCover: false,
@@ -266,7 +267,7 @@ STARMERCS.terrain = {
     blocksLOS: true
   },
   mountain: {
-    label: "STARMERCS.Terrain.Mountain",
+    label: "Mountain",
     movementCost: 3,
     signatureMod: -1,
     infantryCover: false,
@@ -280,7 +281,7 @@ STARMERCS.terrain = {
     blocksLOS: true
   },
   swamp: {
-    label: "STARMERCS.Terrain.Swamp",
+    label: "Swamp",
     movementCost: 2,
     signatureMod: 0,
     infantryCover: false,
@@ -294,7 +295,7 @@ STARMERCS.terrain = {
     blocksLOS: false
   },
   river: {
-    label: "STARMERCS.Terrain.River",
+    label: "River",
     movementCost: 2,
     signatureMod: 0,
     infantryCover: false,
@@ -308,7 +309,7 @@ STARMERCS.terrain = {
     blocksLOS: false
   },
   lake: {
-    label: "STARMERCS.Terrain.Lake",
+    label: "Lake",
     movementCost: 2,
     signatureMod: 0,
     infantryCover: false,
@@ -322,7 +323,7 @@ STARMERCS.terrain = {
     blocksLOS: false
   },
   ocean: {
-    label: "STARMERCS.Terrain.Ocean",
+    label: "Ocean",
     movementCost: 2,
     signatureMod: 0,
     infantryCover: false,
@@ -336,7 +337,7 @@ STARMERCS.terrain = {
     blocksLOS: false
   },
   urbanDense: {
-    label: "STARMERCS.Terrain.UrbanDense",
+    label: "Urban (Dense)",
     movementCost: 1,
     signatureMod: -2,
     infantryCover: false,
@@ -350,7 +351,7 @@ STARMERCS.terrain = {
     blocksLOS: true
   },
   urbanLight: {
-    label: "STARMERCS.Terrain.UrbanLight",
+    label: "Urban (Light)",
     movementCost: 1,
     signatureMod: -1,
     infantryCover: true,
@@ -379,7 +380,7 @@ STARMERCS.arrowColors = {
  * Trait activation modes.
  */
 STARMERCS.traitModes = {
-  passive: "STARMERCS.TraitMode.Passive",
-  active: "STARMERCS.TraitMode.Active",
-  conditional: "STARMERCS.TraitMode.Conditional"
+  passive: "Passive",
+  active: "Active",
+  conditional: "Conditional"
 };

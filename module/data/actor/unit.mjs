@@ -1,4 +1,4 @@
-const { SchemaField, NumberField, StringField } = foundry.data.fields;
+const { ArrayField, SchemaField, NumberField, StringField } = foundry.data.fields;
 
 /**
  * Data model for Star Mercs Unit actors.
@@ -89,7 +89,15 @@ export default class UnitData extends foundry.abstract.TypeDataModel {
       team: new StringField({ required: true, initial: "a", choices: { a: "Team A", b: "Team B" } }),
 
       // --- Notes ---
-      notes: new StringField({ required: false, initial: "" })
+      notes: new StringField({ required: false, initial: "" }),
+
+      // Unit log: history of events (damage, morale, orders, supply)
+      log: new ArrayField(new SchemaField({
+        turn: new NumberField({ integer: true, initial: 0 }),
+        phase: new StringField({ initial: "" }),
+        text: new StringField({ initial: "" }),
+        type: new StringField({ initial: "info" })
+      }), { initial: [] })
     };
   }
 

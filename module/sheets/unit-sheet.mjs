@@ -100,7 +100,7 @@ export default class StarMercsUnitSheet extends ActorSheet {
       })
       .map(([key, data]) => ({
         key,
-        label: game.i18n.localize(data.label),
+        label: data.label,
         category: data.category,
         allowsMovement: data.allowsMovement,
         allowsAttack: data.allowsAttack,
@@ -114,7 +114,7 @@ export default class StarMercsUnitSheet extends ActorSheet {
     const rawOrderData = allOrders[context.currentOrderKey] || null;
     if (rawOrderData) {
       context.currentOrderData = Object.assign({}, rawOrderData, {
-        labelText: game.i18n.localize(rawOrderData.label)
+        labelText: rawOrderData.label
       });
     } else {
       context.currentOrderData = null;
@@ -145,6 +145,13 @@ export default class StarMercsUnitSheet extends ActorSheet {
     context.isPreparationPhase = combat?.phase === "preparation";
     context.canTransferSupply = !combat?.started || combat?.phase === "preparation";
     context.supplyTransferRange = this.actor.getSupplyTransferRange();
+
+    // GM overrides
+    context.isGM = game.user.isGM;
+    context.allOrders = allOrders;
+
+    // Log tab data
+    context.log = this.actor.system.log ?? [];
 
     return context;
   }
@@ -254,6 +261,13 @@ export default class StarMercsUnitSheet extends ActorSheet {
 
     // Supply transfer
     html.on("click", ".transfer-supply-btn", this._onTransferSupply.bind(this));
+
+    // Log tab: clear log
+    html.on("click", ".clear-log-btn", this._onClearLog.bind(this));
+
+    // GM overrides
+    html.on("change", ".gm-toggle-breaking", this._onGMToggleBreaking.bind(this));
+    html.on("change", ".gm-order-override", this._onGMOrderOverride.bind(this));
   }
 
   /* ---------------------------------------- */
@@ -336,12 +350,23 @@ export default class StarMercsUnitSheet extends ActorSheet {
       return;
     }
 
-    // Line of Sight / comms chain validation
+    // Ensure unit is on the map
     const myToken = this.actor.getActiveTokens()?.[0];
     if (!myToken) {
       ui.notifications.warn("Unit must be placed on the map to assign targets.");
       return;
     }
+
+    // Range check
+    const distance = StarMercsActor.getHexDistance(myToken, targetToken);
+    if (item.system.range > 0 && distance > item.system.range) {
+      ui.notifications.warn(
+        `${item.name} is out of range (${item.system.range} hex max, target is ${distance} hexes away).`
+      );
+      return;
+    }
+
+    // Line of Sight / comms chain validation
     {
       const hasDirectLOS = StarMercsActor.hasLineOfSight(myToken, targetToken);
       const manager = game.starmercs?.commsLinkManager;
@@ -425,6 +450,12 @@ export default class StarMercsUnitSheet extends ActorSheet {
     event.preventDefault();
     const selectedOrderKey = event.currentTarget.value;
     await this.actor.update({ "system.currentOrder": selectedOrderKey });
+
+    // Log the order assignment
+    const orderConfig = CONFIG.STARMERCS.orders?.[selectedOrderKey];
+    if (orderConfig) {
+      await this.actor.addLogEntry(`Order: ${orderConfig.label}`, "order");
+    }
 
     // Clear any previous assault target
     const token = this.actor.getActiveTokens()?.[0];
@@ -575,7 +606,7 @@ export default class StarMercsUnitSheet extends ActorSheet {
     // Only allow supply transfer during preparation phase
     const combat = game.combat;
     if (combat?.started && combat.phase !== "preparation") {
-      ui.notifications.warn(game.i18n.localize("STARMERCS.TransferPrepOnly"));
+      ui.notifications.warn("Supply transfers are only allowed during the Preparation phase.");
       return;
     }
 
@@ -618,7 +649,7 @@ export default class StarMercsUnitSheet extends ActorSheet {
     }
 
     if (nearbyTargets.length === 0) {
-      ui.notifications.warn(game.i18n.localize("STARMERCS.TransferNoTargets"));
+      ui.notifications.warn("No friendly units within transfer range with available capacity.");
       return;
     }
 
@@ -691,5 +722,36 @@ export default class StarMercsUnitSheet extends ActorSheet {
     const li = event.currentTarget.closest(".item");
     const item = this.actor.items.get(li.dataset.itemId);
     if (item) return item.toChat();
+  }
+
+  /* ---------------------------------------- */
+  /*  Log Handlers                            */
+  /* ---------------------------------------- */
+
+  async _onClearLog(event) {
+    event.preventDefault();
+    await this.actor.update({ "system.log": [] });
+  }
+
+  /* ---------------------------------------- */
+  /*  GM Override Handlers                    */
+  /* ---------------------------------------- */
+
+  async _onGMToggleBreaking(event) {
+    if (!game.user.isGM) return;
+    const checked = event.currentTarget.checked;
+    const token = this.actor.getActiveTokens()?.[0]?.document;
+    if (token) await token.setFlag("star-mercs", "breaking", checked);
+  }
+
+  async _onGMOrderOverride(event) {
+    if (!game.user.isGM) return;
+    const selectedOrderKey = event.currentTarget.value;
+    if (!selectedOrderKey) return;
+    await this.actor.update({ "system.currentOrder": selectedOrderKey });
+    const orderConfig = CONFIG.STARMERCS.orders?.[selectedOrderKey];
+    if (orderConfig) {
+      await this.actor.addLogEntry(`GM Override: Order set to ${orderConfig.label}`, "order");
+    }
   }
 }

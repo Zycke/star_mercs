@@ -1,0 +1,18 @@
+<div class="unit-log">
+  <div class="log-header">
+    <h3>Unit Log</h3>
+    <button class="clear-log-btn" type="button" title="Clear Log">
+      <i class="fas fa-trash"></i> Clear
+    </button>
+  </div>
+  <div class="log-entries">
+    {{#each log}}
+    <div class="log-entry log-{{this.type}}">
+      <span class="log-turn">R{{this.turn}}</span>
+      <span class="log-text">{{{this.text}}}</span>
+    </div>
+    {{else}}
+    <p class="empty">No log entries yet.</p>
+    {{/each}}
+  </div>
+</div>

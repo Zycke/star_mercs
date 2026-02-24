@@ -92,7 +92,7 @@ export default class StarMercsActor extends Actor {
       if (totalAmmo <= 0) {
         return {
           allowed: false,
-          reason: game.i18n.localize("STARMERCS.NoSupplyAttack")
+          reason: "Cannot attack — no ammunition supply remaining."
         };
       }
     }
@@ -189,7 +189,7 @@ export default class StarMercsActor extends Actor {
       const distance = StarMercsActor.getHexDistance(attackerToken, targetToken);
       if (distance > weapon.system.range) {
         ui.notifications.warn(
-          game.i18n.format("STARMERCS.OutOfRange", { range: weapon.system.range, distance })
+          `Out of range — ${weapon.name} has ${weapon.system.range} hex range, target is ${distance} hexes away.`
         );
         return null;
       }
@@ -243,6 +243,12 @@ export default class StarMercsActor extends Actor {
       }
     }
 
+    // Mark the target as having been fired at this turn (for morale triggers)
+    const targetTokenForFlag = canvas?.tokens?.placeables.find(t => t.actor === target);
+    if (targetTokenForFlag?.document) {
+      await targetTokenForFlag.document.setFlag("star-mercs", "firedAtThisTurn", true);
+    }
+
     // Build chat card
     const templateData = {
       attackerName: this.name,
@@ -261,7 +267,8 @@ export default class StarMercsActor extends Actor {
       inaccurateMod: result.accuracy.inaccurateMod ?? 0,
       disorderedMod: result.accuracy.disorderedMod ?? 0,
       standDownMod: result.accuracy.standDownMod ?? 0,
-      hasAccuracyMods: (result.accuracy.ewarMod > 0 || result.accuracy.readinessMod > 0 || (result.accuracy.accurateMod ?? 0) > 0 || (result.accuracy.inaccurateMod ?? 0) > 0 || (result.accuracy.disorderedMod ?? 0) !== 0 || (result.accuracy.standDownMod ?? 0) !== 0),
+      orderAccuracyMod: result.accuracy.orderAccuracyMod ?? 0,
+      hasAccuracyMods: (result.accuracy.ewarMod > 0 || result.accuracy.readinessMod > 0 || (result.accuracy.accurateMod ?? 0) > 0 || (result.accuracy.inaccurateMod ?? 0) > 0 || (result.accuracy.disorderedMod ?? 0) !== 0 || (result.accuracy.standDownMod ?? 0) !== 0 || (result.accuracy.orderAccuracyMod ?? 0) !== 0),
       hitType: result.hitResult.type,
       hitLabel: HIT_LABELS[result.hitResult.type],
       isHit: result.hitResult.hit,
@@ -359,7 +366,8 @@ export default class StarMercsActor extends Actor {
       inaccurateMod: accuracy.inaccurateMod ?? 0,
       disorderedMod: 0,
       standDownMod: 0,
-      hasAccuracyMods: (accuracy.readinessMod > 0 || (accuracy.accurateMod ?? 0) > 0 || (accuracy.inaccurateMod ?? 0) > 0),
+      orderAccuracyMod: accuracy.orderAccuracyMod ?? 0,
+      hasAccuracyMods: (accuracy.readinessMod > 0 || (accuracy.accurateMod ?? 0) > 0 || (accuracy.inaccurateMod ?? 0) > 0 || (accuracy.orderAccuracyMod ?? 0) !== 0),
       hitType: hitResult.type,
       hitLabel: HIT_LABELS[hitResult.type],
       isHit: hitResult.hit,
@@ -423,7 +431,7 @@ export default class StarMercsActor extends Actor {
             const distance = StarMercsActor.getHexDistance(attackerToken, targetToken);
             if (distance > item.system.range) {
               ui.notifications.warn(
-                game.i18n.format("STARMERCS.OutOfRange", { range: item.system.range, distance })
+                `Out of range — ${item.name} has ${item.system.range} hex range, target is ${distance} hexes away.`
                 + ` (${item.name})`
               );
               continue;
@@ -514,6 +522,19 @@ export default class StarMercsActor extends Actor {
       }
     }
 
+    // Mark each targeted unit as having been fired at this turn (for morale triggers)
+    const flaggedTargets = new Set();
+    for (const result of results) {
+      if (!result.valid || !result.target) continue;
+      const tokenId = result.targetTokenId;
+      if (flaggedTargets.has(tokenId)) continue;
+      flaggedTargets.add(tokenId);
+      const tToken = canvas?.tokens?.get(tokenId);
+      if (tToken?.document) {
+        await tToken.document.setFlag("star-mercs", "firedAtThisTurn", true);
+      }
+    }
+
     // Phase 3: Post individual attack results to chat
     const attackTypeLabels = { soft: "Soft", hard: "Hard", antiAir: "Anti-Air" };
     for (const result of results) {
@@ -552,7 +573,8 @@ export default class StarMercsActor extends Actor {
         readinessMod: result.accuracy.readinessMod,
         accurateMod: result.accuracy.accurateMod ?? 0,
         inaccurateMod: result.accuracy.inaccurateMod ?? 0,
-        hasAccuracyMods: (result.accuracy.ewarMod > 0 || result.accuracy.readinessMod > 0 || (result.accuracy.accurateMod ?? 0) > 0 || (result.accuracy.inaccurateMod ?? 0) > 0),
+        orderAccuracyMod: result.accuracy.orderAccuracyMod ?? 0,
+        hasAccuracyMods: (result.accuracy.ewarMod > 0 || result.accuracy.readinessMod > 0 || (result.accuracy.accurateMod ?? 0) > 0 || (result.accuracy.inaccurateMod ?? 0) > 0 || (result.accuracy.orderAccuracyMod ?? 0) !== 0),
         hitType: result.hitResult.type,
         hitLabel: HIT_LABELS[result.hitResult.type],
         isHit: result.hitResult.hit,
@@ -710,6 +732,20 @@ export default class StarMercsActor extends Actor {
   getSupplyTransferRange() {
     const supplyTraitValue = this.getTraitValue("Supply");
     return 1 + supplyTraitValue;
+  }
+
+  /**
+   * Add an entry to the unit's history log.
+   * @param {string} text - The log message.
+   * @param {string} [type="info"] - Log type: info, damage, morale, order, supply.
+   */
+  async addLogEntry(text, type = "info") {
+    const combat = game.combat;
+    const turn = combat?.round ?? 0;
+    const phase = combat?.phase ?? "";
+    const log = foundry.utils.deepClone(this.system.log ?? []);
+    log.push({ turn, phase, text, type });
+    await this.update({ "system.log": log });
   }
 
   /**
