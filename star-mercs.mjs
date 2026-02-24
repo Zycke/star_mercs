@@ -14,6 +14,7 @@ import { preloadHandlebarsTemplates, registerHandlebarsHelpers } from "./module/
 import TargetingArrowLayer from "./module/canvas/targeting-layer.mjs";
 import CommsLinkManager from "./module/comms-link-manager.mjs";
 import CommsLinkLayer from "./module/canvas/comms-link-layer.mjs";
+import * as hexUtils from "./module/hex-utils.mjs";
 
 /* ============================================ */
 /*  Foundry VTT Initialization                  */
@@ -29,7 +30,8 @@ Hooks.once("init", () => {
     StarMercsCombat: documents.StarMercsCombat,
     combat,
     dice,
-    commsLinkManager: new CommsLinkManager()
+    commsLinkManager: new CommsLinkManager(),
+    hexUtils
   };
 
   // Assign system configuration object
@@ -46,6 +48,11 @@ Hooks.once("init", () => {
       id: "breaking",
       label: "Breaking",
       icon: "icons/svg/skull.svg"
+    },
+    {
+      id: "engaged",
+      label: "Engaged",
+      icon: "icons/svg/sword.svg"
     }
   );
 
@@ -267,6 +274,27 @@ Hooks.on("preUpdateToken", (tokenDoc, changes, options, userId) => {
       }
     }
 
+    // --- Hex blocking: cannot end in an occupied hex or pass through enemy hexes ---
+    const destCenter = { x: newX + (currentToken.w / 2), y: newY + (currentToken.h / 2) };
+    const destSnapped = hexUtils.snapToHexCenter(destCenter);
+
+    // Cannot end in a hex occupied by another living unit
+    const tokensAtDest = hexUtils.getTokensAtHex(destSnapped);
+    const otherAtDest = tokensAtDest.filter(t => t !== currentToken);
+    if (otherAtDest.length > 0) {
+      ui.notifications.warn("Cannot move into a hex occupied by another unit.");
+      return false;
+    }
+
+    // Cannot maneuver through a hex containing an enemy unit
+    const myTeam = actor.system.team ?? "a";
+    const path = hexUtils.computeHexPath(currentCenter, destSnapped);
+    const pathValidation = hexUtils.validatePath(currentToken, path);
+    if (!pathValidation.valid) {
+      ui.notifications.warn(pathValidation.reason);
+      return false;
+    }
+
     // Pass computed distance to updateToken hook via options
     options._starMercsHexesMoved = hexesMoved;
   }
@@ -290,6 +318,28 @@ Hooks.on("updateToken", (tokenDoc, changes, options) => {
       const hexesMoved = options?._starMercsHexesMoved ?? 1;
       const movementUsed = tokenDoc.getFlag("star-mercs", "movementUsed") ?? 0;
       tokenDoc.setFlag("star-mercs", "movementUsed", movementUsed + hexesMoved);
+    }
+  }
+});
+
+/** Refresh engagement status effects on all tokens after any movement. */
+Hooks.on("updateToken", (tokenDoc, changes) => {
+  if (!("x" in changes) && !("y" in changes)) return;
+  if (!canvas?.tokens?.placeables) return;
+
+  const engagedEffect = CONFIG.statusEffects.find(e => e.id === "engaged");
+  if (!engagedEffect) return;
+
+  for (const token of canvas.tokens.placeables) {
+    if (!token.actor || token.actor.type !== "unit") continue;
+    if (token.actor.system.strength.value <= 0) continue;
+
+    const engaged = hexUtils.isEngaged(token);
+    const hasEffect = token.document.hasStatusEffect("engaged");
+    if (engaged && !hasEffect) {
+      token.document.toggleActiveEffect(engagedEffect, { active: true });
+    } else if (!engaged && hasEffect) {
+      token.document.toggleActiveEffect(engagedEffect, { active: false });
     }
   }
 });
@@ -419,12 +469,103 @@ Hooks.on("renderChatMessage", (message, html) => {
     const combatId = event.currentTarget.dataset.combatId;
     const combat = game.combats.get(combatId);
     if (!combat) return;
-    // Disable button after click
     const btn = event.currentTarget;
     btn.disabled = true;
     btn.textContent = "Rolling...";
     await combat.rollMoraleChecks();
     btn.textContent = "Morale Checks Complete";
+  });
+
+  // Tactical sub-step: "Next Step" button
+  html.find(".next-tactical-step-btn").on("click", async (event) => {
+    event.preventDefault();
+    const combatId = event.currentTarget.dataset.combatId;
+    const combat = game.combats.get(combatId);
+    if (!combat) return;
+    const btn = event.currentTarget;
+    btn.disabled = true;
+    btn.textContent = "Processing...";
+    await combat.nextTurn();
+  });
+
+  // Overwatch fire button
+  html.find(".overwatch-fire-btn").on("click", async (event) => {
+    event.preventDefault();
+    const btn = event.currentTarget;
+    const attackerDocId = btn.dataset.attackerId;
+    const targetDocId = btn.dataset.targetId;
+
+    const attackerToken = canvas.tokens.placeables.find(t => t.document.id === attackerDocId);
+    const targetToken = canvas.tokens.placeables.find(t => t.document.id === targetDocId);
+    if (!attackerToken?.actor || !targetToken?.actor) return;
+
+    btn.disabled = true;
+    btn.textContent = "Firing...";
+    html.find(".overwatch-skip-btn").prop("disabled", true);
+
+    // Fire all in-range weapons at the target
+    for (const weapon of attackerToken.actor.items) {
+      if (weapon.type !== "weapon") continue;
+      if (!weapon.system.range) continue;
+      const dist = documents.StarMercsActor.getHexDistance(attackerToken, targetToken);
+      if (dist <= weapon.system.range) {
+        await attackerToken.actor.rollAttack(weapon, targetToken.actor);
+      }
+    }
+
+    btn.textContent = "Fired!";
+  });
+
+  // Overwatch skip button
+  html.find(".overwatch-skip-btn").on("click", (event) => {
+    event.preventDefault();
+    const btn = event.currentTarget;
+    btn.disabled = true;
+    btn.textContent = "Held";
+    html.find(".overwatch-fire-btn").prop("disabled", true).text("Passed");
+  });
+
+  // Maneuver fire: target selection button
+  html.find(".maneuver-fire-btn").on("click", async (event) => {
+    event.preventDefault();
+    const btn = event.currentTarget;
+    const tokenDocId = btn.dataset.tokenId;
+    const combatId = btn.dataset.combatId;
+    const combat = game.combats.get(combatId);
+    if (!combat) return;
+
+    const token = canvas.tokens.placeables.find(t => t.document.id === tokenDocId);
+    if (!token?.actor) return;
+
+    btn.disabled = true;
+    btn.textContent = "Firing...";
+
+    // Fire all weapons at currently targeted enemies (set via Foundry targeting)
+    const targets = Array.from(game.user.targets);
+    if (targets.length === 0) {
+      ui.notifications.warn("Select targets first using Foundry's targeting (T key + click).");
+      btn.disabled = false;
+      btn.textContent = "Fire Weapons";
+      return;
+    }
+
+    for (const weapon of token.actor.items) {
+      if (weapon.type !== "weapon") continue;
+      if (weapon.system.artillery || weapon.system.aircraft) continue;
+      if (!weapon.system.range) continue;
+
+      // Fire at the first in-range target
+      for (const targetToken of targets) {
+        if (!targetToken.actor || targetToken.actor.system.team === token.actor.system.team) continue;
+        const dist = documents.StarMercsActor.getHexDistance(token, targetToken);
+        if (dist <= weapon.system.range) {
+          await token.actor.rollAttack(weapon, targetToken.actor);
+          break;
+        }
+      }
+    }
+
+    btn.textContent = "Fired!";
   });
 });
 

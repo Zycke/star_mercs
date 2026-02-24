@@ -86,10 +86,20 @@ export default class StarMercsUnitSheet extends ActorSheet {
     context.isBroken = isBroken;
     context.isDisordered = activeToken?.document?.getFlag("star-mercs", "disordered") ?? false;
 
+    // Check engagement status (adjacent to enemies)
+    const hUtils = game.starmercs?.hexUtils;
+    const unitIsEngaged = activeToken && hUtils ? hUtils.isEngaged(activeToken) : false;
+    context.isEngaged = unitIsEngaged;
+
+    // Orders that engaged units cannot take (movement orders except withdraw/assault)
+    const engagedBlockedOrders = ["move", "forced_march"];
+
     context.availableOrders = Object.entries(allOrders)
       .filter(([key, data]) => {
         // Breaking/Broken units can only Hold or Withdraw
         if ((isBreaking || isBroken) && !breakingOrders.includes(key)) return false;
+        // Engaged units cannot Maneuver or Forced March
+        if (unitIsEngaged && engagedBlockedOrders.includes(key)) return false;
         // Special orders require a trait
         if (data.category === "special" && data.requiredTrait) {
           if (!this.actor.hasTrait(data.requiredTrait)) return false;
@@ -499,6 +509,21 @@ export default class StarMercsUnitSheet extends ActorSheet {
       const distance = StarMercsActor.getHexDistance(myToken, token);
       if (distance <= speed) {
         validTargets.push({ tokenId: token.id, name: token.name, distance });
+      }
+    }
+
+    // Engaged units can only assault adjacent enemies
+    const hUtils = game.starmercs?.hexUtils;
+    if (hUtils && hUtils.isEngaged(myToken)) {
+      const adjacentOnly = validTargets.filter(t => {
+        const tToken = canvas.tokens.get(t.tokenId);
+        return tToken && hUtils.areAdjacent(myToken, tToken);
+      });
+      validTargets.length = 0;
+      adjacentOnly.forEach(t => validTargets.push(t));
+      if (validTargets.length === 0) {
+        ui.notifications.warn("Engaged units can only assault adjacent enemies.");
+        return;
       }
     }
 
