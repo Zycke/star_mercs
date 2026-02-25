@@ -39,8 +39,10 @@
     }
   ],
   "socket": false,
-  "gridDistance": 5,
-  "gridUnits": "km",
+  "grid": {
+    "distance": 5,
+    "units": "km"
+  },
   "primaryTokenAttribute": "strength",
   "secondaryTokenAttribute": "readiness",
   "documentTypes": {
