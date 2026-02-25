@@ -56,8 +56,10 @@ export default class TerrainLayer extends PIXI.Container {
       const [xStr, yStr] = key.split(",");
       const center = { x: parseFloat(xStr), y: parseFloat(yStr) };
 
-      // Get top-left from center
-      const topLeft = canvas.grid.getTopLeftPoint(center);
+      // Get top-left from center using snapping for precision
+      const topLeft = canvas.grid.getSnappedPoint(center, {
+        mode: CONST.GRID_SNAPPING_MODES.TOP_LEFT_CORNER
+      });
 
       this._drawHexOverlay(topLeft, shape, config.color ?? 0x888888);
       this._drawLabel(center, config.label ?? terrainType);

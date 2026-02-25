@@ -59,22 +59,48 @@ export default class TargetingArrowLayer extends PIXI.Container {
   }
 
   /* ---------------------------------------- */
+  /*  Team Filtering Helper                   */
+  /* ---------------------------------------- */
+
+  /**
+   * Get the current player's team for arrow filtering.
+   * GM sees all. Returns null if no team filtering should apply.
+   * @returns {string|null}
+   * @private
+   */
+  _getMyTeam() {
+    if (game.user.isGM) return null;
+    const assignments = game.settings.get("star-mercs", "teamAssignments") ?? {};
+    const team = assignments[game.user.id];
+    if (!team || team === "spectator") return null;
+    return team;
+  }
+
+  /* ---------------------------------------- */
   /*  Data Collection                         */
   /* ---------------------------------------- */
 
   /**
    * Iterate all tokens on the canvas, check their weapons for targetIds,
    * resolve target tokens, and return arrow descriptors.
+   * Non-GM players only see arrows for their own team's units.
    * @returns {Array<{attackerCenter: {x,y}, targetCenter: {x,y}, color: number, offset: number}>}
    * @private
    */
   _collectArrowData() {
     const arrows = [];
     const colors = CONFIG.STARMERCS?.arrowColors ?? {};
+    const myTeam = this._getMyTeam();
 
     for (const token of canvas.tokens.placeables) {
       const actor = token.actor;
       if (!actor) continue;
+
+      // Team filter: non-GM players only see their own team's arrows
+      if (myTeam) {
+        const tokenTeam = actor.system?.team ?? "a";
+        if (tokenTeam !== myTeam) continue;
+      }
 
       // Group weapons by targetId to compute perpendicular offsets
       const weaponsByTarget = new Map();
@@ -183,12 +209,21 @@ export default class TargetingArrowLayer extends PIXI.Container {
   /**
    * Draw green dashed arrows from tokens to their planned movement destinations.
    * Destinations are stored as token flags during the Orders phase.
+   * Non-GM players only see arrows for their own team's units.
    * @private
    */
   _drawMoveDestinationArrows() {
     if (!canvas?.tokens?.placeables) return;
 
+    const myTeam = this._getMyTeam();
+
     for (const token of canvas.tokens.placeables) {
+      // Team filter
+      if (myTeam) {
+        const tokenTeam = token.actor?.system?.team ?? "a";
+        if (tokenTeam !== myTeam) continue;
+      }
+
       const dest = token.document.getFlag("star-mercs", "moveDestination");
       if (!dest) continue;
 
@@ -228,8 +263,11 @@ export default class TargetingArrowLayer extends PIXI.Container {
         { mode: CONST.GRID_SNAPPING_MODES.CENTER }
       );
 
-      // Get the hex grid top-left point for the snapped destination
-      const topLeft = canvas.grid.getTopLeftPoint({ x: snapped.x, y: snapped.y });
+      // Get the hex grid top-left point using snapping for precision
+      const topLeft = canvas.grid.getSnappedPoint(
+        { x: snapped.x, y: snapped.y },
+        { mode: CONST.GRID_SNAPPING_MODES.TOP_LEFT_CORNER }
+      );
 
       // Get hex shape vertices (relative to top-left)
       const shape = canvas.grid.getShape();

@@ -609,16 +609,41 @@ export default class StarMercsUnitSheet extends ActorSheet {
       return;
     }
 
+    // Capture actor speed and order for the closure
+    let speed = this.actor.system.speed ?? 0;
+    const orderKey = this.actor.system.currentOrder;
+    const orderConfig = CONFIG.STARMERCS.orders?.[orderKey];
+    if (orderConfig?.speedMultiplier) {
+      speed *= orderConfig.speedMultiplier;
+    }
+
     ui.notifications.info("Click a hex on the map to set the movement destination.");
 
-    const handler = (event) => {
+    const handler = async (event) => {
       const pos = event.data.getLocalPosition(canvas.app.stage);
       // Snap to hex grid center
       const snapped = canvas.grid.getSnappedPoint(pos, { mode: CONST.GRID_SNAPPING_MODES.CENTER });
       const dest = snapped ?? pos;
 
-      // Store destination on the token document
-      token.document.setFlag("star-mercs", "moveDestination", { x: dest.x, y: dest.y });
+      // Range check: ensure destination is within movement range
+      if (speed > 0) {
+        const from = token.center;
+        const ray = new Ray(from, dest);
+        const segments = [{ ray }];
+        const distance = canvas.grid.measureDistances(segments, { gridSpaces: true })[0];
+        const gridDistance = canvas.scene.grid.distance || 1;
+        const hexDistance = Math.round(distance / gridDistance);
+
+        if (hexDistance > speed) {
+          ui.notifications.warn(
+            `Destination is ${hexDistance} hexes away but unit speed is only ${speed}. Choose a closer hex.`
+          );
+          return; // Keep listener active so user can try again
+        }
+      }
+
+      // Store destination on the token document — await to ensure flag is persisted
+      await token.document.setFlag("star-mercs", "moveDestination", { x: dest.x, y: dest.y });
 
       // Redraw arrows to show the green movement arrow
       game.starmercs?.targetingArrowLayer?.drawArrows();

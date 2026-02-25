@@ -58,6 +58,11 @@ Hooks.once("init", () => {
       id: "engaged",
       label: "Engaged",
       icon: "icons/svg/sword.svg"
+    },
+    {
+      id: "entrenched",
+      label: "Entrenched",
+      icon: "icons/svg/shield.svg"
     }
   );
 
@@ -384,6 +389,12 @@ Hooks.on("updateToken", (tokenDoc, changes, options) => {
     game.starmercs?.commsLinkLayer?.drawLinks();
   }
 
+  // Also redraw arrows when moveDestination or assaultTarget flags change
+  if (foundry.utils.hasProperty(changes, "flags.star-mercs.moveDestination")
+      || foundry.utils.hasProperty(changes, "flags.star-mercs.assaultTarget")) {
+    game.starmercs?.targetingArrowLayer?.drawArrows();
+  }
+
   // Track movement during tactical phase (skip for GM override moves)
   if (("x" in changes || "y" in changes) && game.combat?.started
       && game.combat.phase === "tactical" && !options?._starMercsGMOverride) {
@@ -392,6 +403,19 @@ Hooks.on("updateToken", (tokenDoc, changes, options) => {
       const hexesMoved = options?._starMercsHexesMoved ?? 1;
       const movementUsed = tokenDoc.getFlag("star-mercs", "movementUsed") ?? 0;
       tokenDoc.setFlag("star-mercs", "movementUsed", movementUsed + hexesMoved);
+    }
+  }
+
+  // Deactivate Entrenched trait when a unit moves
+  if ("x" in changes || "y" in changes) {
+    const actor = tokenDoc.actor;
+    if (actor?.type === "unit") {
+      const entrenchedTrait = actor.items.find(
+        i => i.type === "trait" && i.name.toLowerCase() === "entrenched" && i.system.active
+      );
+      if (entrenchedTrait) {
+        entrenchedTrait.update({ "system.active": false });
+      }
     }
   }
 });
@@ -445,6 +469,26 @@ Hooks.on("updateItem", (item, changes) => {
   if (item.type === "trait" && foundry.utils.hasProperty(changes, "system.active")) {
     game.starmercs?.commsLinkManager?.invalidate();
     game.starmercs?.commsLinkLayer?.drawLinks();
+
+    // Sync "Entrenched" status effect icon with the trait's active state
+    if (item.name.toLowerCase() === "entrenched") {
+      const isActive = changes.system.active;
+      const actor = item.parent;
+      if (actor?.type === "unit") {
+        const token = actor.getActiveTokens()?.[0]?.document;
+        if (token) {
+          const entrenchedEffect = CONFIG.statusEffects.find(e => e.id === "entrenched");
+          if (entrenchedEffect) {
+            const hasEffect = token.hasStatusEffect("entrenched");
+            if (isActive && !hasEffect) {
+              token.toggleActiveEffect(entrenchedEffect, { active: true });
+            } else if (!isActive && hasEffect) {
+              token.toggleActiveEffect(entrenchedEffect, { active: false });
+            }
+          }
+        }
+      }
+    }
   }
 });
 
@@ -610,6 +654,9 @@ Hooks.on("renderChatMessage", (message, html) => {
 
     const token = canvas.tokens.placeables.find(t => t.document.id === tokenDocId);
     if (!token?.actor) return;
+
+    // Only the owning player or GM can fire
+    if (!token.actor.isOwner && !game.user.isGM) return;
 
     btn.disabled = true;
     btn.textContent = "Firing...";
