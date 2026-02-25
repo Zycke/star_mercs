@@ -263,15 +263,14 @@ export default class TargetingArrowLayer extends PIXI.Container {
         { mode: CONST.GRID_SNAPPING_MODES.CENTER }
       );
 
-      // Get the hex grid top-left point using snapping for precision
-      const topLeft = canvas.grid.getSnappedPoint(
-        { x: snapped.x, y: snapped.y },
-        { mode: CONST.GRID_SNAPPING_MODES.TOP_LEFT_CORNER }
-      );
-
       // Get hex shape vertices (relative to top-left)
       const shape = canvas.grid.getShape();
       if (!shape || shape.length < 3) continue;
+
+      // Derive top-left from center minus shape centroid (self-consistent with shape vertices)
+      const shapeCenterX = shape.reduce((sum, p) => sum + p.x, 0) / shape.length;
+      const shapeCenterY = shape.reduce((sum, p) => sum + p.y, 0) / shape.length;
+      const topLeft = { x: snapped.x - shapeCenterX, y: snapped.y - shapeCenterY };
 
       // Draw filled hex polygon
       g.lineStyle(2, TargetingArrowLayer.MOVE_ARROW_COLOR, 0.6);

@@ -1377,7 +1377,48 @@
   margin-right: 4px;
 }
 
-/* Consolidation chat cards */
+/* Combined consolidation chat card */
+.star-mercs.chat-card.consolidation-combined {
+  border-left: 3px solid var(--sm-accent);
+  padding: 6px 8px;
+}
+
+.star-mercs.chat-card.consolidation-combined .summary-header {
+  font-size: 14px;
+  margin-bottom: 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--sm-border);
+}
+
+.star-mercs.chat-card.consolidation-combined .consolidation-section {
+  padding: 4px 0;
+  border-bottom: 1px solid var(--sm-border);
+}
+
+.star-mercs.chat-card.consolidation-combined .consolidation-section:last-child {
+  border-bottom: none;
+}
+
+.star-mercs.chat-card.consolidation-combined .consolidation-section-header {
+  font-size: 12px;
+  font-weight: bold;
+  color: var(--sm-text);
+  margin-bottom: 2px;
+}
+
+.star-mercs.chat-card.consolidation-combined .consolidation-section-header i {
+  margin-right: 4px;
+  width: 14px;
+  text-align: center;
+}
+
+.star-mercs.chat-card.consolidation-combined .consolidation-section.damage .summary-damage {
+  font-size: 13px;
+  color: var(--sm-danger-light);
+  margin-bottom: 2px;
+}
+
+/* Legacy consolidation chat cards (kept for backwards compatibility) */
 .star-mercs.chat-card.consolidation-damage,
 .star-mercs.chat-card.consolidation-readiness {
   border-left: 3px solid var(--sm-accent);
