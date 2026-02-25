@@ -216,7 +216,7 @@ export default class StarMercsActor extends Actor {
             attackerName: this.name,
             targetName: target.name,
             weaponName: weapon.name,
-            attackString: weapon.system.attackString,
+            attackString: weapon.system.attackString ?? `D${weapon.system.damage}/R${weapon.system.range}`,
             attackType: weapon.system.attackType,
             attackTypeLabel: attackTypeLabels[weapon.system.attackType] ?? weapon.system.attackType,
             invalid: true,
@@ -258,12 +258,16 @@ export default class StarMercsActor extends Actor {
       await targetTokenForFlag.document.setFlag("star-mercs", "firedAtThisTurn", true);
     }
 
+    // Log the attack result
+    const hitLabel = result.hitResult.hit ? `HIT (${result.damage?.final ?? 0} dmg)` : `MISS (${HIT_LABELS[result.hitResult.type]})`;
+    await this.addLogEntry(`Attacked ${target.name} with ${weapon.name}: ${hitLabel}`, "info");
+
     // Build chat card
     const templateData = {
       attackerName: this.name,
       targetName: target.name,
       weaponName: weapon.name,
-      attackString: weapon.system.attackString,
+      attackString: weapon.system.attackString ?? `D${weapon.system.damage}/R${weapon.system.range}`,
       attackType: weapon.system.attackType,
       attackTypeLabel: attackTypeLabels[weapon.system.attackType] ?? weapon.system.attackType,
       invalid: false,
@@ -375,7 +379,7 @@ export default class StarMercsActor extends Actor {
       attackerName: this.name,
       targetName: null,
       weaponName: weapon.name,
-      attackString: weapon.system.attackString,
+      attackString: weapon.system.attackString ?? `D${weapon.system.damage}/R${weapon.system.range}`,
       attackType: weapon.system.attackType,
       attackTypeLabel: attackTypeLabels[weapon.system.attackType] ?? weapon.system.attackType,
       invalid: false,
@@ -576,7 +580,7 @@ export default class StarMercsActor extends Actor {
               attackerName: this.name,
               targetName: result.targetTokenName,
               weaponName: result.weapon.name,
-              attackString: result.weapon.system.attackString,
+              attackString: result.weapon.system.attackString ?? `D${result.weapon.system.damage}/R${result.weapon.system.range}`,
               attackType: result.weapon.system.attackType,
               attackTypeLabel: attackTypeLabels[result.weapon.system.attackType] ?? result.weapon.system.attackType,
               invalid: true,
@@ -588,11 +592,15 @@ export default class StarMercsActor extends Actor {
         continue;
       }
 
+      // Log attack result
+      const hitLabel = result.hitResult.hit ? `HIT (${result.damage?.final ?? 0} dmg)` : `MISS (${HIT_LABELS[result.hitResult.type]})`;
+      await this.addLogEntry(`Attacked ${result.targetTokenName} with ${result.weapon.name}: ${hitLabel}`, "info");
+
       const templateData = {
         attackerName: this.name,
         targetName: result.targetTokenName,
         weaponName: result.weapon.name,
-        attackString: result.weapon.system.attackString,
+        attackString: result.weapon.system.attackString ?? `D${result.weapon.system.damage}/R${result.weapon.system.range}`,
         attackType: result.weapon.system.attackType,
         attackTypeLabel: attackTypeLabels[result.weapon.system.attackType] ?? result.weapon.system.attackType,
         invalid: false,

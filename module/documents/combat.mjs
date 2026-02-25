@@ -565,22 +565,18 @@ export default class StarMercsCombat extends Combat {
 
   /**
    * Evaluate a morale roll with all modifiers applied.
-   * Natural 1 on the die always fails regardless of modifiers.
+   * Roll-under system: roll d10 + damage taken, must be ≤ readiness to pass.
+   * Lower rolls are better (natural 1 is the best possible roll).
    * @param {number} dieResult - Raw d10 result.
    * @param {number} damageTaken - Strength damage taken this turn.
    * @param {number} readiness - Current readiness value.
-   * @returns {{total: number, passed: boolean, autoFail: boolean}}
+   * @returns {{total: number, passed: boolean}}
    * @private
    */
   _evaluateMoraleRoll(dieResult, damageTaken, readiness) {
-    // Natural 1 always fails
-    if (dieResult === 1) {
-      return { total: dieResult, passed: false, autoFail: true };
-    }
-    let total = dieResult;
-    total += damageTaken;
+    const total = dieResult + damageTaken;
     const passed = total <= readiness;
-    return { total, passed, autoFail: false };
+    return { total, passed };
   }
 
   /* ---------------------------------------- */
@@ -599,7 +595,7 @@ export default class StarMercsCombat extends Combat {
    * Comms chain effects:
    *   - Isolated (chain size 1): re-roll successful morale (forced to use worse result)
    *   - Command in chain: re-roll failed morale (get a second chance)
-   *   - Natural 1 always fails (no re-roll can save it for isolation; Command still re-rolls)
+   *   - Isolation: if passed, forced re-roll (use worse result)
    *
    * @param {Map<string, number>} damageTakenMap - Token ID → strength damage taken this turn.
    * @private
@@ -676,30 +672,29 @@ export default class StarMercsCombat extends Combat {
         html += `<div class="summary-header"><i class="fas fa-brain"></i> <strong>${token.name}</strong> — Morale Check (${statusLabel})</div>`;
         html += `<div class="morale-details">RDY: ${currentReadiness} | Roll: ${roll.total}`;
         if (damageTaken > 0) html += ` +${damageTaken} dmg`;
-        if (result.autoFail) html += ` (NAT 1 AUTO-FAIL)`;
         html += ` = ${result.total} vs RDY ${currentReadiness} — ${result.passed ? "Passed" : "Failed"}</div>`;
 
         if (rerollType === "isolation") {
           html += `<div class="morale-reroll isolation">Isolation re-roll (no comms link): ${rerollRollObj.total}`;
           if (damageTaken > 0) html += ` +${damageTaken}`;
-          if (rerollEval.autoFail) html += ` (NAT 1)`;
           html += ` = ${rerollEval.total} — ${rerollEval.passed ? "Passed" : "Failed"}</div>`;
         } else if (rerollType === "command") {
           html += `<div class="morale-reroll command">Command re-roll: ${rerollRollObj.total}`;
           if (damageTaken > 0) html += ` +${damageTaken}`;
-          if (rerollEval.autoFail) html += ` (NAT 1)`;
           html += ` = ${rerollEval.total} — ${rerollEval.passed ? "Passed" : "Failed"}</div>`;
         }
 
         if (finalPassed) {
           await token.setFlag("star-mercs", "breaking", false);
           await token.setFlag("star-mercs", "broken", false);
+          await token.unsetFlag("star-mercs", "breakingTurn");
           html += `<div class="status-update morale-passed"><i class="fas fa-check"></i> Morale restored — ${statusLabel} status removed!</div>`;
         } else {
           // Second failure while Breaking/Broken → SURRENDER
           await actor.update({ "system.strength.value": 0 });
           await token.setFlag("star-mercs", "breaking", false);
           await token.setFlag("star-mercs", "broken", false);
+          await token.unsetFlag("star-mercs", "breakingTurn");
           html += `<div class="status-alert morale-failed"><i class="fas fa-flag"></i> SURRENDERED — ${token.name} is removed from the game!</div>`;
         }
         html += `</div>`;
@@ -757,25 +752,35 @@ export default class StarMercsCombat extends Combat {
       html += `<div class="summary-header"><i class="fas fa-brain"></i> <strong>${token.name}</strong> — Morale Check</div>`;
       html += `<div class="morale-details">RDY: ${currentReadiness} | Roll: ${roll.total}`;
       if (damageTaken > 0) html += ` +${damageTaken} dmg`;
-      if (result.autoFail) html += ` (NAT 1 AUTO-FAIL)`;
       html += ` = ${result.total} vs RDY ${currentReadiness} — ${result.passed ? "Passed" : "Failed"}</div>`;
 
       if (rerollType === "isolation") {
         html += `<div class="morale-reroll isolation">Isolation re-roll (no comms link): ${rerollRollObj.total}`;
         if (damageTaken > 0) html += ` +${damageTaken}`;
-        if (rerollEval.autoFail) html += ` (NAT 1)`;
         html += ` = ${rerollEval.total} — ${rerollEval.passed ? "Passed" : "Failed"}</div>`;
       } else if (rerollType === "command") {
         html += `<div class="morale-reroll command">Command re-roll: ${rerollRollObj.total}`;
         if (damageTaken > 0) html += ` +${damageTaken}`;
-        if (rerollEval.autoFail) html += ` (NAT 1)`;
         html += ` = ${rerollEval.total} — ${rerollEval.passed ? "Passed" : "Failed"}</div>`;
       }
+
+      // Determine trigger reason for log entry
+      const reason = wasFiredAt && damageTaken > 0 ? "fired at, took damage"
+        : wasFiredAt ? "fired at" : "took damage";
 
       if (finalPassed) {
         html += `<div class="status-update morale-passed"><i class="fas fa-check"></i> Morale holds!</div>`;
       } else {
-        html += `<div class="status-alert morale-failed"><i class="fas fa-heartbeat"></i> BREAKING — unit can only Hold or Withdraw!</div>`;
+        // Check for double-breaking: already Breaking from a previous turn
+        const alreadyBreaking = token.getFlag("star-mercs", "breaking") ?? false;
+        const breakingTurn = token.getFlag("star-mercs", "breakingTurn") ?? -1;
+
+        if (alreadyBreaking && breakingTurn !== this.round) {
+          // Second Breaking on a different turn → ROUTED (destroyed)
+          html += `<div class="status-alert morale-failed"><i class="fas fa-flag"></i> ROUTED — ${token.name} was already Breaking and failed morale again! Removed from game.</div>`;
+        } else {
+          html += `<div class="status-alert morale-failed"><i class="fas fa-heartbeat"></i> BREAKING — unit can only Hold or Withdraw!</div>`;
+        }
       }
       html += `</div>`;
 
@@ -785,12 +790,24 @@ export default class StarMercsCombat extends Combat {
         rolls: allRolls
       });
 
-      // Apply Breaking status and log
+      // Apply status and log
       if (!finalPassed) {
-        await token.setFlag("star-mercs", "breaking", true);
-        await actor.addLogEntry(`Morale FAILED: rolled ${roll.total} +${damageTaken} dmg = ${result.total} vs RDY ${currentReadiness} — BREAKING`, "morale");
+        const alreadyBreaking = token.getFlag("star-mercs", "breaking") ?? false;
+        const breakingTurn = token.getFlag("star-mercs", "breakingTurn") ?? -1;
+
+        if (alreadyBreaking && breakingTurn !== this.round) {
+          // Double Breaking → ROUTED
+          await actor.update({ "system.strength.value": 0 });
+          await token.setFlag("star-mercs", "breaking", false);
+          await token.unsetFlag("star-mercs", "breakingTurn");
+          await actor.addLogEntry(`ROUTED (${reason}): Already Breaking, failed morale again — destroyed`, "morale");
+        } else {
+          await token.setFlag("star-mercs", "breaking", true);
+          await token.setFlag("star-mercs", "breakingTurn", this.round);
+          await actor.addLogEntry(`Morale FAILED (${reason}): rolled ${roll.total} +${damageTaken} dmg = ${result.total} vs RDY ${currentReadiness} — BREAKING`, "morale");
+        }
       } else {
-        await actor.addLogEntry(`Morale passed: rolled ${roll.total} +${damageTaken} dmg = ${result.total} vs RDY ${currentReadiness}`, "morale");
+        await actor.addLogEntry(`Morale passed (${reason}): rolled ${roll.total} +${damageTaken} dmg = ${result.total} vs RDY ${currentReadiness}`, "morale");
       }
     }
   }
@@ -803,7 +820,7 @@ export default class StarMercsCombat extends Combat {
    * Run assault-specific morale resolution.
    *
    * Both the assaulting unit and the defender roll morale.
-   * Modifiers: damage taken this turn, natural 1 auto-fail.
+   * Modifiers: damage taken this turn.
    *
    * Comms chain effects apply to both sides:
    *   - Isolated: re-roll successful morale
@@ -821,6 +838,8 @@ export default class StarMercsCombat extends Combat {
    * @private
    */
   async _runAssaultMorale(damageTakenMap) {
+    const processedPairs = new Set();
+
     for (const combatant of this.combatants) {
       const actor = combatant.actor;
       if (!actor || actor.type !== "unit") continue;
@@ -833,11 +852,21 @@ export default class StarMercsCombat extends Combat {
       const assaultTargetId = token.getFlag("star-mercs", "assaultTarget");
       if (!assaultTargetId) continue;
 
+      // Check if this pair was already processed as a mutual assault
+      const pairKey = [token.id, assaultTargetId].sort().join("-");
+      if (processedPairs.has(pairKey)) continue;
+
       const attackerCanvasToken = canvas?.tokens?.get(token.id);
       const targetCanvasToken = canvas?.tokens?.get(assaultTargetId);
       if (!targetCanvasToken?.actor) continue;
       const targetActor = targetCanvasToken.actor;
       if (targetActor.system.strength.value <= 0) continue;
+
+      // Detect mutual assault
+      const targetCombatant = this.combatants.find(c => c.token?.id === assaultTargetId);
+      const isMutual = targetCombatant?.actor?.system?.currentOrder === "assault"
+        && targetCombatant?.token?.getFlag("star-mercs", "assaultTarget") === token.id;
+      if (isMutual) processedPairs.add(pairKey);
 
       // Find defender's token document
       const defenderToken = targetCanvasToken.document;
@@ -926,42 +955,55 @@ export default class StarMercsCombat extends Combat {
       }
 
       // Build chat message
+      const headerLabel = isMutual ? "Mutual Assault" : "Assault Resolution";
       let html = `<div class="star-mercs chat-card assault-morale">`;
-      html += `<div class="summary-header"><i class="fas fa-fist-raised"></i> Assault Resolution: <strong>${token.name}</strong> vs <strong>${targetCanvasToken.name}</strong></div>`;
+      html += `<div class="summary-header"><i class="fas fa-fist-raised"></i> ${headerLabel}: <strong>${token.name}</strong> vs <strong>${targetCanvasToken.name}</strong></div>`;
 
       // Attacker roll details
       html += `<div class="morale-details">${token.name}: Roll ${assaultRoll.total}`;
       if (attackerDmg > 0) html += ` +${attackerDmg} dmg`;
-      if (aResult.autoFail) html += ` (NAT 1)`;
       html += ` = ${aResult.total} vs RDY ${attackerReadiness} — ${aResult.passed ? "Passed" : "Failed"}</div>`;
       if (aRerollType === "isolation") {
         html += `<div class="morale-reroll isolation">${token.name} Isolation re-roll: ${aRerollObj.total}`;
         if (attackerDmg > 0) html += ` +${attackerDmg}`;
-        if (aRerollEval.autoFail) html += ` (NAT 1)`;
         html += ` = ${aRerollEval.total} — ${aRerollEval.passed ? "Passed" : "Failed"}</div>`;
       } else if (aRerollType === "command") {
         html += `<div class="morale-reroll command">${token.name} Command re-roll: ${aRerollObj.total}`;
         if (attackerDmg > 0) html += ` +${attackerDmg}`;
-        if (aRerollEval.autoFail) html += ` (NAT 1)`;
         html += ` = ${aRerollEval.total} — ${aRerollEval.passed ? "Passed" : "Failed"}</div>`;
       }
 
       // Defender roll details
       html += `<div class="morale-details">${targetCanvasToken.name}: Roll ${defenderRoll.total}`;
       if (defenderDmg > 0) html += ` +${defenderDmg} dmg`;
-      if (dResult.autoFail) html += ` (NAT 1)`;
       html += ` = ${dResult.total} vs RDY ${defenderReadiness} — ${dResult.passed ? "Passed" : "Failed"}</div>`;
       if (dRerollType === "isolation") {
         html += `<div class="morale-reroll isolation">${targetCanvasToken.name} Isolation re-roll: ${dRerollObj.total}`;
         if (defenderDmg > 0) html += ` +${defenderDmg}`;
-        if (dRerollEval.autoFail) html += ` (NAT 1)`;
         html += ` = ${dRerollEval.total} — ${dRerollEval.passed ? "Passed" : "Failed"}</div>`;
       } else if (dRerollType === "command") {
         html += `<div class="morale-reroll command">${targetCanvasToken.name} Command re-roll: ${dRerollObj.total}`;
         if (defenderDmg > 0) html += ` +${defenderDmg}`;
-        if (dRerollEval.autoFail) html += ` (NAT 1)`;
         html += ` = ${dRerollEval.total} — ${dRerollEval.passed ? "Passed" : "Failed"}</div>`;
       }
+
+      // Helper to apply Breaking with double-breaking check
+      const applyBreaking = async (tkn, act, label) => {
+        const alreadyBreaking = tkn.getFlag("star-mercs", "breaking") ?? false;
+        const breakingTurn = tkn.getFlag("star-mercs", "breakingTurn") ?? -1;
+        if (alreadyBreaking && breakingTurn !== this.round) {
+          // Double Breaking → ROUTED
+          await act.update({ "system.strength.value": 0 });
+          await tkn.setFlag("star-mercs", "breaking", false);
+          await tkn.unsetFlag("star-mercs", "breakingTurn");
+          await act.addLogEntry(`ROUTED: Already Breaking, failed assault morale — destroyed`, "morale");
+          return `<div class="status-alert morale-failed"><i class="fas fa-flag"></i> ROUTED — ${label} was already Breaking! Removed from game.</div>`;
+        } else {
+          await tkn.setFlag("star-mercs", "breaking", true);
+          await tkn.setFlag("star-mercs", "breakingTurn", this.round);
+          return null;
+        }
+      };
 
       if (aFinalPassed && dFinalPassed) {
         // Both pass: stalemate
@@ -970,24 +1012,31 @@ export default class StarMercsCombat extends Combat {
         // Attacker fails, defender passes: attacker Breaking, loses 2 RDY
         const newRdy = Math.max(0, actor.system.readiness.value - 2);
         await actor.update({ "system.readiness.value": newRdy });
-        await token.setFlag("star-mercs", "breaking", true);
-        html += `<div class="status-alert morale-failed"><i class="fas fa-shield-alt"></i> Assault repelled! ${token.name} is Breaking, loses 2 readiness.</div>`;
+        const routedHtml = await applyBreaking(token, actor, token.name);
+        if (routedHtml) {
+          html += routedHtml;
+        } else {
+          html += `<div class="status-alert morale-failed"><i class="fas fa-shield-alt"></i> Assault repelled! ${token.name} is Breaking, loses 2 readiness.</div>`;
+        }
       } else if (aFinalPassed && !dFinalPassed) {
         // Attacker passes, defender fails → Routing → must move 1 hex or surrender
         const newRdy = Math.max(0, targetActor.system.readiness.value - 2);
         await targetActor.update({ "system.readiness.value": newRdy });
 
-        // Check if defender can move 1 hex away (any adjacent hex without enemies)
-        const canRetreat = this._canRetreatFromAssault(targetCanvasToken, token.id);
-
-        if (canRetreat) {
-          // Defender routes 1 hex, gains Broken status
-          if (defenderToken) await defenderToken.setFlag("star-mercs", "broken", true);
-          html += `<div class="status-alert morale-failed"><i class="fas fa-running"></i> Defender routs! ${targetCanvasToken.name} must fall back 1 hex — BROKEN. Loses 2 readiness.</div>`;
+        // For mutual assault, the passing unit is the "attacker" (winner)
+        const routedHtml = await applyBreaking(defenderToken, targetActor, targetCanvasToken.name);
+        if (routedHtml) {
+          html += routedHtml;
         } else {
-          // No valid hex — SURRENDER
-          await targetActor.update({ "system.strength.value": 0 });
-          html += `<div class="status-alert morale-failed"><i class="fas fa-flag"></i> ${targetCanvasToken.name} cannot retreat — SURRENDERED! Removed from game.</div>`;
+          // Check if defender can move 1 hex away
+          const canRetreat = this._canRetreatFromAssault(targetCanvasToken, token.id);
+          if (canRetreat) {
+            if (defenderToken) await defenderToken.setFlag("star-mercs", "broken", true);
+            html += `<div class="status-alert morale-failed"><i class="fas fa-running"></i> ${isMutual ? "Loser routs!" : "Defender routs!"} ${targetCanvasToken.name} must fall back 1 hex — BROKEN. Loses 2 readiness.</div>`;
+          } else {
+            await targetActor.update({ "system.strength.value": 0 });
+            html += `<div class="status-alert morale-failed"><i class="fas fa-flag"></i> ${targetCanvasToken.name} cannot retreat — SURRENDERED! Removed from game.</div>`;
+          }
         }
       } else {
         // Both fail: each gains Breaking, loses 2 RDY
@@ -995,9 +1044,17 @@ export default class StarMercsCombat extends Combat {
         const newDefRdy = Math.max(0, targetActor.system.readiness.value - 2);
         await actor.update({ "system.readiness.value": newAtkRdy });
         await targetActor.update({ "system.readiness.value": newDefRdy });
-        await token.setFlag("star-mercs", "breaking", true);
-        if (defenderToken) await defenderToken.setFlag("star-mercs", "breaking", true);
-        html += `<div class="status-alert morale-failed"><i class="fas fa-exchange-alt"></i> Both sides falter! Each is Breaking, loses 2 readiness.</div>`;
+        const atkRoutedHtml = await applyBreaking(token, actor, token.name);
+        const defRoutedHtml = await applyBreaking(defenderToken, targetActor, targetCanvasToken.name);
+        if (atkRoutedHtml) {
+          html += atkRoutedHtml;
+        }
+        if (defRoutedHtml) {
+          html += defRoutedHtml;
+        }
+        if (!atkRoutedHtml && !defRoutedHtml) {
+          html += `<div class="status-alert morale-failed"><i class="fas fa-exchange-alt"></i> Both sides falter! Each is Breaking, loses 2 readiness.</div>`;
+        }
       }
       html += `</div>`;
 
@@ -1107,16 +1164,13 @@ export default class StarMercsCombat extends Combat {
       let html = `<div class="star-mercs chat-card morale-check withdraw-morale">`;
       html += `<div class="summary-header"><i class="fas fa-running"></i> <strong>${token.name}</strong> — Withdraw Morale Test</div>`;
       html += `<div class="morale-details">RDY: ${currentReadiness} | Roll: ${roll.total}`;
-      if (result.autoFail) html += ` (NAT 1 AUTO-FAIL)`;
       html += ` = ${result.total} vs RDY ${currentReadiness} — ${result.passed ? "Passed" : "Failed"}</div>`;
 
       if (rerollType === "isolation") {
         html += `<div class="morale-reroll isolation">Isolation re-roll (no comms link): ${rerollRollObj.total}`;
-        if (rerollEval.autoFail) html += ` (NAT 1)`;
         html += ` = ${rerollEval.total} — ${rerollEval.passed ? "Passed" : "Failed"}</div>`;
       } else if (rerollType === "command") {
         html += `<div class="morale-reroll command">Command re-roll: ${rerollRollObj.total}`;
-        if (rerollEval.autoFail) html += ` (NAT 1)`;
         html += ` = ${rerollEval.total} — ${rerollEval.passed ? "Passed" : "Failed"}</div>`;
       }
 
@@ -1334,6 +1388,8 @@ export default class StarMercsCombat extends Combat {
    */
   async _runAssaultStep() {
     let assaultCount = 0;
+    const processedPairs = new Set();
+
     for (const combatant of this.combatants) {
       const actor = combatant.actor;
       if (!actor || actor.type !== "unit") continue;
@@ -1346,12 +1402,48 @@ export default class StarMercsCombat extends Combat {
       const assaultTargetId = token.getFlag("star-mercs", "assaultTarget");
       if (!assaultTargetId) continue;
 
+      // Check if this pair was already processed as a mutual assault
+      const pairKey = [token.id, assaultTargetId].sort().join("-");
+      if (processedPairs.has(pairKey)) {
+        assaultCount++;
+        continue;
+      }
+
       const attackerToken = canvas.tokens.get(token.id);
       const targetToken = canvas.tokens.get(assaultTargetId);
       if (!attackerToken || !targetToken) continue;
 
-      // Already adjacent — no movement needed
+      // Detect mutual assault (target is also assaulting this unit)
+      const targetCombatant = this.combatants.find(c => c.token?.id === assaultTargetId);
+      const isMutual = targetCombatant?.actor?.system?.currentOrder === "assault"
+        && targetCombatant?.token?.getFlag("star-mercs", "assaultTarget") === token.id;
+
+      if (isMutual) {
+        processedPairs.add(pairKey);
+      }
+
+      // Helper: fire weapons at a target
+      const fireAssaultWeapons = async (firingActor, firingToken, targetTkn) => {
+        const weapons = firingActor.items.filter(
+          i => i.type === "weapon" && !i.system.artillery && !i.system.aircraft
+        );
+        for (const weapon of weapons) {
+          const currentToken = canvas.tokens.get(firingToken.id ?? firingToken.document?.id);
+          if (!currentToken) break;
+          const dist = StarMercsActor.getHexDistance(currentToken, targetTkn);
+          if (dist <= weapon.system.range) {
+            await firingActor.rollAttack(weapon, targetTkn.actor);
+          }
+        }
+      };
+
+      // Already adjacent — no movement needed, but still fire weapons
       if (areAdjacent(attackerToken, targetToken)) {
+        await fireAssaultWeapons(actor, attackerToken, targetToken);
+        // If mutual, the target also fires back
+        if (isMutual && targetCombatant?.actor && targetCombatant.actor.system.strength.value > 0) {
+          await fireAssaultWeapons(targetCombatant.actor, targetToken, attackerToken);
+        }
         assaultCount++;
         continue;
       }
@@ -1373,7 +1465,9 @@ export default class StarMercsCombat extends Combat {
       const hexesMoved = Math.max(0, distance - 1);
 
       // Move the token
-      const topLeft = canvas.grid.getTopLeftPoint(adjacentHex);
+      const topLeft = canvas.grid.getSnappedPoint(adjacentHex, {
+        mode: CONST.GRID_SNAPPING_MODES.TOP_LEFT_CORNER
+      });
       await token.update({ x: topLeft.x, y: topLeft.y });
 
       // Track movement for fuel consumption
@@ -1394,17 +1488,11 @@ export default class StarMercsCombat extends Combat {
       }
 
       // Fire weapons at the assault target
-      const weapons = actor.items.filter(
-        i => i.type === "weapon" && !i.system.artillery && !i.system.aircraft
-      );
-      for (const weapon of weapons) {
-        // Check range from new position
-        const newAttackerToken = canvas.tokens.get(token.id);
-        if (!newAttackerToken) break;
-        const dist = StarMercsActor.getHexDistance(newAttackerToken, targetToken);
-        if (dist <= weapon.system.range) {
-          await actor.rollAttack(weapon, targetToken.actor);
-        }
+      await fireAssaultWeapons(actor, attackerToken, targetToken);
+
+      // If mutual assault, the target also fires
+      if (isMutual && targetCombatant?.actor && targetCombatant.actor.system.strength.value > 0) {
+        await fireAssaultWeapons(targetCombatant.actor, targetToken, attackerToken);
       }
 
       assaultCount++;
@@ -1515,14 +1603,24 @@ export default class StarMercsCombat extends Combat {
       const canvasToken = canvas.tokens.get(mover.token.id);
       if (!canvasToken) continue;
 
-      const path = computeHexPath(canvasToken.center, mover.dest);
+      // Snap destination to hex center for accurate path computation
+      const snappedDest = snapToHexCenter(mover.dest);
+      const path = computeHexPath(canvasToken.center, snappedDest);
+
+      // Skip if path is empty (already at destination)
+      if (path.length === 0) {
+        movedCount++;
+        continue;
+      }
 
       if (mover.contestLost) {
         // Move to last hex before the contested destination
         const safePath = path.slice(0, -1);
         if (safePath.length > 0) {
           const safeHex = safePath[safePath.length - 1];
-          const topLeft = canvas.grid.getTopLeftPoint(safeHex);
+          const topLeft = canvas.grid.getSnappedPoint(safeHex, {
+            mode: CONST.GRID_SNAPPING_MODES.TOP_LEFT_CORNER
+          });
           await mover.token.update({ x: topLeft.x, y: topLeft.y });
           await mover.token.setFlag("star-mercs", "movementUsed", safePath.length);
         }
@@ -1539,12 +1637,12 @@ export default class StarMercsCombat extends Combat {
       }
 
       // Move token to final destination
-      if (path.length > 0) {
-        const finalHex = path[path.length - 1];
-        const topLeft = canvas.grid.getTopLeftPoint(finalHex);
-        await mover.token.update({ x: topLeft.x, y: topLeft.y });
-        await mover.token.setFlag("star-mercs", "movementUsed", path.length);
-      }
+      const finalHex = path[path.length - 1];
+      const topLeft = canvas.grid.getSnappedPoint(finalHex, {
+        mode: CONST.GRID_SNAPPING_MODES.TOP_LEFT_CORNER
+      });
+      await mover.token.update({ x: topLeft.x, y: topLeft.y });
+      await mover.token.setFlag("star-mercs", "movementUsed", path.length);
       movedCount++;
     }
 

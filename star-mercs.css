@@ -1801,12 +1801,64 @@
 }
 
 /* ---------------------------------------- */
-/*  Text Wrapping Fixes                     */
+/*  Chat Action Buttons                     */
+/* ---------------------------------------- */
+
+.star-mercs.chat-card .overwatch-fire-btn,
+.star-mercs.chat-card .overwatch-skip-btn,
+.star-mercs.chat-card .maneuver-fire-btn,
+.star-mercs.chat-card .next-tactical-step-btn {
+  background: var(--sm-primary);
+  border: 1px solid var(--sm-primary-light);
+  color: #ffffff;
+  padding: 6px 16px;
+  border-radius: var(--sm-radius);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: bold;
+  transition: background 0.15s;
+  margin-top: 6px;
+}
+
+.star-mercs.chat-card .overwatch-fire-btn:hover,
+.star-mercs.chat-card .maneuver-fire-btn:hover,
+.star-mercs.chat-card .next-tactical-step-btn:hover {
+  background: var(--sm-primary-light);
+}
+
+.star-mercs.chat-card .overwatch-fire-btn:disabled,
+.star-mercs.chat-card .overwatch-skip-btn:disabled,
+.star-mercs.chat-card .maneuver-fire-btn:disabled,
+.star-mercs.chat-card .next-tactical-step-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.star-mercs.chat-card .overwatch-skip-btn {
+  background: var(--sm-bg-light);
+  border-color: var(--sm-border);
+}
+
+.star-mercs.chat-card .overwatch-skip-btn:hover {
+  background: var(--sm-bg-medium);
+}
+
+/* ---------------------------------------- */
+/*  Text Wrapping & Alignment Fixes         */
 /* ---------------------------------------- */
 
 .star-mercs.chat-card {
   word-wrap: break-word;
   overflow-wrap: break-word;
+}
+
+.star-mercs.chat-card .combatants {
+  text-align: left;
+}
+
+.star-mercs.chat-card .morale-details,
+.star-mercs.chat-card .morale-reroll {
+  text-align: left;
 }
 
 .star-mercs .damage-breakdown {
