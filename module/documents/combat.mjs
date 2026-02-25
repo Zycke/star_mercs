@@ -20,13 +20,14 @@ export default class StarMercsCombat extends Combat {
 
   /** Tactical sub-step definitions, executed in order during the tactical phase. */
   static TACTICAL_STEPS = [
-    { key: "withdraw_morale", label: "Withdraw Morale Checks" },
-    { key: "artillery",       label: "Artillery Fire" },
-    { key: "airstrikes",      label: "Air Strikes" },
-    { key: "weapons_fire",    label: "Weapons Fire" },
-    { key: "assault",         label: "Assault Resolution" },
-    { key: "movement",        label: "Unit Movement" },
-    { key: "maneuver_fire",   label: "Maneuvering Unit Fire" }
+    { key: "withdraw_morale",  label: "Withdraw Morale Checks" },
+    { key: "artillery",        label: "Artillery Fire" },
+    { key: "airstrikes",       label: "Air Strikes" },
+    { key: "weapons_fire",     label: "Weapons Fire" },
+    { key: "assault_adjacent", label: "Assault (Adjacent)" },
+    { key: "movement",         label: "Unit Movement" },
+    { key: "assault_move",     label: "Assault (Move & Attack)" },
+    { key: "maneuver_fire",    label: "Maneuvering Unit Fire" }
   ];
 
   /** Per-phase permission rules. */
@@ -73,6 +74,7 @@ export default class StarMercsCombat extends Combat {
     });
     const result = await super.startCombat();
     this._announcePhase();
+    this._refreshEngagementStatus();
     return result;
   }
 
@@ -153,6 +155,7 @@ export default class StarMercsCombat extends Combat {
     });
     const result = await super.nextRound();
     this._announcePhase();
+    this._refreshEngagementStatus();
     return result;
   }
 
@@ -206,6 +209,19 @@ export default class StarMercsCombat extends Combat {
         return {
           allowed: false,
           reason: `${order.name} order does not allow movement.`
+        };
+      }
+    }
+
+    // Consolidation phase: only withdraw and assault retreat movement allowed
+    if (this.phase === "consolidation" && actor?.type === "unit") {
+      const order = actor.system.currentOrder;
+      const token = actor.getActiveTokens()?.[0]?.document;
+      const isAssaultRetreat = token?.getFlag("star-mercs", "assaultRetreat") ?? false;
+      if (order !== "withdraw" && !isAssaultRetreat) {
+        return {
+          allowed: false,
+          reason: "Only withdraw and assault retreat movement allowed during consolidation."
         };
       }
     }
@@ -330,6 +346,10 @@ export default class StarMercsCombat extends Combat {
       const actor = combatant.actor;
       if (!actor || actor.type !== "unit") continue;
       const token = combatant.token;
+      const unitName = token?.name ?? actor.name;
+
+      // Accumulate HTML sections for this unit's combined card
+      const sections = [];
 
       // 1. Apply pending damage and record how much each unit took
       if (token) {
@@ -353,14 +373,11 @@ export default class StarMercsCombat extends Combat {
           const hitsDesc = pending.hits?.map(h => `${h.source} (${h.weapon})`).join(", ") ?? "unknown";
           await actor.addLogEntry(`Took -${pending.strength} STR, -${pending.readiness} RDY from: ${hitsDesc}`, "damage");
 
-          await ChatMessage.create({
-            content: `<div class="star-mercs chat-card consolidation-damage">
-              <div class="summary-header"><i class="fas fa-skull"></i> <strong>${token.name}</strong> — Damage Applied</div>
-              <div class="summary-damage">-${pending.strength} STR, -${pending.readiness} RDY</div>
-              <div class="status-update">${statusText}</div>
-            </div>`,
-            speaker: { alias: "Star Mercs" }
-          });
+          sections.push(`<div class="consolidation-section damage">
+            <div class="consolidation-section-header"><i class="fas fa-skull"></i> Damage Applied</div>
+            <div class="summary-damage">-${pending.strength} STR, -${pending.readiness} RDY</div>
+            <div class="status-update">${statusText}</div>
+          </div>`);
 
           await token.unsetFlag("star-mercs", "pendingDamage");
         }
@@ -376,12 +393,9 @@ export default class StarMercsCombat extends Combat {
         if (newRdy !== currentRdy) {
           await actor.update({ "system.readiness.value": newRdy });
           const label = cost > 0 ? `+${cost}` : `${cost}`;
-          await ChatMessage.create({
-            content: `<div class="star-mercs chat-card consolidation-readiness">
-              <div class="summary-header"><i class="fas fa-battery-half"></i> <strong>${token?.name ?? actor.name}</strong> — Order Readiness: ${label} (${order.name})</div>
-            </div>`,
-            speaker: { alias: "Star Mercs" }
-          });
+          sections.push(`<div class="consolidation-section readiness">
+            <div class="consolidation-section-header"><i class="fas fa-battery-half"></i> Order Readiness: ${label} (${order.name})</div>
+          </div>`);
         }
       }
 
@@ -394,12 +408,9 @@ export default class StarMercsCombat extends Combat {
           );
           if (entrenchedTrait && !entrenchedTrait.system.active) {
             await entrenchedTrait.update({ "system.active": true });
-            await ChatMessage.create({
-              content: `<div class="star-mercs chat-card consolidation-readiness">
-                <div class="summary-header"><i class="fas fa-shield-alt"></i> <strong>${token?.name ?? actor.name}</strong> — Gained Entrenched</div>
-              </div>`,
-              speaker: { alias: "Star Mercs" }
-            });
+            sections.push(`<div class="consolidation-section entrench">
+              <div class="consolidation-section-header"><i class="fas fa-shield-alt"></i> Gained Entrenched</div>
+            </div>`);
           }
         }
       }
@@ -412,12 +423,9 @@ export default class StarMercsCombat extends Combat {
           const newRdy = Math.max(0, currentRdy - 1);
           if (newRdy !== currentRdy) {
             await actor.update({ "system.readiness.value": newRdy });
-            await ChatMessage.create({
-              content: `<div class="star-mercs chat-card consolidation-readiness">
-                <div class="summary-header"><i class="fas fa-dizzy"></i> <strong>${token.name}</strong> — Disordered Withdrawal: -1 readiness</div>
-              </div>`,
-              speaker: { alias: "Star Mercs" }
-            });
+            sections.push(`<div class="consolidation-section readiness">
+              <div class="consolidation-section-header"><i class="fas fa-dizzy"></i> Disordered Withdrawal: -1 readiness</div>
+            </div>`);
           }
         }
       }
@@ -494,11 +502,18 @@ export default class StarMercsCombat extends Combat {
       // Apply all supply updates at once
       if (Object.keys(supplyUpdate).length > 0) {
         await actor.update(supplyUpdate);
+        sections.push(`<div class="consolidation-section supply">
+          <div class="consolidation-section-header"><i class="fas fa-box"></i> Supply Consumed</div>
+          <div class="status-update">${consumedParts.join(" | ")}</div>
+        </div>`);
+      }
 
+      // Post ONE combined chat card for this unit (if there are any sections)
+      if (sections.length > 0) {
         await ChatMessage.create({
-          content: `<div class="star-mercs chat-card consolidation-supply">
-            <div class="summary-header"><i class="fas fa-box"></i> <strong>${token?.name ?? actor.name}</strong> — Supply Consumed</div>
-            <div class="status-update">${consumedParts.join(" | ")}</div>
+          content: `<div class="star-mercs chat-card consolidation-combined">
+            <div class="summary-header"><i class="fas fa-cog"></i> <strong>${unitName}</strong> — Consolidation</div>
+            ${sections.join("\n")}
           </div>`,
           speaker: { alias: "Star Mercs" }
         });
@@ -1216,8 +1231,11 @@ export default class StarMercsCombat extends Combat {
       case "weapons_fire":
         await this._runStandardWeaponsFire();
         break;
-      case "assault":
-        await this._runAssaultStep();
+      case "assault_adjacent":
+        await this._runAssaultStep("adjacent");
+        break;
+      case "assault_move":
+        await this._runAssaultStep("move");
         break;
       case "movement":
         await this._runMovementStep();
@@ -1382,13 +1400,29 @@ export default class StarMercsCombat extends Combat {
   /* ---------------------------------------- */
 
   /**
-   * Execute the assault step: move assaulting units adjacent to their targets.
-   * Deducts -1 readiness per hex moved.
+   * Execute the assault step for a given mode.
+   * @param {"adjacent"|"move"} mode - "adjacent" for pre-movement assaults (already adjacent),
+   *   "move" for post-movement assaults (need to move to reach target).
    * @private
    */
-  async _runAssaultStep() {
+  async _runAssaultStep(mode = "adjacent") {
     let assaultCount = 0;
     const processedPairs = new Set();
+
+    // Helper: fire weapons at a target
+    const fireAssaultWeapons = async (firingActor, firingToken, targetTkn) => {
+      const weapons = firingActor.items.filter(
+        i => i.type === "weapon" && !i.system.artillery && !i.system.aircraft
+      );
+      for (const weapon of weapons) {
+        const currentToken = canvas.tokens.get(firingToken.id ?? firingToken.document?.id);
+        if (!currentToken) break;
+        const dist = StarMercsActor.getHexDistance(currentToken, targetTkn);
+        if (dist <= weapon.system.range) {
+          await firingActor.rollAttack(weapon, targetTkn.actor);
+        }
+      }
+    };
 
     for (const combatant of this.combatants) {
       const actor = combatant.actor;
@@ -1418,29 +1452,20 @@ export default class StarMercsCombat extends Combat {
       const isMutual = targetCombatant?.actor?.system?.currentOrder === "assault"
         && targetCombatant?.token?.getFlag("star-mercs", "assaultTarget") === token.id;
 
+      const adjacent = areAdjacent(attackerToken, targetToken);
+
+      // Filter by mode: "adjacent" only handles already-adjacent assaults,
+      // "move" only handles assaults that require movement
+      if (mode === "adjacent" && !adjacent) continue;
+      if (mode === "move" && adjacent) continue;
+
       if (isMutual) {
         processedPairs.add(pairKey);
       }
 
-      // Helper: fire weapons at a target
-      const fireAssaultWeapons = async (firingActor, firingToken, targetTkn) => {
-        const weapons = firingActor.items.filter(
-          i => i.type === "weapon" && !i.system.artillery && !i.system.aircraft
-        );
-        for (const weapon of weapons) {
-          const currentToken = canvas.tokens.get(firingToken.id ?? firingToken.document?.id);
-          if (!currentToken) break;
-          const dist = StarMercsActor.getHexDistance(currentToken, targetTkn);
-          if (dist <= weapon.system.range) {
-            await firingActor.rollAttack(weapon, targetTkn.actor);
-          }
-        }
-      };
-
-      // Already adjacent — no movement needed, but still fire weapons
-      if (areAdjacent(attackerToken, targetToken)) {
+      if (adjacent) {
+        // Already adjacent — no movement needed, fire weapons
         await fireAssaultWeapons(actor, attackerToken, targetToken);
-        // If mutual, the target also fires back
         if (isMutual && targetCombatant?.actor && targetCombatant.actor.system.strength.value > 0) {
           await fireAssaultWeapons(targetCombatant.actor, targetToken, attackerToken);
         }
@@ -1448,7 +1473,7 @@ export default class StarMercsCombat extends Combat {
         continue;
       }
 
-      // Find the best adjacent hex to the target
+      // Move-mode: find adjacent hex, move there, then fire
       const adjacentHex = findBestAdjacentHex(targetToken, attackerToken);
       if (!adjacentHex) {
         await ChatMessage.create({
@@ -1464,10 +1489,11 @@ export default class StarMercsCombat extends Combat {
       const distance = StarMercsActor.getHexDistance(attackerToken, targetToken);
       const hexesMoved = Math.max(0, distance - 1);
 
-      // Move the token
-      const topLeft = canvas.grid.getSnappedPoint(adjacentHex, {
-        mode: CONST.GRID_SNAPPING_MODES.TOP_LEFT_CORNER
-      });
+      // Derive top-left from hex center using shape centroid
+      const shape = canvas.grid.getShape();
+      const shapeCX = shape.reduce((sum, p) => sum + p.x, 0) / shape.length;
+      const shapeCY = shape.reduce((sum, p) => sum + p.y, 0) / shape.length;
+      const topLeft = { x: adjacentHex.x - shapeCX, y: adjacentHex.y - shapeCY };
       await token.update({ x: topLeft.x, y: topLeft.y });
 
       // Track movement for fuel consumption
@@ -1498,9 +1524,13 @@ export default class StarMercsCombat extends Combat {
       assaultCount++;
     }
 
+    // Refresh engagement status after assault movements
+    this._refreshEngagementStatus();
+
+    const stepLabel = mode === "adjacent" ? "Assault (Adjacent)" : "Assault (Move & Attack)";
     await ChatMessage.create({
       content: `<div class="star-mercs chat-card tactical-step">
-        <div class="summary-header"><i class="fas fa-fist-raised"></i> Assault Step Complete</div>
+        <div class="summary-header"><i class="fas fa-fist-raised"></i> ${stepLabel} Complete</div>
         <div class="status-update">${assaultCount} assault${assaultCount !== 1 ? "s" : ""} resolved.</div>
       </div>`,
       speaker: { alias: "Star Mercs" }
@@ -1613,14 +1643,17 @@ export default class StarMercsCombat extends Combat {
         continue;
       }
 
+      // Compute shape centroid for center→top-left conversion
+      const shape = canvas.grid.getShape();
+      const shapeCX = shape.reduce((sum, p) => sum + p.x, 0) / shape.length;
+      const shapeCY = shape.reduce((sum, p) => sum + p.y, 0) / shape.length;
+
       if (mover.contestLost) {
         // Move to last hex before the contested destination
         const safePath = path.slice(0, -1);
         if (safePath.length > 0) {
           const safeHex = safePath[safePath.length - 1];
-          const topLeft = canvas.grid.getSnappedPoint(safeHex, {
-            mode: CONST.GRID_SNAPPING_MODES.TOP_LEFT_CORNER
-          });
+          const topLeft = { x: safeHex.x - shapeCX, y: safeHex.y - shapeCY };
           await mover.token.update({ x: topLeft.x, y: topLeft.y });
           await mover.token.setFlag("star-mercs", "movementUsed", safePath.length);
         }
@@ -1638,9 +1671,7 @@ export default class StarMercsCombat extends Combat {
 
       // Move token to final destination
       const finalHex = path[path.length - 1];
-      const topLeft = canvas.grid.getSnappedPoint(finalHex, {
-        mode: CONST.GRID_SNAPPING_MODES.TOP_LEFT_CORNER
-      });
+      const topLeft = { x: finalHex.x - shapeCX, y: finalHex.y - shapeCY };
       await mover.token.update({ x: topLeft.x, y: topLeft.y });
       await mover.token.setFlag("star-mercs", "movementUsed", path.length);
       movedCount++;

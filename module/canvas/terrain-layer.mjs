@@ -48,6 +48,10 @@ export default class TerrainLayer extends PIXI.Container {
     const shape = canvas.grid.getShape();
     if (!shape || shape.length < 3) return;
 
+    // Compute shape centroid for reliable center→top-left conversion
+    const shapeCenterX = shape.reduce((sum, p) => sum + p.x, 0) / shape.length;
+    const shapeCenterY = shape.reduce((sum, p) => sum + p.y, 0) / shape.length;
+
     for (const [key, terrainType] of Object.entries(terrainMap)) {
       const config = terrainConfig[terrainType];
       if (!config) continue;
@@ -56,10 +60,8 @@ export default class TerrainLayer extends PIXI.Container {
       const [xStr, yStr] = key.split(",");
       const center = { x: parseFloat(xStr), y: parseFloat(yStr) };
 
-      // Get top-left from center using snapping for precision
-      const topLeft = canvas.grid.getSnappedPoint(center, {
-        mode: CONST.GRID_SNAPPING_MODES.TOP_LEFT_CORNER
-      });
+      // Derive top-left from center minus shape centroid (self-consistent with shape vertices)
+      const topLeft = { x: center.x - shapeCenterX, y: center.y - shapeCenterY };
 
       this._drawHexOverlay(topLeft, shape, config.color ?? 0x888888);
       this._drawLabel(center, config.label ?? terrainType);
