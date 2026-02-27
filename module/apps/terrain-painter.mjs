@@ -28,9 +28,21 @@ export default class TerrainPainter extends FormApplication {
   constructor(...args) {
     super(...args);
     this._selectedTerrain = "plain";
+    this._selectedElevation = 0;
+    this._selectedRoad = false;
     this._active = false;
-    this._canvasClickHandler = null;
-    this._canvasContextHandler = null;
+
+    // Bound event handlers (assigned in _startPainting, removed in _stopPainting)
+    this._onPointerDown = null;
+    this._onRightDown = null;
+    this._onPointerMove = null;
+    this._onPointerUp = null;
+
+    // Drag state
+    this._isDragging = false;
+    this._isErasing = false;
+    this._dragVisitedKeys = new Set();
+    this._pendingTerrainMap = null;
   }
 
   /** @override */
@@ -42,6 +54,9 @@ export default class TerrainPainter extends FormApplication {
     return {
       terrainChoices,
       selectedTerrain: this._selectedTerrain,
+      selectedElevation: this._selectedElevation,
+      selectedRoad: this._selectedRoad,
+      maxElevation: CONFIG.STARMERCS.maxElevation ?? 5,
       isActive: this._active
     };
   }
@@ -51,6 +66,10 @@ export default class TerrainPainter extends FormApplication {
     if (formData.selectedTerrain) {
       this._selectedTerrain = formData.selectedTerrain;
     }
+    if (formData.selectedElevation != null) {
+      this._selectedElevation = Math.max(0, Math.min(CONFIG.STARMERCS.maxElevation ?? 5, Number(formData.selectedElevation) || 0));
+    }
+    this._selectedRoad = !!formData.selectedRoad;
   }
 
   /** @override */
@@ -80,61 +99,123 @@ export default class TerrainPainter extends FormApplication {
   }
 
   /**
-   * Activate painting mode: register canvas click handlers.
+   * Activate painting mode: register canvas event handlers for click-and-drag painting.
+   * Left-click/drag paints terrain, right-click/drag erases terrain.
+   * Changes are batched and flushed to the scene flag on pointer-up.
    * @private
    */
   _startPainting() {
-    if (this._canvasClickHandler) return;
+    if (this._onPointerDown) return;
 
-    this._canvasClickHandler = async (event) => {
-      if (!this._active) return;
-      const pos = event.data?.getLocalPosition(canvas.stage);
-      if (!pos) return;
-      const center = snapToHexCenter(pos);
-      const key = hexKey(center);
-
-      const terrainMap = foundry.utils.deepClone(
-        canvas.scene.getFlag("star-mercs", "terrainMap") ?? {}
-      );
-      terrainMap[key] = this._selectedTerrain;
-      await canvas.scene.setFlag("star-mercs", "terrainMap", terrainMap);
-      game.starmercs?.terrainLayer?.drawTerrain();
+    this._onPointerDown = (event) => {
+      if (!this._active || event.data?.button !== 0) return;
+      this._beginDrag(event, false);
     };
 
-    this._canvasContextHandler = async (event) => {
+    this._onRightDown = (event) => {
       if (!this._active) return;
       event.preventDefault?.();
-      const pos = event.data?.getLocalPosition(canvas.stage);
-      if (!pos) return;
-      const center = snapToHexCenter(pos);
-      const key = hexKey(center);
-
-      const terrainMap = foundry.utils.deepClone(
-        canvas.scene.getFlag("star-mercs", "terrainMap") ?? {}
-      );
-      delete terrainMap[key];
-      await canvas.scene.setFlag("star-mercs", "terrainMap", terrainMap);
-      game.starmercs?.terrainLayer?.drawTerrain();
+      this._beginDrag(event, true);
     };
 
-    canvas.stage.on("pointerdown", this._canvasClickHandler);
-    canvas.stage.on("rightdown", this._canvasContextHandler);
-    ui.notifications.info("Terrain Painter active: left-click to paint, right-click to erase.");
+    this._onPointerMove = (event) => {
+      if (!this._active || !this._isDragging) return;
+      const pos = event.data?.getLocalPosition(canvas.stage);
+      if (!pos) return;
+      this._applyToHex(pos);
+    };
+
+    this._onPointerUp = async () => {
+      if (!this._isDragging) return;
+      this._isDragging = false;
+
+      if (this._pendingTerrainMap && this._dragVisitedKeys.size > 0) {
+        await canvas.scene.setFlag("star-mercs", "terrainMap", this._pendingTerrainMap);
+        game.starmercs?.terrainLayer?.drawTerrain();
+      }
+
+      this._dragVisitedKeys.clear();
+      this._pendingTerrainMap = null;
+    };
+
+    canvas.stage.on("pointerdown", this._onPointerDown);
+    canvas.stage.on("rightdown", this._onRightDown);
+    canvas.stage.on("pointermove", this._onPointerMove);
+    canvas.stage.on("pointerup", this._onPointerUp);
+    canvas.stage.on("pointerupoutside", this._onPointerUp);
+    ui.notifications.info("Terrain Painter active: click/drag to paint, right-click/drag to erase.");
   }
 
   /**
-   * Deactivate painting mode: remove canvas click handlers.
+   * Begin a drag operation (paint or erase).
+   * @param {PIXI.InteractionEvent} event
+   * @param {boolean} erasing - True if erasing, false if painting.
+   * @private
+   */
+  _beginDrag(event, erasing) {
+    this._isDragging = true;
+    this._isErasing = erasing;
+    this._dragVisitedKeys.clear();
+    this._pendingTerrainMap = foundry.utils.deepClone(
+      canvas.scene.getFlag("star-mercs", "terrainMap") ?? {}
+    );
+
+    const pos = event.data?.getLocalPosition(canvas.stage);
+    if (pos) this._applyToHex(pos);
+  }
+
+  /**
+   * Paint or erase a single hex during a drag operation.
+   * Skips hexes already visited in the current drag stroke.
+   * @param {{x: number, y: number}} pos - Canvas position.
+   * @private
+   */
+  _applyToHex(pos) {
+    const center = snapToHexCenter(pos);
+    const key = hexKey(center);
+    if (this._dragVisitedKeys.has(key)) return;
+
+    this._dragVisitedKeys.add(key);
+
+    if (this._isErasing) {
+      delete this._pendingTerrainMap[key];
+    } else {
+      this._pendingTerrainMap[key] = {
+        type: this._selectedTerrain,
+        elevation: this._selectedElevation,
+        road: this._selectedRoad
+      };
+    }
+
+    // Live preview using the pending map (not yet saved to the scene flag)
+    game.starmercs?.terrainLayer?.drawTerrain(this._pendingTerrainMap);
+  }
+
+  /**
+   * Deactivate painting mode: remove canvas event handlers.
    * @private
    */
   _stopPainting() {
-    if (this._canvasClickHandler) {
-      canvas.stage.off("pointerdown", this._canvasClickHandler);
-      this._canvasClickHandler = null;
+    if (this._onPointerDown) {
+      canvas.stage.off("pointerdown", this._onPointerDown);
+      this._onPointerDown = null;
     }
-    if (this._canvasContextHandler) {
-      canvas.stage.off("rightdown", this._canvasContextHandler);
-      this._canvasContextHandler = null;
+    if (this._onRightDown) {
+      canvas.stage.off("rightdown", this._onRightDown);
+      this._onRightDown = null;
     }
+    if (this._onPointerMove) {
+      canvas.stage.off("pointermove", this._onPointerMove);
+      this._onPointerMove = null;
+    }
+    if (this._onPointerUp) {
+      canvas.stage.off("pointerup", this._onPointerUp);
+      canvas.stage.off("pointerupoutside", this._onPointerUp);
+      this._onPointerUp = null;
+    }
+    this._isDragging = false;
+    this._pendingTerrainMap = null;
+    this._dragVisitedKeys.clear();
     ui.notifications.info("Terrain Painter deactivated.");
   }
 

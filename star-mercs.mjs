@@ -20,6 +20,7 @@ import TerrainPainter from "./module/apps/terrain-painter.mjs";
 import TeamSettingsForm from "./module/apps/team-settings.mjs";
 import * as detection from "./module/detection.mjs";
 import DetectionLayer from "./module/canvas/detection-layer.mjs";
+import MovementPathLayer from "./module/canvas/movement-path-layer.mjs";
 
 /* ============================================ */
 /*  Foundry VTT Initialization                  */
@@ -278,6 +279,15 @@ Hooks.on("canvasReady", () => {
   game.starmercs.detectionLayer = detectionLayer;
   canvas.interface.addChild(detectionLayer);
   detectionLayer.drawDetection();
+
+  // Movement path overlay
+  const previousMovementPathLayer = game.starmercs.movementPathLayer;
+  if (previousMovementPathLayer) {
+    previousMovementPathLayer.destroy({ children: true });
+  }
+  const movementPathLayer = new MovementPathLayer();
+  game.starmercs.movementPathLayer = movementPathLayer;
+  canvas.interface.addChild(movementPathLayer);
 });
 
 /** Redraw arrows when a token is visually refreshed (position change, etc.). */
@@ -312,50 +322,23 @@ Hooks.on("preUpdateToken", (tokenDoc, changes, options, userId) => {
     return false;
   }
 
-  // Tactical phase: enforce speed limit and fuel check
+  // Tactical phase: enforce MP limit, terrain, elevation, and fuel checks
   if (combat.phase === "tactical") {
-    // Calculate actual hex distance of the proposed move
     const currentToken = canvas.tokens?.get(tokenDoc.id);
     if (!currentToken) return true;
     const currentCenter = currentToken.center;
     const newX = changes.x ?? tokenDoc.x;
     const newY = changes.y ?? tokenDoc.y;
     const newCenter = { x: newX + (currentToken.w / 2), y: newY + (currentToken.h / 2) };
-    const ray = new Ray(currentCenter, newCenter);
-    const distance = canvas.grid.measureDistances([{ ray }], { gridSpaces: true })[0];
-    const gridDistance = canvas.scene.grid.distance || 1;
-    const hexesMoved = Math.max(1, Math.round(distance / gridDistance));
+    const destSnapped = hexUtils.snapToHexCenter(newCenter);
 
-    const movementUsed = tokenDoc.getFlag("star-mercs", "movementUsed") ?? 0;
-    let speed = actor.system.speed ?? 0;
-
-    // Forced March and other orders with speedMultiplier
-    const orderConfig = CONFIG.STARMERCS.orders?.[actor.system.currentOrder];
-    if (orderConfig?.speedMultiplier) {
-      speed *= orderConfig.speedMultiplier;
-    }
-
-    if (speed > 0 && (movementUsed + hexesMoved) > speed) {
-      ui.notifications.warn(
-        `This unit has used all ${speed} hexes of movement this phase.`
-      );
+    // Compute hex path and validate (terrain, elevation, enemy occupancy)
+    const path = hexUtils.computeHexPath(currentCenter, destSnapped);
+    const pathValidation = hexUtils.validatePath(currentToken, path);
+    if (!pathValidation.valid) {
+      ui.notifications.warn(pathValidation.reason);
       return false;
     }
-
-    // Check if unit has fuel to move
-    const fuelPerHex = actor.system.fuelPerHex ?? 0;
-    if (fuelPerHex > 0) {
-      const fuelRemaining = actor.system.supply?.fuel?.current ?? 0;
-      const fuelNeeded = (movementUsed + hexesMoved) * fuelPerHex;
-      if (fuelNeeded > fuelRemaining) {
-        ui.notifications.warn("Cannot move — not enough fuel remaining.");
-        return false;
-      }
-    }
-
-    // --- Hex blocking: cannot end in an occupied hex or pass through enemy hexes ---
-    const destCenter = { x: newX + (currentToken.w / 2), y: newY + (currentToken.h / 2) };
-    const destSnapped = hexUtils.snapToHexCenter(destCenter);
 
     // Cannot end in a hex occupied by another living unit
     const tokensAtDest = hexUtils.getTokensAtHex(destSnapped);
@@ -365,17 +348,42 @@ Hooks.on("preUpdateToken", (tokenDoc, changes, options, userId) => {
       return false;
     }
 
-    // Cannot maneuver through a hex containing an enemy unit
-    const myTeam = actor.system.team ?? "a";
-    const path = hexUtils.computeHexPath(currentCenter, destSnapped);
-    const pathValidation = hexUtils.validatePath(currentToken, path);
-    if (!pathValidation.valid) {
-      ui.notifications.warn(pathValidation.reason);
+    // Calculate MP cost for the path
+    const { totalCost, passable, reason: costReason } = hexUtils.calculatePathCost(currentCenter, path, actor);
+    if (!passable) {
+      ui.notifications.warn(costReason);
       return false;
     }
 
-    // Pass computed distance to updateToken hook via options
-    options._starMercsHexesMoved = hexesMoved;
+    const mpUsed = tokenDoc.getFlag("star-mercs", "movementUsed") ?? 0;
+    let maxMP = actor.system.movement ?? 0;
+
+    // Forced March and other orders with speedMultiplier
+    const orderConfig = CONFIG.STARMERCS.orders?.[actor.system.currentOrder];
+    if (orderConfig?.speedMultiplier) {
+      maxMP *= orderConfig.speedMultiplier;
+    }
+
+    if (maxMP > 0 && (mpUsed + totalCost) > maxMP) {
+      ui.notifications.warn(
+        `Not enough MP: need ${totalCost}, have ${maxMP - mpUsed} remaining.`
+      );
+      return false;
+    }
+
+    // Check if unit has fuel to move
+    const fuelPerMP = actor.system.fuelPerMP ?? 0;
+    if (fuelPerMP > 0) {
+      const fuelRemaining = actor.system.supply?.fuel?.current ?? 0;
+      const fuelNeeded = (mpUsed + totalCost) * fuelPerMP;
+      if (fuelNeeded > fuelRemaining) {
+        ui.notifications.warn("Cannot move — not enough fuel remaining.");
+        return false;
+      }
+    }
+
+    // Pass computed MP cost to updateToken hook via options
+    options._starMercsMPCost = totalCost;
   }
 
   return true;
@@ -395,14 +403,14 @@ Hooks.on("updateToken", (tokenDoc, changes, options) => {
     game.starmercs?.targetingArrowLayer?.drawArrows();
   }
 
-  // Track movement during tactical phase (skip for GM override moves)
+  // Track movement points spent during tactical phase (skip for GM override moves)
   if (("x" in changes || "y" in changes) && game.combat?.started
       && game.combat.phase === "tactical" && !options?._starMercsGMOverride) {
     const actor = tokenDoc.actor;
     if (actor?.type === "unit") {
-      const hexesMoved = options?._starMercsHexesMoved ?? 1;
+      const mpCost = options?._starMercsMPCost ?? 1;
       const movementUsed = tokenDoc.getFlag("star-mercs", "movementUsed") ?? 0;
-      tokenDoc.setFlag("star-mercs", "movementUsed", movementUsed + hexesMoved);
+      tokenDoc.setFlag("star-mercs", "movementUsed", movementUsed + mpCost);
     }
   }
 
@@ -521,8 +529,8 @@ Hooks.on("updateCombat", (combat, changes) => {
   if (!foundry.utils.hasProperty(changes, "flags.star-mercs.phase")) return;
   const newPhase = foundry.utils.getProperty(changes, "flags.star-mercs.phase");
 
-  // Reset movement counters when entering tactical phase
-  if (newPhase === "tactical") {
+  // Reset movement counters when entering preparation phase
+  if (newPhase === "preparation") {
     for (const combatant of combat.combatants) {
       const token = combatant.token;
       if (token) {

@@ -1,7 +1,8 @@
 import StarMercsActor from "./actor.mjs";
 import { snapToHexCenter, hexKey, getAdjacentHexCenters, getTokensAtHex,
   areAdjacent, getAdjacentEnemies, isEngaged, computeHexPath,
-  validatePath, findBestAdjacentHex, getLastSafeHex } from "../hex-utils.mjs";
+  validatePath, findBestAdjacentHex, getLastSafeHex,
+  calculatePathCost } from "../hex-utils.mjs";
 import { getDetectionLevel } from "../detection.mjs";
 
 /**
@@ -462,16 +463,16 @@ export default class StarMercsCombat extends Combat {
         }
       }
 
-      // 4b. Fuel consumption: movement + assault surcharge + Vehicle baseline
+      // 4b. Fuel consumption: MP spent × fuelPerMP + assault surcharge + Vehicle baseline
       {
-        const movementUsed = token ? (token.getFlag("star-mercs", "movementUsed") ?? 0) : 0;
-        const fuelPerHex = actor.system.fuelPerHex ?? 0;
+        const mpSpent = token ? (token.getFlag("star-mercs", "movementUsed") ?? 0) : 0;
+        const fuelPerMP = actor.system.fuelPerMP ?? 0;
         const orderKey = actor.system.currentOrder;
 
-        // Base movement fuel + assault surcharge (flat fuelPerHex extra for assault)
-        let moveFuel = movementUsed * fuelPerHex;
-        if (orderKey === "assault" && fuelPerHex > 0) {
-          moveFuel += fuelPerHex;
+        // Base movement fuel (MP spent × fuel per MP) + assault surcharge
+        let moveFuel = mpSpent * fuelPerMP;
+        if (orderKey === "assault" && fuelPerMP > 0) {
+          moveFuel += fuelPerMP;
         }
 
         // Apply supply modifier to movement/assault fuel
@@ -485,8 +486,8 @@ export default class StarMercsCombat extends Combat {
           const used = Math.min(fuelUsed, supply.fuel.current);
           supplyUpdate["system.supply.fuel.current"] = supply.fuel.current - used;
           const fuelDetails = [];
-          if (movementUsed > 0) fuelDetails.push(`${movementUsed} hex × ${fuelPerHex}`);
-          if (orderKey === "assault" && fuelPerHex > 0) fuelDetails.push(`+${fuelPerHex} assault`);
+          if (mpSpent > 0) fuelDetails.push(`${mpSpent} MP × ${fuelPerMP}`);
+          if (orderKey === "assault" && fuelPerMP > 0) fuelDetails.push(`+${fuelPerMP} assault`);
           if (supplyMod > 1) fuelDetails.push(`×${supplyMod} supply mod`);
           if (vehicleBaseline > 0) fuelDetails.push("+1 vehicle baseline");
           consumedParts.push(`Fuel: -${used} (${fuelDetails.join(", ")})`);
@@ -1633,15 +1634,31 @@ export default class StarMercsCombat extends Combat {
       const canvasToken = canvas.tokens.get(mover.token.id);
       if (!canvasToken) continue;
 
-      // Snap destination to hex center for accurate path computation
+      // Build full path through waypoints (if any) or direct to destination
+      const waypoints = mover.token.getFlag("star-mercs", "moveWaypoints");
       const snappedDest = snapToHexCenter(mover.dest);
-      const path = computeHexPath(canvasToken.center, snappedDest);
+      let path = [];
+
+      if (waypoints && waypoints.length > 1) {
+        // Multi-waypoint path
+        let start = canvasToken.center;
+        for (const wp of waypoints) {
+          const segment = computeHexPath(start, snapToHexCenter(wp));
+          path.push(...segment);
+          if (segment.length > 0) start = segment[segment.length - 1];
+        }
+      } else {
+        path = computeHexPath(canvasToken.center, snappedDest);
+      }
 
       // Skip if path is empty (already at destination)
       if (path.length === 0) {
         movedCount++;
         continue;
       }
+
+      // Calculate MP cost
+      const { totalCost } = calculatePathCost(canvasToken.center, path, mover.actor);
 
       // Compute shape centroid for center→top-left conversion
       const shape = canvas.grid.getShape();
@@ -1655,7 +1672,8 @@ export default class StarMercsCombat extends Combat {
           const safeHex = safePath[safePath.length - 1];
           const topLeft = { x: safeHex.x - shapeCX, y: safeHex.y - shapeCY };
           await mover.token.update({ x: topLeft.x, y: topLeft.y });
-          await mover.token.setFlag("star-mercs", "movementUsed", safePath.length);
+          const { totalCost: safeCost } = calculatePathCost(canvasToken.center, safePath, mover.actor);
+          await mover.token.setFlag("star-mercs", "movementUsed", safeCost);
         }
         movedCount++;
         continue;
@@ -1673,7 +1691,7 @@ export default class StarMercsCombat extends Combat {
       const finalHex = path[path.length - 1];
       const topLeft = { x: finalHex.x - shapeCX, y: finalHex.y - shapeCY };
       await mover.token.update({ x: topLeft.x, y: topLeft.y });
-      await mover.token.setFlag("star-mercs", "movementUsed", path.length);
+      await mover.token.setFlag("star-mercs", "movementUsed", totalCost);
       movedCount++;
     }
 
@@ -1976,6 +1994,7 @@ export default class StarMercsCombat extends Combat {
       if (token) {
         await token.unsetFlag("star-mercs", "movementUsed");
         await token.unsetFlag("star-mercs", "moveDestination");
+        await token.unsetFlag("star-mercs", "moveWaypoints");
         await token.unsetFlag("star-mercs", "assaultTarget");
         // 3. Clear per-type weapons fired counters
         await token.unsetFlag("star-mercs", "weaponsFired_smallArms");

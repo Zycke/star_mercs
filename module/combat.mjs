@@ -5,11 +5,14 @@
  * hit determination, damage calculation, and result packaging.
  *
  * EWAR: Increases the accuracy threshold needed to hit (makes unit harder to hit).
+ * Elevation: +1 to attack roll (−1 accuracy threshold) when firing from higher elevation.
  * Armored[X]: Reduces incoming damage by X.
  * Entrenched: Reduces incoming damage by 1.
  * Fortified: Reduces incoming damage by 2.
  * Heavy: Soft attacks only hit on natural 10.
  */
+
+import { getHexElevation, snapToHexCenter } from "./hex-utils.mjs";
 
 /**
  * Validate whether a weapon can target a specific unit based on attack type
@@ -92,9 +95,23 @@ export function calculateAccuracy(weapon, attacker, target = null) {
     orderAccuracyMod = orderConfig.accuracyPenalty;
   }
 
-  const effective = Math.max(2, Math.min(10, base - accurateMod + inaccurateMod + readinessMod + ewarMod + disorderedMod + standDownMod + orderAccuracyMod));
+  // Elevation bonus: -1 to threshold (easier to hit) when firing from higher elevation
+  let elevationMod = 0;
+  if (target) {
+    const attackerToken = canvas?.tokens?.placeables.find(t => t.actor === attacker);
+    const targetTokenElev = canvas?.tokens?.placeables.find(t => t.actor === target);
+    if (attackerToken && targetTokenElev) {
+      const attackerElev = getHexElevation(snapToHexCenter(attackerToken.center));
+      const targetElev = getHexElevation(snapToHexCenter(targetTokenElev.center));
+      if (attackerElev > targetElev) {
+        elevationMod = -1;
+      }
+    }
+  }
 
-  return { effective, base, readinessMod, ewarMod, accurateMod, inaccurateMod, disorderedMod, standDownMod, orderAccuracyMod };
+  const effective = Math.max(2, Math.min(10, base - accurateMod + inaccurateMod + readinessMod + ewarMod + disorderedMod + standDownMod + orderAccuracyMod + elevationMod));
+
+  return { effective, base, readinessMod, ewarMod, accurateMod, inaccurateMod, disorderedMod, standDownMod, orderAccuracyMod, elevationMod };
 }
 
 /**
