@@ -152,6 +152,18 @@ export default class StarMercsUnitSheet extends ActorSheet {
       };
     }
 
+    // Movement points: current/total (factoring in order multiplier)
+    {
+      let mpMax = this.actor.system.movement ?? 0;
+      const currentOrderKey = this.actor.system.currentOrder;
+      const curOrderConfig = CONFIG.STARMERCS.orders?.[currentOrderKey];
+      if (curOrderConfig?.speedMultiplier) mpMax *= curOrderConfig.speedMultiplier;
+      const mpUsed = activeToken?.document?.getFlag("star-mercs", "movementUsed") ?? 0;
+      context.mpMax = mpMax;
+      context.mpUsed = mpUsed;
+      context.mpRemaining = Math.max(0, mpMax - mpUsed);
+    }
+
     // Pending damage on this unit's token (if any)
     const token = this.actor.getActiveTokens()?.[0];
     if (token?.document) {
@@ -629,9 +641,16 @@ export default class StarMercsUnitSheet extends ActorSheet {
 
     ui.notifications.info("Left-click to add waypoints. Right-click to remove last. Press Escape to cancel.");
 
+    // Helper: extract canvas position from PIXI event (compatible with v5–v7)
+    const _getEventPos = (event) => {
+      return event.getLocalPosition?.(canvas.stage)
+        ?? event.data?.getLocalPosition?.(canvas.stage)
+        ?? null;
+    };
+
     // Hover handler: show live preview of path to hovered hex
     const moveHandler = (event) => {
-      const pos = event.data?.getLocalPosition(canvas.stage);
+      const pos = _getEventPos(event);
       if (!pos) return;
       const snapped = snapToHexCenter(pos);
       updatePreview(snapped);
@@ -639,8 +658,9 @@ export default class StarMercsUnitSheet extends ActorSheet {
 
     // Left-click handler: add waypoint
     const clickHandler = (event) => {
-      if (event.data?.button !== 0) return;
-      const pos = event.data?.getLocalPosition(canvas.stage);
+      const button = event.button ?? event.data?.button ?? 0;
+      if (button !== 0) return;
+      const pos = _getEventPos(event);
       if (!pos) return;
       const snapped = snapToHexCenter(pos);
 

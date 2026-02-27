@@ -1495,7 +1495,7 @@ export default class StarMercsCombat extends Combat {
       const shapeCX = shape.reduce((sum, p) => sum + p.x, 0) / shape.length;
       const shapeCY = shape.reduce((sum, p) => sum + p.y, 0) / shape.length;
       const topLeft = { x: adjacentHex.x - shapeCX, y: adjacentHex.y - shapeCY };
-      await token.update({ x: topLeft.x, y: topLeft.y });
+      await token.update({ x: topLeft.x, y: topLeft.y }, { _starMercsAutoMove: true });
 
       // Track movement for fuel consumption
       await token.setFlag("star-mercs", "movementUsed", hexesMoved);
@@ -1671,7 +1671,7 @@ export default class StarMercsCombat extends Combat {
         if (safePath.length > 0) {
           const safeHex = safePath[safePath.length - 1];
           const topLeft = { x: safeHex.x - shapeCX, y: safeHex.y - shapeCY };
-          await mover.token.update({ x: topLeft.x, y: topLeft.y });
+          await mover.token.update({ x: topLeft.x, y: topLeft.y }, { _starMercsAutoMove: true });
           const { totalCost: safeCost } = calculatePathCost(canvasToken.center, safePath, mover.actor);
           await mover.token.setFlag("star-mercs", "movementUsed", safeCost);
         }
@@ -1690,7 +1690,7 @@ export default class StarMercsCombat extends Combat {
       // Move token to final destination
       const finalHex = path[path.length - 1];
       const topLeft = { x: finalHex.x - shapeCX, y: finalHex.y - shapeCY };
-      await mover.token.update({ x: topLeft.x, y: topLeft.y });
+      await mover.token.update({ x: topLeft.x, y: topLeft.y }, { _starMercsAutoMove: true });
       await mover.token.setFlag("star-mercs", "movementUsed", totalCost);
       movedCount++;
     }

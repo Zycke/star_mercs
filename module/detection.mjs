@@ -11,7 +11,8 @@
  *   "hidden"  — beyond 2x detection range (invisible)
  *
  * Line of sight is blocked by terrain with blocksLOS: true and by
- * elevation differences (intermediate hex higher than both endpoints).
+ * elevation differences (intermediate hex at least as high as both endpoints).
+ * Units at higher elevation can see over lower-elevation hexes.
  */
 
 import { snapToHexCenter, hexKey, computeHexPath,
@@ -21,11 +22,15 @@ import StarMercsActor from "./documents/actor.mjs";
 /**
  * Check hex-based line of sight between two hex positions.
  *
- * LOS blocking rules:
- * 1. Terrain with blocksLOS: true blocks vision through that hex.
- * 2. Higher elevation blocks LOS: if any hex along the path has elevation
- *    higher than the observer, it blocks vision to anything past it.
- *    The first higher-elevation hex encountered still counts as within LOS.
+ * LOS blocking rules (elevation-aware):
+ * 1. Units at higher elevation can see OVER hexes at lower elevation,
+ *    even if those hexes have terrain that normally blocks LOS.
+ * 2. An intermediate hex only blocks LOS if its elevation is >= BOTH
+ *    the observer's elevation AND the target's elevation.
+ * 3. When blocking applies: terrain with blocksLOS: true blocks vision,
+ *    and elevation strictly higher than both endpoints blocks vision.
+ * 4. The first blocking hex encountered is still within LOS itself,
+ *    but everything beyond it is blocked.
  *
  * @param {{x: number, y: number}} fromCenter - Observer hex center.
  * @param {{x: number, y: number}} toCenter - Target hex center.
@@ -42,6 +47,8 @@ export function checkLOS(fromCenter, toCenter) {
   if (path.length === 0) return true;
 
   const fromElev = getHexElevation(from);
+  const toElev = getHexElevation(to);
+  const maxEndpointElev = Math.max(fromElev, toElev);
 
   // Check intermediate hexes (exclude final destination).
   // path excludes start already; the last element IS the destination.
@@ -53,6 +60,13 @@ export function checkLOS(fromCenter, toCenter) {
     // If a previous hex already blocked LOS, everything beyond is out of sight
     if (blocked) return false;
 
+    const elev = getHexElevation(hex);
+
+    // If the intermediate hex is lower than either endpoint, both endpoints
+    // can see over it — skip all blocking checks for this hex
+    if (elev < maxEndpointElev) continue;
+
+    // Hex is at least as high as both endpoints — check for blocking
     const config = getHexTerrainConfig(hex);
 
     // Terrain-based LOS blocking
@@ -61,11 +75,10 @@ export function checkLOS(fromCenter, toCenter) {
       continue; // This hex itself is still "within LOS" but blocks beyond
     }
 
-    // Elevation-based LOS blocking: hex higher than the observer blocks beyond
-    const elev = getHexElevation(hex);
-    if (elev > fromElev) {
+    // Elevation-based LOS blocking: hex strictly higher than both endpoints
+    if (elev > maxEndpointElev) {
       blocked = true;
-      continue; // First higher hex is within LOS, but blocks past it
+      continue;
     }
   }
 

@@ -107,8 +107,12 @@ export default class TerrainPainter extends FormApplication {
   _startPainting() {
     if (this._onPointerDown) return;
 
+    // Helper: extract canvas position from PIXI event (v5–v7 compatible)
+    this._getEventPos = (e) => e.getLocalPosition?.(canvas.stage) ?? e.data?.getLocalPosition?.(canvas.stage) ?? null;
+
     this._onPointerDown = (event) => {
-      if (!this._active || event.data?.button !== 0) return;
+      const button = event.button ?? event.data?.button ?? 0;
+      if (!this._active || button !== 0) return;
       this._beginDrag(event, false);
     };
 
@@ -120,7 +124,7 @@ export default class TerrainPainter extends FormApplication {
 
     this._onPointerMove = (event) => {
       if (!this._active || !this._isDragging) return;
-      const pos = event.data?.getLocalPosition(canvas.stage);
+      const pos = this._getEventPos(event);
       if (!pos) return;
       this._applyToHex(pos);
     };
@@ -160,7 +164,7 @@ export default class TerrainPainter extends FormApplication {
       canvas.scene.getFlag("star-mercs", "terrainMap") ?? {}
     );
 
-    const pos = event.data?.getLocalPosition(canvas.stage);
+    const pos = this._getEventPos?.(event);
     if (pos) this._applyToHex(pos);
   }
 
