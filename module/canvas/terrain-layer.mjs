@@ -32,16 +32,18 @@ export default class TerrainLayer extends PIXI.Container {
   /* ---------------------------------------- */
 
   /**
-   * Clear and redraw all terrain hex overlays from the scene's terrainMap flag.
+   * Clear and redraw all terrain hex overlays.
+   * @param {object} [overrideMap] - Optional terrain map to render instead of reading from the scene flag.
+   *                                  Used for live preview during drag-painting.
    */
-  drawTerrain() {
+  drawTerrain(overrideMap) {
     this.terrainGraphics.clear();
     this.labelContainer.removeChildren();
 
     if (!game.settings.get("star-mercs", "showTerrainOverlay")) return;
     if (!canvas?.scene) return;
 
-    const terrainMap = canvas.scene.getFlag("star-mercs", "terrainMap");
+    const terrainMap = overrideMap ?? canvas.scene.getFlag("star-mercs", "terrainMap");
     if (!terrainMap || typeof terrainMap !== "object") return;
 
     const terrainConfig = CONFIG.STARMERCS?.terrain ?? {};
