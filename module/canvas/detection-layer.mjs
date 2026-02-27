@@ -117,6 +117,10 @@ export default class DetectionLayer extends PIXI.Container {
     const shape = canvas.grid.getShape();
     if (!shape || shape.length < 3) return;
 
+    // Compute shape centroid for center→topLeft conversion (same pattern as terrain-layer)
+    const shapeCX = shape.reduce((sum, p) => sum + p.x, 0) / shape.length;
+    const shapeCY = shape.reduce((sum, p) => sum + p.y, 0) / shape.length;
+
     const center = snapToHexCenter(token.center);
 
     // BFS flood-fill to find all hex centers within detection range
@@ -144,7 +148,7 @@ export default class DetectionLayer extends PIXI.Container {
     // Draw subtle fill on frontier hexes
     g.lineStyle(DetectionLayer.RANGE_RING_WIDTH, DetectionLayer.RANGE_RING_COLOR, DetectionLayer.RANGE_RING_ALPHA);
     for (const hex of frontier) {
-      const topLeft = canvas.grid.getTopLeftPoint(hex);
+      const topLeft = { x: hex.x - shapeCX, y: hex.y - shapeCY };
       g.beginFill(DetectionLayer.RANGE_RING_COLOR, 0.05);
       g.moveTo(topLeft.x + shape[0].x, topLeft.y + shape[0].y);
       for (let i = 1; i < shape.length; i++) {

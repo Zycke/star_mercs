@@ -137,11 +137,9 @@ export default class StarMercsActor extends Actor {
    * @returns {number} Distance in hexes.
    */
   static getHexDistance(token1, token2) {
-    const ray = new Ray(token1.center, token2.center);
-    const segments = [{ ray }];
-    const distance = canvas.grid.measureDistances(segments, { gridSpaces: true })[0];
+    const result = canvas.grid.measurePath([token1.center, token2.center]);
     const gridDistance = canvas.scene.grid.distance || 1;
-    return Math.round(distance / gridDistance);
+    return Math.round(result.distance / gridDistance);
   }
 
   /* ---------------------------------------- */
