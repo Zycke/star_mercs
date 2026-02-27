@@ -641,11 +641,12 @@ export default class StarMercsUnitSheet extends ActorSheet {
 
     ui.notifications.info("Left-click to add waypoints. Right-click to remove last. Press Escape to cancel.");
 
-    // Helper: extract canvas position from PIXI event (compatible with v5–v7)
+    // Helper: extract canvas position from PIXI event (compatible with v5–v8 / Foundry v12–v13)
     const _getEventPos = (event) => {
-      return event.getLocalPosition?.(canvas.stage)
-        ?? event.data?.getLocalPosition?.(canvas.stage)
-        ?? null;
+      if (typeof event.getLocalPosition === 'function') return event.getLocalPosition(canvas.stage);
+      if (event.data?.getLocalPosition) return event.data.getLocalPosition(canvas.stage);
+      if (event.global) return canvas.stage.toLocal(event.global);
+      return null;
     };
 
     // Hover handler: show live preview of path to hovered hex

@@ -6,7 +6,7 @@ Star Mercs is a tabletop wargame built as a game system for Foundry VTT. The goa
 
 ## Version
 
-**Current Version: 0.0.32**
+**Current Version: 0.0.33**
 
 - Increment the **patch** number (the last digit) with each update (e.g., 0.0.1 -> 0.0.2 -> 0.0.3).
 - Do **not** roll to 0.1.0, 0.2.0, etc. unless explicitly instructed.
@@ -26,6 +26,12 @@ Always consult the following resources when building and modifying this system:
 - The game uses a **hex grid** as its map. All map scenes in Foundry should be configured with a hex grid overlay.
 - **All movement values, weapon ranges, ability distances, and any other spatial measurements are expressed in number of hexes.**
 - All map interactions (token movement, range calculations, area effects, line of sight, etc.) must be designed and implemented with Foundry's hex map overlay in mind.
+
+## Target Platform
+
+- **Always develop for Foundry VTT v13.** v12 is out of date.
+- In v13, render hooks (`renderChatMessage`, `renderCombatTracker`, etc.) pass **native DOM elements**, not jQuery objects. Use `querySelector`/`querySelectorAll`/`addEventListener` instead of jQuery's `find`/`on`/`attr`/`prop`.
+- PIXI v8 (used by Foundry v13) uses `FederatedPointerEvent`. Use the fallback chain: `event.getLocalPosition(canvas.stage)` → `event.data?.getLocalPosition(canvas.stage)` → `canvas.stage.toLocal(event.global)`.
 
 ## Development Guidelines
 

@@ -572,18 +572,19 @@ Hooks.on("renderCombatTracker", (app, html, data) => {
     </div>
   `;
 
-  // Insert after the combat tracker header
-  const header = html.find("#combat-round");
-  if (header.length) {
-    html.find(".star-mercs-phase-display").remove();
-    header.after(phaseHtml);
+  // Insert after the combat tracker header (v13: html is a DOM element, not jQuery)
+  const header = html.querySelector("#combat-round");
+  if (header) {
+    html.querySelectorAll(".star-mercs-phase-display").forEach(el => el.remove());
+    header.insertAdjacentHTML("afterend", phaseHtml);
   }
 
   // Rename "Next Turn" button to "Next Phase"
-  const nextTurnBtn = html.find('a[data-control="nextTurn"]');
-  if (nextTurnBtn.length) {
-    nextTurnBtn.attr("title", "Next Phase");
-    nextTurnBtn.find("i").attr("title", "Next Phase");
+  const nextTurnBtn = html.querySelector('a[data-control="nextTurn"]');
+  if (nextTurnBtn) {
+    nextTurnBtn.setAttribute("title", "Next Phase");
+    const icon = nextTurnBtn.querySelector("i");
+    if (icon) icon.setAttribute("title", "Next Phase");
   }
 });
 
@@ -591,113 +592,122 @@ Hooks.on("renderCombatTracker", (app, html, data) => {
 /*  Chat Message Hooks                         */
 /* ============================================ */
 
-/** Handle morale button click in consolidation chat cards. */
+/** Handle chat message button clicks (v13: html is a DOM element, not jQuery). */
 Hooks.on("renderChatMessage", (message, html) => {
-  html.find(".roll-morale-btn").on("click", async (event) => {
-    event.preventDefault();
-    const combatId = event.currentTarget.dataset.combatId;
-    const combat = game.combats.get(combatId);
-    if (!combat) return;
-    const btn = event.currentTarget;
-    btn.disabled = true;
-    btn.textContent = "Rolling...";
-    await combat.rollMoraleChecks();
-    btn.textContent = "Morale Checks Complete";
+  // Morale button
+  html.querySelectorAll(".roll-morale-btn").forEach(btn => {
+    btn.addEventListener("click", async (event) => {
+      event.preventDefault();
+      const combatId = btn.dataset.combatId;
+      const combat = game.combats.get(combatId);
+      if (!combat) return;
+      btn.disabled = true;
+      btn.textContent = "Rolling...";
+      await combat.rollMoraleChecks();
+      btn.textContent = "Morale Checks Complete";
+    });
   });
 
   // Tactical sub-step: "Next Step" button
-  html.find(".next-tactical-step-btn").on("click", async (event) => {
-    event.preventDefault();
-    const combatId = event.currentTarget.dataset.combatId;
-    const combat = game.combats.get(combatId);
-    if (!combat) return;
-    const btn = event.currentTarget;
-    btn.disabled = true;
-    btn.textContent = "Processing...";
-    await combat.nextTurn();
+  html.querySelectorAll(".next-tactical-step-btn").forEach(btn => {
+    btn.addEventListener("click", async (event) => {
+      event.preventDefault();
+      const combatId = btn.dataset.combatId;
+      const combat = game.combats.get(combatId);
+      if (!combat) return;
+      btn.disabled = true;
+      btn.textContent = "Processing...";
+      await combat.nextTurn();
+    });
   });
 
   // Overwatch fire button
-  html.find(".overwatch-fire-btn").on("click", async (event) => {
-    event.preventDefault();
-    const btn = event.currentTarget;
-    const attackerDocId = btn.dataset.attackerId;
-    const targetDocId = btn.dataset.targetId;
+  html.querySelectorAll(".overwatch-fire-btn").forEach(btn => {
+    btn.addEventListener("click", async (event) => {
+      event.preventDefault();
+      const attackerDocId = btn.dataset.attackerId;
+      const targetDocId = btn.dataset.targetId;
 
-    const attackerToken = canvas.tokens.placeables.find(t => t.document.id === attackerDocId);
-    const targetToken = canvas.tokens.placeables.find(t => t.document.id === targetDocId);
-    if (!attackerToken?.actor || !targetToken?.actor) return;
+      const attackerToken = canvas.tokens.placeables.find(t => t.document.id === attackerDocId);
+      const targetToken = canvas.tokens.placeables.find(t => t.document.id === targetDocId);
+      if (!attackerToken?.actor || !targetToken?.actor) return;
 
-    btn.disabled = true;
-    btn.textContent = "Firing...";
-    html.find(".overwatch-skip-btn").prop("disabled", true);
+      btn.disabled = true;
+      btn.textContent = "Firing...";
+      html.querySelectorAll(".overwatch-skip-btn").forEach(el => el.disabled = true);
 
-    // Fire all in-range weapons at the target
-    for (const weapon of attackerToken.actor.items) {
-      if (weapon.type !== "weapon") continue;
-      if (!weapon.system.range) continue;
-      const dist = documents.StarMercsActor.getHexDistance(attackerToken, targetToken);
-      if (dist <= weapon.system.range) {
-        await attackerToken.actor.rollAttack(weapon, targetToken.actor);
+      // Fire all in-range weapons at the target
+      for (const weapon of attackerToken.actor.items) {
+        if (weapon.type !== "weapon") continue;
+        if (!weapon.system.range) continue;
+        const dist = documents.StarMercsActor.getHexDistance(attackerToken, targetToken);
+        if (dist <= weapon.system.range) {
+          await attackerToken.actor.rollAttack(weapon, targetToken.actor);
+        }
       }
-    }
 
-    btn.textContent = "Fired!";
+      btn.textContent = "Fired!";
+    });
   });
 
   // Overwatch skip button
-  html.find(".overwatch-skip-btn").on("click", (event) => {
-    event.preventDefault();
-    const btn = event.currentTarget;
-    btn.disabled = true;
-    btn.textContent = "Held";
-    html.find(".overwatch-fire-btn").prop("disabled", true).text("Passed");
+  html.querySelectorAll(".overwatch-skip-btn").forEach(btn => {
+    btn.addEventListener("click", (event) => {
+      event.preventDefault();
+      btn.disabled = true;
+      btn.textContent = "Held";
+      html.querySelectorAll(".overwatch-fire-btn").forEach(el => {
+        el.disabled = true;
+        el.textContent = "Passed";
+      });
+    });
   });
 
   // Maneuver fire: target selection button
-  html.find(".maneuver-fire-btn").on("click", async (event) => {
-    event.preventDefault();
-    const btn = event.currentTarget;
-    const tokenDocId = btn.dataset.tokenId;
-    const combatId = btn.dataset.combatId;
-    const combat = game.combats.get(combatId);
-    if (!combat) return;
+  html.querySelectorAll(".maneuver-fire-btn").forEach(btn => {
+    btn.addEventListener("click", async (event) => {
+      event.preventDefault();
+      const tokenDocId = btn.dataset.tokenId;
+      const combatId = btn.dataset.combatId;
+      const combat = game.combats.get(combatId);
+      if (!combat) return;
 
-    const token = canvas.tokens.placeables.find(t => t.document.id === tokenDocId);
-    if (!token?.actor) return;
+      const token = canvas.tokens.placeables.find(t => t.document.id === tokenDocId);
+      if (!token?.actor) return;
 
-    // Only the owning player or GM can fire
-    if (!token.actor.isOwner && !game.user.isGM) return;
+      // Only the owning player or GM can fire
+      if (!token.actor.isOwner && !game.user.isGM) return;
 
-    btn.disabled = true;
-    btn.textContent = "Firing...";
+      btn.disabled = true;
+      btn.textContent = "Firing...";
 
-    // Fire all weapons at currently targeted enemies (set via Foundry targeting)
-    const targets = Array.from(game.user.targets);
-    if (targets.length === 0) {
-      ui.notifications.warn("Select targets first using Foundry's targeting (T key + click).");
-      btn.disabled = false;
-      btn.textContent = "Fire Weapons";
-      return;
-    }
+      // Fire all weapons at currently targeted enemies (set via Foundry targeting)
+      const targets = Array.from(game.user.targets);
+      if (targets.length === 0) {
+        ui.notifications.warn("Select targets first using Foundry's targeting (T key + click).");
+        btn.disabled = false;
+        btn.textContent = "Fire Weapons";
+        return;
+      }
 
-    for (const weapon of token.actor.items) {
-      if (weapon.type !== "weapon") continue;
-      if (weapon.system.artillery || weapon.system.aircraft) continue;
-      if (!weapon.system.range) continue;
+      for (const weapon of token.actor.items) {
+        if (weapon.type !== "weapon") continue;
+        if (weapon.system.artillery || weapon.system.aircraft) continue;
+        if (!weapon.system.range) continue;
 
-      // Fire at the first in-range target
-      for (const targetToken of targets) {
-        if (!targetToken.actor || targetToken.actor.system.team === token.actor.system.team) continue;
-        const dist = documents.StarMercsActor.getHexDistance(token, targetToken);
-        if (dist <= weapon.system.range) {
-          await token.actor.rollAttack(weapon, targetToken.actor);
-          break;
+        // Fire at the first in-range target
+        for (const targetToken of targets) {
+          if (!targetToken.actor || targetToken.actor.system.team === token.actor.system.team) continue;
+          const dist = documents.StarMercsActor.getHexDistance(token, targetToken);
+          if (dist <= weapon.system.range) {
+            await token.actor.rollAttack(weapon, targetToken.actor);
+            break;
+          }
         }
       }
-    }
 
-    btn.textContent = "Fired!";
+      btn.textContent = "Fired!";
+    });
   });
 });
 
