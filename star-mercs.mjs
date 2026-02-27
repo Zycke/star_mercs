@@ -309,6 +309,9 @@ Hooks.on("preUpdateToken", (tokenDoc, changes, options, userId) => {
     return true;
   }
 
+  // Automated movement (system-driven): already validated, skip hook checks
+  if (options._starMercsAutoMove) return true;
+
   const combat = game.combat;
   if (!combat?.started) return true;
 

@@ -93,6 +93,17 @@
     {{/if}}
   </div>
 
+  {{!-- Movement Points (shown during active combat) --}}
+  {{#if combatActive}}
+    <div class="status-block mp-block">
+      <label>Movement Points</label>
+      <span class="status-value">
+        {{mpRemaining}} / {{mpMax}} MP
+        {{#if mpUsed}}<span class="mp-used">(used {{mpUsed}})</span>{{/if}}
+      </span>
+    </div>
+  {{/if}}
+
   {{!-- Pending Damage (shown during tactical phase) --}}
   {{#if pendingDamage}}
     <div class="status-block pending-damage-block">
