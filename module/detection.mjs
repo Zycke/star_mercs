@@ -132,12 +132,15 @@ export function getDetectionLevel(observerToken, targetToken) {
 
   if (result.detectionRange <= 0) {
     // If detection range is 0 or negative, only detect if literally adjacent
-    if (result.distance <= 1) return "visible";
+    if (result.distance <= 1) return result.hasLOS ? "visible" : "blip";
     if (result.distance <= 2) return "blip";
     return "hidden";
   }
 
-  if (result.distance <= result.detectionRange) return "visible";
+  // Cap at "blip" when LOS is blocked — units without line of sight can never be "visible"
+  if (result.distance <= result.detectionRange) {
+    return result.hasLOS ? "visible" : "blip";
+  }
   if (result.distance <= result.detectionRange * 2) return "blip";
   return "hidden";
 }

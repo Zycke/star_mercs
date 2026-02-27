@@ -108,7 +108,13 @@ export default class TerrainPainter extends FormApplication {
     if (this._onPointerDown) return;
 
     // Helper: extract canvas position from PIXI event (v5–v7 compatible)
-    this._getEventPos = (e) => e.getLocalPosition?.(canvas.stage) ?? e.data?.getLocalPosition?.(canvas.stage) ?? null;
+    // Extract canvas position from PIXI event (compatible with v5–v8 / Foundry v12–v13)
+    this._getEventPos = (e) => {
+      if (typeof e.getLocalPosition === 'function') return e.getLocalPosition(canvas.stage);
+      if (e.data?.getLocalPosition) return e.data.getLocalPosition(canvas.stage);
+      if (e.global) return canvas.stage.toLocal(e.global);
+      return null;
+    };
 
     this._onPointerDown = (event) => {
       const button = event.button ?? event.data?.button ?? 0;
