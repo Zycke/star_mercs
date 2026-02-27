@@ -33,8 +33,8 @@ export default class UnitData extends foundry.abstract.TypeDataModel {
         max: new NumberField({ required: true, integer: true, min: 0, initial: 10 })
       }),
 
-      // --- Movement ---
-      speed: new NumberField({ required: true, integer: true, min: 0, initial: 4, label: "STARMERCS.Speed" }),
+      // --- Movement (movement points available per turn) ---
+      movement: new NumberField({ required: true, integer: true, min: 0, initial: 4, label: "STARMERCS.Movement" }),
 
       // --- Supply (7 categories) ---
       supply: new SchemaField({
@@ -68,8 +68,8 @@ export default class UnitData extends foundry.abstract.TypeDataModel {
         })
       }),
 
-      // Fuel consumed per hex of movement
-      fuelPerHex: new NumberField({ required: true, integer: true, min: 0, initial: 1 }),
+      // Fuel consumed per movement point spent
+      fuelPerMP: new NumberField({ required: true, integer: true, min: 0, initial: 1 }),
 
       // --- Detection ---
       sensors: new NumberField({ required: true, integer: true, min: 0, initial: 2, label: "STARMERCS.Sensors" }),

@@ -28,6 +28,8 @@ export default class TerrainPainter extends FormApplication {
   constructor(...args) {
     super(...args);
     this._selectedTerrain = "plain";
+    this._selectedElevation = 0;
+    this._selectedRoad = false;
     this._active = false;
 
     // Bound event handlers (assigned in _startPainting, removed in _stopPainting)
@@ -52,6 +54,9 @@ export default class TerrainPainter extends FormApplication {
     return {
       terrainChoices,
       selectedTerrain: this._selectedTerrain,
+      selectedElevation: this._selectedElevation,
+      selectedRoad: this._selectedRoad,
+      maxElevation: CONFIG.STARMERCS.maxElevation ?? 5,
       isActive: this._active
     };
   }
@@ -61,6 +66,10 @@ export default class TerrainPainter extends FormApplication {
     if (formData.selectedTerrain) {
       this._selectedTerrain = formData.selectedTerrain;
     }
+    if (formData.selectedElevation != null) {
+      this._selectedElevation = Math.max(0, Math.min(CONFIG.STARMERCS.maxElevation ?? 5, Number(formData.selectedElevation) || 0));
+    }
+    this._selectedRoad = !!formData.selectedRoad;
   }
 
   /** @override */
@@ -171,7 +180,11 @@ export default class TerrainPainter extends FormApplication {
     if (this._isErasing) {
       delete this._pendingTerrainMap[key];
     } else {
-      this._pendingTerrainMap[key] = this._selectedTerrain;
+      this._pendingTerrainMap[key] = {
+        type: this._selectedTerrain,
+        elevation: this._selectedElevation,
+        road: this._selectedRoad
+      };
     }
 
     // Live preview using the pending map (not yet saved to the scene flag)

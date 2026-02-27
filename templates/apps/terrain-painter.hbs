@@ -6,6 +6,19 @@
     </select>
   </div>
 
+  <div class="form-group">
+    <label>Elevation (0–{{maxElevation}})</label>
+    <input type="number" name="selectedElevation" value="{{selectedElevation}}"
+           min="0" max="{{maxElevation}}" step="1"/>
+  </div>
+
+  <div class="form-group">
+    <label class="checkbox">
+      <input type="checkbox" name="selectedRoad" {{#if selectedRoad}}checked{{/if}}/>
+      Road
+    </label>
+  </div>
+
   <div class="form-group terrain-painter-buttons">
     <button type="button" class="toggle-painting {{#if isActive}}active{{/if}}">
       <i class="fas {{#if isActive}}fa-stop{{else}}fa-paint-brush{{/if}}"></i>
@@ -20,7 +33,7 @@
   </div>
 
   <p class="notes">
-    <strong>Left-click</strong> a hex to paint terrain.<br/>
-    <strong>Right-click</strong> a hex to erase terrain.
+    <strong>Left-click/drag</strong> to paint terrain.<br/>
+    <strong>Right-click/drag</strong> to erase terrain.
   </p>
 </form>

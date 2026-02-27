@@ -78,7 +78,7 @@ STARMERCS.orders = {
     supplyModifier: "2x",
     speedMultiplier: 2,
     noReturnFire: true,
-    description: "Unit moves at 2x speed. Cannot fire. Does not return fire if attacked."
+    description: "Unit moves at 2x movement. Cannot fire. Does not return fire if attacked."
   },
   withdraw: {
     label: "Withdraw",
@@ -189,7 +189,7 @@ STARMERCS.phaseOrder = ["preparation", "orders", "tactical", "consolidation"];
  * Terrain types — labels for dropdowns.
  */
 STARMERCS.terrainTypes = {
-  forest: "Forest",
+  forest: "Dense Woods",
   plain: "Plain",
   hill: "Hill",
   mountain: "Mountain",
@@ -205,7 +205,8 @@ STARMERCS.terrainTypes = {
  * Terrain effects data table.
  * Encodes the rules for each terrain type's modifiers.
  *
- * movementCost: hex movement cost (default 1, road halves it to 0.5)
+ * movementCost: movement points required to enter the hex (road subtracts 1, min 1)
+ * waterTerrain: impassable unless unit has Flying, Hover, or Amphibious trait
  * signatureMod: modifier to signature for Infantry units in this terrain
  * infantryCover: Infantry gains Entrenched trait (Cover)
  * infantryHeavyCover: Infantry gains Armored-like heavy cover (2 damage reduction)
@@ -213,17 +214,19 @@ STARMERCS.terrainTypes = {
  * damageToNonFlying: extra damage taken by non-Flying/non-Hovering units
  * impassableVehicle: Vehicle units cannot enter unless road present
  * noFortification: Entrenchments/fortifications cannot be built
- * hasRoad: always treated as having a road
- * elevationBonus: units gain +1 weapon range when firing downhill
+ * hasRoad: always treated as having a road (urban terrain)
  * blocksLOS: blocks line of sight for detection
+ *
+ * NOTE: Elevation is now an independent per-hex property (0–5) stored in the terrainMap,
+ * not a property of terrain types. The old "elevation" field is removed from terrain config.
  */
 STARMERCS.terrain = {
   forest: {
-    label: "Forest",
+    label: "Dense Woods",
     color: 0x228B22,
     icon: "fas fa-tree",
-    elevation: 0,
-    movementCost: 2,
+    movementCost: 3,
+    waterTerrain: false,
     signatureMod: -1,
     infantryCover: true,
     infantryHeavyCover: false,
@@ -232,15 +235,14 @@ STARMERCS.terrain = {
     impassableVehicle: false,
     noFortification: false,
     hasRoad: false,
-    elevationBonus: false,
     blocksLOS: true
   },
   plain: {
     label: "Plain",
     color: 0xC2B280,
     icon: "fas fa-seedling",
-    elevation: 0,
-    movementCost: 1,
+    movementCost: 2,
+    waterTerrain: false,
     signatureMod: 0,
     infantryCover: false,
     infantryHeavyCover: false,
@@ -249,15 +251,14 @@ STARMERCS.terrain = {
     impassableVehicle: false,
     noFortification: false,
     hasRoad: false,
-    elevationBonus: false,
     blocksLOS: false
   },
   hill: {
     label: "Hill",
     color: 0x8B7355,
     icon: "fas fa-mountain",
-    elevation: 1,
-    movementCost: 1,
+    movementCost: 3,
+    waterTerrain: false,
     signatureMod: 0,
     infantryCover: false,
     infantryHeavyCover: false,
@@ -266,15 +267,14 @@ STARMERCS.terrain = {
     impassableVehicle: false,
     noFortification: false,
     hasRoad: false,
-    elevationBonus: true,
     blocksLOS: true
   },
   mountain: {
     label: "Mountain",
     color: 0x696969,
     icon: "fas fa-mountain",
-    elevation: 2,
-    movementCost: 3,
+    movementCost: 4,
+    waterTerrain: false,
     signatureMod: -1,
     infantryCover: false,
     infantryHeavyCover: false,
@@ -283,15 +283,14 @@ STARMERCS.terrain = {
     impassableVehicle: true,
     noFortification: false,
     hasRoad: false,
-    elevationBonus: true,
     blocksLOS: true
   },
   swamp: {
     label: "Swamp",
     color: 0x556B2F,
     icon: "fas fa-water",
-    elevation: 0,
-    movementCost: 2,
+    movementCost: 3,
+    waterTerrain: false,
     signatureMod: 0,
     infantryCover: false,
     infantryHeavyCover: false,
@@ -300,15 +299,14 @@ STARMERCS.terrain = {
     impassableVehicle: false,
     noFortification: true,
     hasRoad: false,
-    elevationBonus: false,
     blocksLOS: false
   },
   river: {
     label: "River",
     color: 0x4682B4,
     icon: "fas fa-water",
-    elevation: 0,
     movementCost: 2,
+    waterTerrain: true,
     signatureMod: 0,
     infantryCover: false,
     infantryHeavyCover: false,
@@ -317,15 +315,14 @@ STARMERCS.terrain = {
     impassableVehicle: false,
     noFortification: false,
     hasRoad: false,
-    elevationBonus: false,
     blocksLOS: false
   },
   lake: {
     label: "Lake",
     color: 0x1E90FF,
     icon: "fas fa-water",
-    elevation: 0,
     movementCost: 2,
+    waterTerrain: true,
     signatureMod: 0,
     infantryCover: false,
     infantryHeavyCover: false,
@@ -334,15 +331,14 @@ STARMERCS.terrain = {
     impassableVehicle: false,
     noFortification: false,
     hasRoad: false,
-    elevationBonus: false,
     blocksLOS: false
   },
   ocean: {
     label: "Ocean",
     color: 0x000080,
     icon: "fas fa-water",
-    elevation: 0,
     movementCost: 2,
+    waterTerrain: true,
     signatureMod: 0,
     infantryCover: false,
     infantryHeavyCover: false,
@@ -351,15 +347,14 @@ STARMERCS.terrain = {
     impassableVehicle: false,
     noFortification: false,
     hasRoad: false,
-    elevationBonus: false,
     blocksLOS: false
   },
   urbanDense: {
     label: "Urban (Dense)",
     color: 0x808080,
     icon: "fas fa-city",
-    elevation: 0,
-    movementCost: 1,
+    movementCost: 2,
+    waterTerrain: false,
     signatureMod: -2,
     infantryCover: false,
     infantryHeavyCover: true,
@@ -368,15 +363,14 @@ STARMERCS.terrain = {
     impassableVehicle: false,
     noFortification: false,
     hasRoad: true,
-    elevationBonus: false,
     blocksLOS: true
   },
   urbanLight: {
     label: "Urban (Light)",
     color: 0xA9A9A9,
     icon: "fas fa-building",
-    elevation: 0,
-    movementCost: 1,
+    movementCost: 2,
+    waterTerrain: false,
     signatureMod: -1,
     infantryCover: true,
     infantryHeavyCover: false,
@@ -385,10 +379,14 @@ STARMERCS.terrain = {
     impassableVehicle: false,
     noFortification: false,
     hasRoad: true,
-    elevationBonus: false,
     blocksLOS: false
   }
 };
+
+/**
+ * Maximum elevation value for the terrain painter.
+ */
+STARMERCS.maxElevation = 5;
 
 /**
  * Arrow colors for the targeting overlay, keyed by weapon attack type.

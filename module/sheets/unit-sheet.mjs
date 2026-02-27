@@ -1,4 +1,5 @@
 import StarMercsActor from "../documents/actor.mjs";
+import { snapToHexCenter, hexKey, computeHexPath, calculatePathCost } from "../hex-utils.mjs";
 
 /**
  * Sheet class for Star Mercs Unit actors.
@@ -147,7 +148,7 @@ export default class StarMercsUnitSheet extends ActorSheet {
         allowsMovement: od.allowsMovement,
         readinessCost: od.readinessCost,
         supplyModifier: od.supplyModifier,
-        speed: this.actor.system.speed ?? 0
+        movement: this.actor.system.movement ?? 0
       };
     }
 
@@ -517,9 +518,9 @@ export default class StarMercsUnitSheet extends ActorSheet {
       return;
     }
 
-    const speed = this.actor.system.speed ?? 4;
+    const maxMP = this.actor.system.movement ?? 4;
 
-    // Find enemy tokens within movement range
+    // Find enemy tokens within movement range (use hex distance as approximation)
     const team = this.actor.system.team ?? "a";
     const validTargets = [];
     for (const token of canvas.tokens.placeables) {
@@ -530,7 +531,7 @@ export default class StarMercsUnitSheet extends ActorSheet {
       if (token.actor.system.strength.value <= 0) continue;
 
       const distance = StarMercsActor.getHexDistance(myToken, token);
-      if (distance <= speed) {
+      if (distance <= maxMP) {
         validTargets.push({ tokenId: token.id, name: token.name, distance });
       }
     }
@@ -562,7 +563,7 @@ export default class StarMercsUnitSheet extends ActorSheet {
     const dialogContent = `
       <form>
         <div class="form-group">
-          <label>Select assault target (within ${speed} hex range)</label>
+          <label>Select assault target (within ${maxMP} MP range)</label>
           <select id="assault-target">${targetOptions}</select>
         </div>
       </form>
@@ -596,64 +597,187 @@ export default class StarMercsUnitSheet extends ActorSheet {
   }
 
   /**
-   * Enter move destination selection mode.
-   * The next canvas click sets the unit's planned movement hex.
+   * Enter waypoint-based move destination selection mode.
+   * Left-click to add waypoints, right-click to remove last waypoint.
+   * A "Confirm Path" dialog finalizes the route.
+   * Path is visualized live on the movement path layer.
    */
   _onSetMoveDestination(event) {
     event.preventDefault();
 
-    // Find this actor's token on canvas
     const token = this.actor.getActiveTokens()?.[0];
     if (!token) {
       ui.notifications.warn("Place this unit's token on the canvas first.");
       return;
     }
 
-    // Capture actor speed and order for the closure
-    let speed = this.actor.system.speed ?? 0;
-    const orderKey = this.actor.system.currentOrder;
+    const actor = this.actor;
+    let maxMP = actor.system.movement ?? 0;
+    const orderKey = actor.system.currentOrder;
     const orderConfig = CONFIG.STARMERCS.orders?.[orderKey];
-    if (orderConfig?.speedMultiplier) {
-      speed *= orderConfig.speedMultiplier;
-    }
+    if (orderConfig?.speedMultiplier) maxMP *= orderConfig.speedMultiplier;
 
-    ui.notifications.info("Click a hex on the map to set the movement destination.");
+    const mpUsed = token.document?.getFlag("star-mercs", "movementUsed") ?? 0;
+    const mpRemaining = maxMP - mpUsed;
 
-    const handler = async (event) => {
-      const pos = event.data.getLocalPosition(canvas.app.stage);
-      // Snap to hex grid center
-      const snapped = canvas.grid.getSnappedPoint(pos, { mode: CONST.GRID_SNAPPING_MODES.CENTER });
-      const dest = snapped ?? pos;
+    const waypoints = [];
+    const pathLayer = game.starmercs?.movementPathLayer;
 
-      // Range check: ensure destination is within movement range
-      if (speed > 0) {
-        const from = token.center;
-        const ray = new Ray(from, dest);
-        const segments = [{ ray }];
-        const distance = canvas.grid.measureDistances(segments, { gridSpaces: true })[0];
-        const gridDistance = canvas.scene.grid.distance || 1;
-        const hexDistance = Math.round(distance / gridDistance);
-
-        if (hexDistance > speed) {
-          ui.notifications.warn(
-            `Destination is ${hexDistance} hexes away but unit speed is only ${speed}. Choose a closer hex.`
-          );
-          return; // Keep listener active so user can try again
-        }
-      }
-
-      // Store destination on the token document — await to ensure flag is persisted
-      await token.document.setFlag("star-mercs", "moveDestination", { x: dest.x, y: dest.y });
-
-      // Redraw arrows to show the green movement arrow
-      game.starmercs?.targetingArrowLayer?.drawArrows();
-
-      // Clean up listener
-      canvas.stage.off("pointerdown", handler);
-      ui.notifications.info("Movement destination set.");
+    const updatePreview = (hoverHex = null) => {
+      pathLayer?.drawPath(token, waypoints, hoverHex);
     };
 
-    canvas.stage.on("pointerdown", handler);
+    ui.notifications.info("Left-click to add waypoints. Right-click to remove last. Press Escape to cancel.");
+
+    // Hover handler: show live preview of path to hovered hex
+    const moveHandler = (event) => {
+      const pos = event.data?.getLocalPosition(canvas.stage);
+      if (!pos) return;
+      const snapped = snapToHexCenter(pos);
+      updatePreview(snapped);
+    };
+
+    // Left-click handler: add waypoint
+    const clickHandler = (event) => {
+      if (event.data?.button !== 0) return;
+      const pos = event.data?.getLocalPosition(canvas.stage);
+      if (!pos) return;
+      const snapped = snapToHexCenter(pos);
+
+      // Calculate total path cost with this new waypoint
+      const testWaypoints = [...waypoints, snapped];
+      let startCenter = snapToHexCenter(token.center);
+      const fullPath = [];
+      for (const wp of testWaypoints) {
+        const segment = computeHexPath(startCenter, wp);
+        fullPath.push(...segment);
+        if (segment.length > 0) startCenter = segment[segment.length - 1];
+      }
+
+      const { totalCost, passable } = calculatePathCost(snapToHexCenter(token.center), fullPath, actor);
+
+      if (!passable) {
+        ui.notifications.warn("Path is blocked. Try a different waypoint.");
+        return;
+      }
+
+      if (totalCost > mpRemaining) {
+        ui.notifications.warn(`Path costs ${totalCost} MP but only ${mpRemaining} MP remaining.`);
+        return;
+      }
+
+      waypoints.push(snapped);
+      updatePreview();
+    };
+
+    // Right-click handler: remove last waypoint
+    const rightClickHandler = (event) => {
+      event.preventDefault?.();
+      if (waypoints.length > 0) {
+        waypoints.pop();
+        updatePreview();
+        ui.notifications.info(`Waypoint removed. ${waypoints.length} waypoint(s) remaining.`);
+      }
+    };
+
+    // ESC handler: cancel
+    const keyHandler = (event) => {
+      if (event.key === "Escape") {
+        cleanup();
+        ui.notifications.info("Movement destination cancelled.");
+      } else if (event.key === "Enter") {
+        confirmPath();
+      }
+    };
+
+    const confirmPath = async () => {
+      if (waypoints.length === 0) {
+        ui.notifications.warn("No waypoints set. Add at least one waypoint.");
+        return;
+      }
+
+      // Calculate full path through all waypoints for final validation
+      let startCenter = snapToHexCenter(token.center);
+      const fullPath = [];
+      for (const wp of waypoints) {
+        const segment = computeHexPath(startCenter, wp);
+        fullPath.push(...segment);
+        if (segment.length > 0) startCenter = segment[segment.length - 1];
+      }
+
+      const { totalCost, passable, reason } = calculatePathCost(snapToHexCenter(token.center), fullPath, actor);
+      if (!passable) {
+        ui.notifications.warn(reason ?? "Path is blocked.");
+        return;
+      }
+      if (totalCost > mpRemaining) {
+        ui.notifications.warn(`Path costs ${totalCost} MP but only ${mpRemaining} MP remaining.`);
+        return;
+      }
+
+      // Store the final destination (last waypoint) and the full waypoint chain
+      const finalDest = waypoints[waypoints.length - 1];
+      await token.document.setFlag("star-mercs", "moveDestination", { x: finalDest.x, y: finalDest.y });
+      if (waypoints.length > 1) {
+        await token.document.setFlag("star-mercs", "moveWaypoints", waypoints.map(wp => ({ x: wp.x, y: wp.y })));
+      } else {
+        await token.document.unsetFlag("star-mercs", "moveWaypoints");
+      }
+
+      game.starmercs?.targetingArrowLayer?.drawArrows();
+      cleanup();
+      ui.notifications.info(`Movement path confirmed (${totalCost} MP).`);
+    };
+
+    const cleanup = () => {
+      canvas.stage.off("pointermove", moveHandler);
+      canvas.stage.off("pointerdown", clickHandler);
+      canvas.stage.off("rightdown", rightClickHandler);
+      document.removeEventListener("keydown", keyHandler);
+      pathLayer?.clear();
+      if (confirmDialog) {
+        confirmDialog.close();
+        confirmDialog = null;
+      }
+    };
+
+    // Show a floating "Confirm Path" dialog
+    let confirmDialog = new Dialog({
+      title: "Movement Path",
+      content: "<p>Add waypoints by left-clicking hexes.<br/>Right-click to undo. Enter to confirm.</p>",
+      buttons: {
+        confirm: {
+          icon: '<i class="fas fa-check"></i>',
+          label: "Confirm Path",
+          callback: () => confirmPath()
+        },
+        cancel: {
+          icon: '<i class="fas fa-times"></i>',
+          label: "Cancel",
+          callback: () => {
+            cleanup();
+            ui.notifications.info("Movement destination cancelled.");
+          }
+        }
+      },
+      default: "confirm",
+      close: () => {
+        // If closed via X button, clean up
+        canvas.stage.off("pointermove", moveHandler);
+        canvas.stage.off("pointerdown", clickHandler);
+        canvas.stage.off("rightdown", rightClickHandler);
+        document.removeEventListener("keydown", keyHandler);
+        pathLayer?.clear();
+        confirmDialog = null;
+      }
+    }, { top: 60, left: 10, width: 260 });
+
+    confirmDialog.render(true);
+
+    canvas.stage.on("pointermove", moveHandler);
+    canvas.stage.on("pointerdown", clickHandler);
+    canvas.stage.on("rightdown", rightClickHandler);
+    document.addEventListener("keydown", keyHandler);
   }
 
   /* ---------------------------------------- */

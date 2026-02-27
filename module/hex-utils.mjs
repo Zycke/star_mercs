@@ -160,6 +160,8 @@ export function computeHexPath(fromCenter, toCenter, maxSteps = 50) {
  * Checks that:
  * 1. No intermediate hex contains an enemy unit.
  * 2. The final hex is not occupied by any other living unit.
+ * 3. Terrain is passable for this unit (water, vehicle restrictions).
+ * 4. Elevation changes between adjacent hexes are ≤ 1 (unless Flying/Hover).
  * @param {Token} token - The moving token.
  * @param {{x: number, y: number}[]} path - Array of hex centers along the path.
  * @returns {{ valid: boolean, blockedAt: {x: number, y: number}|null, reason: string|null }}
@@ -168,9 +170,35 @@ export function validatePath(token, path) {
   if (!token.actor || path.length === 0) return { valid: true, blockedAt: null, reason: null };
 
   const myTeam = token.actor.system.team ?? "a";
+  const actor = token.actor;
+  const isFlying = actor.hasTrait?.("Flying") ?? false;
+  const isHover = actor.hasTrait?.("Hover") ?? false;
+
+  let prevCenter = snapToHexCenter(token.center);
 
   for (let i = 0; i < path.length; i++) {
     const hexCenter = path[i];
+
+    // Terrain passability check
+    const { passable, reason: terrainReason } = getMovementCost(hexCenter, actor);
+    if (!passable) {
+      return { valid: false, blockedAt: hexCenter, reason: terrainReason };
+    }
+
+    // Elevation restriction (skip for Flying/Hover)
+    if (!isFlying && !isHover) {
+      const prevElev = getHexElevation(prevCenter);
+      const nextElev = getHexElevation(hexCenter);
+      if (Math.abs(nextElev - prevElev) > 1) {
+        return {
+          valid: false,
+          blockedAt: hexCenter,
+          reason: `Elevation change too steep (${prevElev} → ${nextElev}). Max difference is 1.`
+        };
+      }
+    }
+
+    // Token occupation checks
     const tokensHere = getTokensAtHex(hexCenter);
     const isLastStep = i === path.length - 1;
 
@@ -197,6 +225,8 @@ export function validatePath(token, path) {
         };
       }
     }
+
+    prevCenter = hexCenter;
   }
 
   return { valid: true, blockedAt: null, reason: null };
@@ -249,15 +279,49 @@ export function findBestAdjacentHex(targetToken, attackerToken) {
 /* ---------------------------------------- */
 
 /**
+ * Normalize a terrainMap entry from the scene flag.
+ * Handles both the legacy string format ("forest") and new object format
+ * ({type: "forest", elevation: 0, road: false}).
+ * @param {string|object} entry - Raw terrainMap value.
+ * @returns {{type: string, elevation: number, road: boolean}}
+ */
+export function normalizeHexData(entry) {
+  if (typeof entry === "string") {
+    return { type: entry, elevation: 0, road: false };
+  }
+  if (entry && typeof entry === "object") {
+    return {
+      type: entry.type ?? "plain",
+      elevation: entry.elevation ?? 0,
+      road: entry.road ?? false
+    };
+  }
+  return { type: "plain", elevation: 0, road: false };
+}
+
+/**
+ * Get the full hex data (terrain type, elevation, road) for a hex.
+ * @param {{x: number, y: number}} hexCenter - A hex center point (will be snapped).
+ * @param {object} [overrideMap] - Optional terrain map to use instead of scene flag.
+ * @returns {{type: string, elevation: number, road: boolean}|null} Hex data or null if none assigned.
+ */
+export function getHexData(hexCenter, overrideMap) {
+  const terrainMap = overrideMap ?? canvas.scene?.getFlag("star-mercs", "terrainMap");
+  if (!terrainMap) return null;
+  const key = hexKey(snapToHexCenter(hexCenter));
+  const entry = terrainMap[key];
+  if (entry == null) return null;
+  return normalizeHexData(entry);
+}
+
+/**
  * Get the terrain type key for a hex, reading from the scene's terrainMap flag.
  * @param {{x: number, y: number}} hexCenter - A hex center point (will be snapped).
  * @returns {string|null} Terrain type key (e.g., "forest") or null if none assigned.
  */
 export function getHexTerrain(hexCenter) {
-  const terrainMap = canvas.scene?.getFlag("star-mercs", "terrainMap");
-  if (!terrainMap) return null;
-  const key = hexKey(snapToHexCenter(hexCenter));
-  return terrainMap[key] ?? null;
+  const data = getHexData(hexCenter);
+  return data?.type ?? null;
 }
 
 /**
@@ -272,13 +336,129 @@ export function getHexTerrainConfig(hexCenter) {
 }
 
 /**
- * Get the elevation level for a hex (from its terrain type).
+ * Get the elevation level for a hex (independent per-hex property, 0–5).
  * @param {{x: number, y: number}} hexCenter
- * @returns {number} Elevation level (0 = flat, 1 = hill, 2 = mountain).
+ * @returns {number} Elevation level (0–5).
  */
 export function getHexElevation(hexCenter) {
-  const config = getHexTerrainConfig(hexCenter);
-  return config?.elevation ?? 0;
+  const data = getHexData(hexCenter);
+  return data?.elevation ?? 0;
+}
+
+/**
+ * Check if a hex has a road.
+ * A hex has a road if it has the road flag set, OR if its terrain type
+ * has hasRoad: true (e.g., urban terrain).
+ * @param {{x: number, y: number}} hexCenter
+ * @returns {boolean}
+ */
+export function getHexRoad(hexCenter) {
+  const data = getHexData(hexCenter);
+  if (!data) return false;
+  if (data.road) return true;
+  const config = CONFIG.STARMERCS.terrain[data.type];
+  return config?.hasRoad ?? false;
+}
+
+/**
+ * Calculate the movement point cost to enter a hex.
+ * Flying and Hover units always pay 1 MP regardless of terrain.
+ * Water terrain is impassable unless the unit has Flying, Hover, or Amphibious.
+ * Road reduces cost by 1 (minimum 1).
+ *
+ * @param {{x: number, y: number}} hexCenter - The hex to enter.
+ * @param {Actor|null} [actor=null] - The moving actor (for trait checks).
+ * @returns {{cost: number, passable: boolean, reason: string|null}}
+ */
+export function getMovementCost(hexCenter, actor = null) {
+  const data = getHexData(hexCenter);
+  const config = data ? CONFIG.STARMERCS.terrain[data.type] ?? null : null;
+
+  // Unpainted hex: treat as open terrain (1 MP)
+  if (!data || !config) return { cost: 1, passable: true, reason: null };
+
+  const isFlying = actor?.hasTrait?.("Flying") ?? false;
+  const isHover = actor?.hasTrait?.("Hover") ?? false;
+  const isAmphibious = actor?.hasTrait?.("Amphibious") ?? false;
+
+  // Flying and Hover units always cost 1 MP
+  if (isFlying || isHover) return { cost: 1, passable: true, reason: null };
+
+  // Water terrain check
+  if (config.waterTerrain) {
+    if (!isAmphibious) {
+      return { cost: Infinity, passable: false, reason: "Water terrain is impassable without Flying, Hover, or Amphibious." };
+    }
+    // Amphibious units can enter water at normal cost
+  }
+
+  // Vehicle impassable check (mountains without road)
+  const isVehicle = actor?.hasTrait?.("Vehicle") ?? false;
+  const hasRoad = data.road || config.hasRoad;
+  if (config.impassableVehicle && isVehicle && !hasRoad) {
+    return { cost: Infinity, passable: false, reason: "Vehicles cannot enter this terrain without a road." };
+  }
+
+  // Base cost from terrain config
+  let cost = config.movementCost ?? 1;
+
+  // Road discount: -1 MP (minimum 1)
+  if (hasRoad) {
+    cost = Math.max(1, cost - 1);
+  }
+
+  return { cost, passable: true, reason: null };
+}
+
+/**
+ * Calculate total movement point cost for a path.
+ * Also checks elevation restrictions (can't move >1 elevation difference between adjacent hexes).
+ *
+ * @param {{x: number, y: number}} fromCenter - Starting hex center.
+ * @param {{x: number, y: number}[]} path - Array of hex centers (excluding start).
+ * @param {Actor|null} [actor=null] - The moving actor.
+ * @returns {{totalCost: number, costs: number[], passable: boolean, blockedIndex: number, reason: string|null}}
+ */
+export function calculatePathCost(fromCenter, path, actor = null) {
+  if (path.length === 0) return { totalCost: 0, costs: [], passable: true, blockedIndex: -1, reason: null };
+
+  const isFlying = actor?.hasTrait?.("Flying") ?? false;
+  const isHover = actor?.hasTrait?.("Hover") ?? false;
+
+  let totalCost = 0;
+  const costs = [];
+  let prevCenter = snapToHexCenter(fromCenter);
+
+  for (let i = 0; i < path.length; i++) {
+    const hexCenter = path[i];
+
+    // Elevation restriction: can't move into hex with >1 elevation difference
+    // (Flying and Hover units are exempt)
+    if (!isFlying && !isHover) {
+      const prevElev = getHexElevation(prevCenter);
+      const nextElev = getHexElevation(hexCenter);
+      if (Math.abs(nextElev - prevElev) > 1) {
+        return {
+          totalCost,
+          costs,
+          passable: false,
+          blockedIndex: i,
+          reason: `Elevation change too steep (${prevElev} → ${nextElev}). Max difference is 1.`
+        };
+      }
+    }
+
+    const { cost, passable, reason } = getMovementCost(hexCenter, actor);
+    if (!passable) {
+      return { totalCost, costs, passable: false, blockedIndex: i, reason };
+    }
+
+    costs.push(cost);
+    totalCost += cost;
+    prevCenter = hexCenter;
+  }
+
+  return { totalCost, costs, passable: true, blockedIndex: -1, reason: null };
 }
 
 /**

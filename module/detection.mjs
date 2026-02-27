@@ -20,8 +20,13 @@ import StarMercsActor from "./documents/actor.mjs";
 
 /**
  * Check hex-based line of sight between two hex positions.
- * LOS is blocked if any intermediate hex has blocking terrain or
- * higher elevation than both endpoints.
+ *
+ * LOS blocking rules:
+ * 1. Terrain with blocksLOS: true blocks vision through that hex.
+ * 2. Higher elevation blocks LOS: if any hex along the path has elevation
+ *    higher than the observer, it blocks vision to anything past it.
+ *    The first higher-elevation hex encountered still counts as within LOS.
+ *
  * @param {{x: number, y: number}} fromCenter - Observer hex center.
  * @param {{x: number, y: number}} toCenter - Target hex center.
  * @returns {boolean} True if LOS is clear.
@@ -37,22 +42,36 @@ export function checkLOS(fromCenter, toCenter) {
   if (path.length === 0) return true;
 
   const fromElev = getHexElevation(from);
-  const toElev = getHexElevation(to);
-  const maxEndpointElev = Math.max(fromElev, toElev);
 
-  // Check intermediate hexes (exclude start and final destination)
-  // path excludes start already; the last element IS the destination
+  // Check intermediate hexes (exclude final destination).
+  // path excludes start already; the last element IS the destination.
+  let blocked = false;
+
   for (let i = 0; i < path.length - 1; i++) {
     const hex = path[i];
+
+    // If a previous hex already blocked LOS, everything beyond is out of sight
+    if (blocked) return false;
+
     const config = getHexTerrainConfig(hex);
 
     // Terrain-based LOS blocking
-    if (config?.blocksLOS) return false;
+    if (config?.blocksLOS) {
+      blocked = true;
+      continue; // This hex itself is still "within LOS" but blocks beyond
+    }
 
-    // Elevation-based LOS blocking: intermediate hex higher than both endpoints
+    // Elevation-based LOS blocking: hex higher than the observer blocks beyond
     const elev = getHexElevation(hex);
-    if (elev > maxEndpointElev) return false;
+    if (elev > fromElev) {
+      blocked = true;
+      continue; // First higher hex is within LOS, but blocks past it
+    }
   }
+
+  // If blocked was set by the second-to-last intermediate hex,
+  // the destination is still past the blocker
+  if (blocked) return false;
 
   return true;
 }
