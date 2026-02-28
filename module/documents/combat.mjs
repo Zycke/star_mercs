@@ -953,10 +953,10 @@ export default class StarMercsCombat extends Combat {
       const attackerComms = this._getCommsChainStatus(token.id);
       const defenderComms = this._getCommsChainStatus(defenderToken?.id ?? assaultTargetId);
 
-      // Shock trait: if attacker has Shock and defender does not, defender gets +1 penalty
-      const attackerHasShock = actor.hasTrait?.("Shock") ?? false;
+      // Shock trait: attacker's Shock [X] value applies as defender penalty (if defender lacks Shock)
+      const attackerShockValue = actor.getTraitValue?.("Shock") ?? 0;
       const defenderHasShock = targetActor.hasTrait?.("Shock") ?? false;
-      const shockPenalty = (attackerHasShock && !defenderHasShock) ? 1 : 0;
+      const shockPenalty = (!defenderHasShock && attackerShockValue > 0) ? attackerShockValue : 0;
 
       // Roll morale for both
       const assaultRoll = new Roll("1d10");
