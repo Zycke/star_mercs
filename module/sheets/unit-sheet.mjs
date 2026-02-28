@@ -1,5 +1,6 @@
 import StarMercsActor from "../documents/actor.mjs";
 import { snapToHexCenter, hexKey, computeHexPath, calculatePathCost } from "../hex-utils.mjs";
+import { checkLOS } from "../detection.mjs";
 
 /**
  * Sheet class for Star Mercs Unit actors.
@@ -43,11 +44,11 @@ export default class StarMercsUnitSheet extends ActorSheet {
     // Ownership flag for template guards
     context.isOwner = this.actor.isOwner;
 
-    // Detection range (derived): range vs a standard signature-2 target
+    // Detection range (derived): range vs configured target signature
     const sensors = this.actor.system.sensors ?? 0;
-    const defaultSig = 2;
-    context.detectionRangeLOS = sensors + defaultSig;
-    context.detectionRangeNoLOS = Math.floor(sensors / 2) + defaultSig;
+    const targetSig = game.settings.get("star-mercs", "detectionRingTargetSig") ?? 2;
+    context.detectionRangeLOS = sensors + targetSig;
+    context.detectionRangeNoLOS = Math.floor(sensors / 2) + targetSig;
 
     // Rating choices for the dropdown
     context.ratingChoices = {
@@ -412,15 +413,15 @@ export default class StarMercsUnitSheet extends ActorSheet {
       }
     }
 
-    // Line of Sight / comms chain validation
+    // Line of Sight / comms chain validation (uses terrain-based LOS)
     {
-      const hasDirectLOS = StarMercsActor.hasLineOfSight(myToken, targetToken);
+      const hasDirectLOS = checkLOS(myToken.center, targetToken.center);
       const manager = game.starmercs?.commsLinkManager;
 
       if (item.system.indirect) {
         // Indirect weapons: require LOS from firing unit OR any comms chain member
         if (!hasDirectLOS) {
-          const canSeeViaChain = manager?.canSeeViaChain(myToken.id, targetToken.id) ?? false;
+          const canSeeViaChain = manager?.canSeeViaChainTerrain(myToken.id, targetToken.id) ?? false;
           if (!canSeeViaChain) {
             ui.notifications.warn(`${item.name} requires a spotter — no unit in comms chain has Line of Sight to target.`);
             return;
@@ -429,7 +430,7 @@ export default class StarMercsUnitSheet extends ActorSheet {
       } else if (item.system.aircraft) {
         // Aircraft weapons: require chain LOS OR Satellite Uplink in chain
         if (!hasDirectLOS) {
-          const canSeeForAirstrike = manager?.canSeeForAirstrike(myToken.id, targetToken.id) ?? false;
+          const canSeeForAirstrike = manager?.canSeeForAirstrikeTerrain(myToken.id, targetToken.id) ?? false;
           if (!canSeeForAirstrike) {
             ui.notifications.warn(`${item.name} requires a spotter or Satellite Uplink in comms chain to acquire target.`);
             return;

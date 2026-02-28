@@ -95,6 +95,12 @@ export function calculateAccuracy(weapon, attacker, target = null) {
     orderAccuracyMod = orderConfig.accuracyPenalty;
   }
 
+  // Area weapon vs Infantry: -1 to threshold (easier to hit)
+  let areaVsInfantryMod = 0;
+  if (weapon.system.area && target?.hasTrait("Infantry")) {
+    areaVsInfantryMod = -1;
+  }
+
   // Elevation bonus: -1 to threshold (easier to hit) when firing from higher elevation
   let elevationMod = 0;
   if (target) {
@@ -109,9 +115,9 @@ export function calculateAccuracy(weapon, attacker, target = null) {
     }
   }
 
-  const effective = Math.max(2, Math.min(10, base - accurateMod + inaccurateMod + readinessMod + ewarMod + disorderedMod + standDownMod + orderAccuracyMod + elevationMod));
+  const effective = Math.max(2, Math.min(10, base - accurateMod + inaccurateMod + readinessMod + ewarMod + disorderedMod + standDownMod + orderAccuracyMod + elevationMod + areaVsInfantryMod));
 
-  return { effective, base, readinessMod, ewarMod, accurateMod, inaccurateMod, disorderedMod, standDownMod, orderAccuracyMod, elevationMod };
+  return { effective, base, readinessMod, ewarMod, accurateMod, inaccurateMod, disorderedMod, standDownMod, orderAccuracyMod, elevationMod, areaVsInfantryMod };
 }
 
 /**

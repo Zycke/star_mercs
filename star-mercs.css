@@ -1909,3 +1909,93 @@
 .star-mercs .accuracy-details {
   flex-wrap: wrap;
 }
+
+/* ============================= */
+/*  Global Select/Dropdown Fix   */
+/* ============================= */
+
+/* Ensure ALL select elements and their options are readable regardless of context */
+select,
+.star-mercs select,
+.star-mercs.sheet select,
+.dialog select,
+.app select,
+.window-app select {
+  background: var(--sm-bg-input, #0d1a30);
+  color: var(--sm-text, #e0e0e0);
+  border: 1px solid var(--sm-border, #3a3a5a);
+  border-radius: var(--sm-radius, 4px);
+  padding: 4px 8px;
+  font-size: 13px;
+}
+
+select option,
+.star-mercs select option,
+.star-mercs.sheet select option,
+.dialog select option,
+.app select option,
+.window-app select option {
+  background: var(--sm-bg-input, #0d1a30);
+  color: var(--sm-text, #e0e0e0);
+}
+
+select:focus,
+.star-mercs select:focus,
+.dialog select:focus,
+.app select:focus {
+  border-color: var(--sm-accent, #c9a227);
+  outline: none;
+  box-shadow: 0 0 3px rgba(201, 162, 39, 0.3);
+}
+
+/* GM override select */
+.gm-override-row select {
+  flex: 1;
+  font-size: 11px;
+  background: var(--sm-bg-input, #0d1a30);
+  color: var(--sm-text, #e0e0e0);
+  border: 1px solid var(--sm-border, #3a3a5a);
+}
+
+.gm-override-row select option {
+  background: var(--sm-bg-input, #0d1a30);
+  color: var(--sm-text, #e0e0e0);
+}
+
+/* ============================= */
+/*  Detection Ring Controls      */
+/* ============================= */
+
+.star-mercs-detection-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 8px;
+  background: rgba(0, 204, 255, 0.08);
+  border-bottom: 1px solid rgba(0, 204, 255, 0.2);
+  font-size: 11px;
+  color: #b0d0e0;
+}
+
+.star-mercs-detection-controls label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.star-mercs-detection-controls input[type="checkbox"] {
+  margin: 0;
+  cursor: pointer;
+}
+
+.star-mercs-detection-controls input[type="number"] {
+  width: 40px;
+  text-align: center;
+  padding: 1px 4px;
+  font-size: 11px;
+  background: var(--sm-bg-input, #0d1a30);
+  color: var(--sm-text, #e0e0e0);
+  border: 1px solid var(--sm-border, #3a3a5a);
+  border-radius: 3px;
+}
