@@ -27,9 +27,9 @@ export function hexKey(center) {
  * @returns {{x: number, y: number}[]}
  */
 export function getAdjacentHexCenters(center) {
-  const neighbors = canvas.grid.getAdjacentPositions?.(center);
-  if (!neighbors || neighbors.length === 0) return [];
-  return neighbors.map(pos => snapToHexCenter(pos));
+  const offsets = canvas.grid.getAdjacentOffsets(center);
+  if (!offsets || offsets.length === 0) return [];
+  return offsets.map(offset => canvas.grid.getCenterPoint(offset));
 }
 
 /**
