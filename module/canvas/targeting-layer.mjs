@@ -1,3 +1,5 @@
+import { snapToHexCenter, computeHexPath } from "../hex-utils.mjs";
+
 /**
  * PIXI.Container that renders targeting arrows on the canvas.
  * Draws colored arrows from each unit's token to the tokens of its weapon targets.
@@ -207,8 +209,8 @@ export default class TargetingArrowLayer extends PIXI.Container {
   /* ---------------------------------------- */
 
   /**
-   * Draw green dashed arrows from tokens to their planned movement destinations.
-   * Destinations are stored as token flags during the Orders phase.
+   * Draw green arrows from tokens through their waypoints to their planned movement destinations.
+   * Arrows follow the waypoint path segment by segment.
    * Non-GM players only see arrows for their own team's units.
    * @private
    */
@@ -227,15 +229,21 @@ export default class TargetingArrowLayer extends PIXI.Container {
       const dest = token.document.getFlag("star-mercs", "moveDestination");
       if (!dest) continue;
 
-      // Re-snap destination to hex center for accurate arrow endpoint
-      const snapped = canvas.grid.getSnappedPoint(
-        { x: dest.x, y: dest.y },
-        { mode: CONST.GRID_SNAPPING_MODES.CENTER }
-      );
+      const waypoints = token.document.getFlag("star-mercs", "moveWaypoints");
 
-      const from = token.center;
-      const to = { x: snapped.x, y: snapped.y };
-      this._drawArrow(from, to, TargetingArrowLayer.MOVE_ARROW_COLOR, 0);
+      if (waypoints && waypoints.length > 1) {
+        // Draw arrows segment by segment through waypoints
+        let from = token.center;
+        for (const wp of waypoints) {
+          const snapped = snapToHexCenter(wp);
+          this._drawArrow(from, snapped, TargetingArrowLayer.MOVE_ARROW_COLOR, 0);
+          from = snapped;
+        }
+      } else {
+        // Single destination — draw one arrow
+        const snapped = snapToHexCenter(dest);
+        this._drawArrow(token.center, snapped, TargetingArrowLayer.MOVE_ARROW_COLOR, 0);
+      }
     }
   }
 
@@ -244,43 +252,51 @@ export default class TargetingArrowLayer extends PIXI.Container {
   /* ---------------------------------------- */
 
   /**
-   * Draw a filled hex highlight at each controlled token's move destination.
-   * Only drawn for currently selected/controlled tokens.
+   * Draw filled hex highlights along the full waypoint path for each controlled token.
+   * All hexes in the computed path are highlighted, not just the destination.
    * @private
    */
   _drawMoveDestinationHighlights() {
     if (!canvas?.tokens?.controlled?.length) return;
 
     const g = this.arrowGraphics;
+    const shape = canvas.grid.getShape();
+    if (!shape || shape.length < 3) return;
+
+    const shapeCenterX = shape.reduce((sum, p) => sum + p.x, 0) / shape.length;
+    const shapeCenterY = shape.reduce((sum, p) => sum + p.y, 0) / shape.length;
 
     for (const token of canvas.tokens.controlled) {
       const dest = token.document.getFlag("star-mercs", "moveDestination");
       if (!dest) continue;
 
-      // Re-snap destination to hex center to ensure proper grid alignment
-      const snapped = canvas.grid.getSnappedPoint(
-        { x: dest.x, y: dest.y },
-        { mode: CONST.GRID_SNAPPING_MODES.CENTER }
-      );
+      const waypoints = token.document.getFlag("star-mercs", "moveWaypoints");
 
-      // Get hex shape vertices (relative to top-left)
-      const shape = canvas.grid.getShape();
-      if (!shape || shape.length < 3) continue;
-
-      // Derive top-left from center minus shape centroid (self-consistent with shape vertices)
-      const shapeCenterX = shape.reduce((sum, p) => sum + p.x, 0) / shape.length;
-      const shapeCenterY = shape.reduce((sum, p) => sum + p.y, 0) / shape.length;
-      const topLeft = { x: snapped.x - shapeCenterX, y: snapped.y - shapeCenterY };
-
-      // Draw filled hex polygon
-      g.lineStyle(2, TargetingArrowLayer.MOVE_ARROW_COLOR, 0.6);
-      g.beginFill(TargetingArrowLayer.MOVE_ARROW_COLOR, 0.2);
-      g.moveTo(topLeft.x + shape[0].x, topLeft.y + shape[0].y);
-      for (let i = 1; i < shape.length; i++) {
-        g.lineTo(topLeft.x + shape[i].x, topLeft.y + shape[i].y);
+      // Build the full hex-by-hex path through waypoints
+      let fullPath = [];
+      if (waypoints && waypoints.length > 1) {
+        let start = snapToHexCenter(token.center);
+        for (const wp of waypoints) {
+          const segment = computeHexPath(start, snapToHexCenter(wp));
+          fullPath.push(...segment);
+          if (segment.length > 0) start = segment[segment.length - 1];
+        }
+      } else {
+        fullPath = computeHexPath(snapToHexCenter(token.center), snapToHexCenter(dest));
       }
-      g.closePath();
-      g.endFill();
+
+      // Highlight every hex in the path
+      for (const hex of fullPath) {
+        const topLeft = { x: hex.x - shapeCenterX, y: hex.y - shapeCenterY };
+        g.lineStyle(2, TargetingArrowLayer.MOVE_ARROW_COLOR, 0.6);
+        g.beginFill(TargetingArrowLayer.MOVE_ARROW_COLOR, 0.2);
+        g.moveTo(topLeft.x + shape[0].x, topLeft.y + shape[0].y);
+        for (let i = 1; i < shape.length; i++) {
+          g.lineTo(topLeft.x + shape[i].x, topLeft.y + shape[i].y);
+        }
+        g.closePath();
+        g.endFill();
+      }
     }
   }
 }
