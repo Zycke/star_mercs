@@ -915,6 +915,11 @@ export default class StarMercsCombat extends Combat {
       const attackerComms = this._getCommsChainStatus(token.id);
       const defenderComms = this._getCommsChainStatus(defenderToken?.id ?? assaultTargetId);
 
+      // Shock trait: if attacker has Shock and defender does not, defender gets +1 penalty
+      const attackerHasShock = actor.hasTrait?.("Shock") ?? false;
+      const defenderHasShock = targetActor.hasTrait?.("Shock") ?? false;
+      const shockPenalty = (attackerHasShock && !defenderHasShock) ? 1 : 0;
+
       // Roll morale for both
       const assaultRoll = new Roll("1d10");
       await assaultRoll.evaluate();
@@ -922,7 +927,7 @@ export default class StarMercsCombat extends Combat {
 
       const defenderRoll = new Roll("1d10");
       await defenderRoll.evaluate();
-      const dResult = this._evaluateMoraleRoll(defenderRoll.total, defenderDmg, defenderReadiness);
+      const dResult = this._evaluateMoraleRoll(defenderRoll.total, defenderDmg + shockPenalty, defenderReadiness);
 
       const allRolls = [assaultRoll, defenderRoll];
 
@@ -959,14 +964,14 @@ export default class StarMercsCombat extends Combat {
         dRerollObj = new Roll("1d10");
         await dRerollObj.evaluate();
         allRolls.push(dRerollObj);
-        dRerollEval = this._evaluateMoraleRoll(dRerollObj.total, defenderDmg, defenderReadiness);
+        dRerollEval = this._evaluateMoraleRoll(dRerollObj.total, defenderDmg + shockPenalty, defenderReadiness);
         dFinalPassed = dRerollEval.passed;
       } else if (!dResult.passed && defenderComms.hasCommandInChain) {
         dRerollType = "command";
         dRerollObj = new Roll("1d10");
         await dRerollObj.evaluate();
         allRolls.push(dRerollObj);
-        dRerollEval = this._evaluateMoraleRoll(dRerollObj.total, defenderDmg, defenderReadiness);
+        dRerollEval = this._evaluateMoraleRoll(dRerollObj.total, defenderDmg + shockPenalty, defenderReadiness);
         dFinalPassed = dRerollEval.passed;
       }
 
@@ -992,6 +997,7 @@ export default class StarMercsCombat extends Combat {
       // Defender roll details
       html += `<div class="morale-details">${targetCanvasToken.name}: Roll ${defenderRoll.total}`;
       if (defenderDmg > 0) html += ` +${defenderDmg} dmg`;
+      if (shockPenalty > 0) html += ` +${shockPenalty} Shock`;
       html += ` = ${dResult.total} vs RDY ${defenderReadiness} — ${dResult.passed ? "Passed" : "Failed"}</div>`;
       if (dRerollType === "isolation") {
         html += `<div class="morale-reroll isolation">${targetCanvasToken.name} Isolation re-roll: ${dRerollObj.total}`;
@@ -1491,11 +1497,8 @@ export default class StarMercsCombat extends Combat {
       const distance = StarMercsActor.getHexDistance(attackerToken, targetToken);
       const hexesMoved = Math.max(0, distance - 1);
 
-      // Derive top-left from hex center using shape centroid
-      const shape = canvas.grid.getShape();
-      const shapeCX = shape.reduce((sum, p) => sum + p.x, 0) / shape.length;
-      const shapeCY = shape.reduce((sum, p) => sum + p.y, 0) / shape.length;
-      const topLeft = { x: adjacentHex.x - shapeCX, y: adjacentHex.y - shapeCY };
+      // Derive top-left from hex center using Foundry's grid API
+      const topLeft = canvas.grid.getTopLeftPoint(adjacentHex);
       await token.update({ x: topLeft.x, y: topLeft.y }, { _starMercsAutoMove: true });
 
       // Track movement for fuel consumption
@@ -1661,17 +1664,12 @@ export default class StarMercsCombat extends Combat {
       // Calculate MP cost
       const { totalCost } = calculatePathCost(canvasToken.center, path, mover.actor);
 
-      // Compute shape centroid for center→top-left conversion
-      const shape = canvas.grid.getShape();
-      const shapeCX = shape.reduce((sum, p) => sum + p.x, 0) / shape.length;
-      const shapeCY = shape.reduce((sum, p) => sum + p.y, 0) / shape.length;
-
       if (mover.contestLost) {
         // Move to last hex before the contested destination
         const safePath = path.slice(0, -1);
         if (safePath.length > 0) {
           const safeHex = safePath[safePath.length - 1];
-          const topLeft = { x: safeHex.x - shapeCX, y: safeHex.y - shapeCY };
+          const topLeft = canvas.grid.getTopLeftPoint(safeHex);
           await mover.token.update({ x: topLeft.x, y: topLeft.y }, { _starMercsAutoMove: true });
           const { totalCost: safeCost } = calculatePathCost(canvasToken.center, safePath, mover.actor);
           await mover.token.setFlag("star-mercs", "movementUsed", safeCost);
@@ -1690,7 +1688,7 @@ export default class StarMercsCombat extends Combat {
 
       // Move token to final destination
       const finalHex = path[path.length - 1];
-      const topLeft = { x: finalHex.x - shapeCX, y: finalHex.y - shapeCY };
+      const topLeft = canvas.grid.getTopLeftPoint(finalHex);
       await mover.token.update({ x: topLeft.x, y: topLeft.y }, { _starMercsAutoMove: true });
       await mover.token.setFlag("star-mercs", "movementUsed", totalCost);
       movedCount++;

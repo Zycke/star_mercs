@@ -1,4 +1,5 @@
 import StarMercsActor from "./documents/actor.mjs";
+import { checkLOS } from "./detection.mjs";
 
 /**
  * Manages communications link chains between units.
@@ -290,6 +291,45 @@ export default class CommsLinkManager {
 
     // Fall back to standard chain LOS check
     return this.canSeeViaChain(firingTokenId, targetTokenId);
+  }
+
+  /**
+   * Check terrain-based LOS through comms chain (uses elevation/terrain blocking).
+   * @param {string} firingTokenId
+   * @param {string} targetTokenId
+   * @returns {boolean}
+   */
+  canSeeViaChainTerrain(firingTokenId, targetTokenId) {
+    this.refresh();
+    const chain = this.getChainForToken(firingTokenId);
+    const targetCanvasToken = canvas?.tokens?.get(targetTokenId);
+    if (!targetCanvasToken) return false;
+
+    for (const memberId of chain) {
+      const memberToken = canvas?.tokens?.get(memberId);
+      if (!memberToken) continue;
+      if (checkLOS(memberToken.center, targetCanvasToken.center)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Check airstrike visibility using terrain-based LOS: chain LOS OR Satellite Uplink.
+   * @param {string} firingTokenId
+   * @param {string} targetTokenId
+   * @returns {boolean}
+   */
+  canSeeForAirstrikeTerrain(firingTokenId, targetTokenId) {
+    const chain = this.getChainForToken(firingTokenId);
+    for (const memberId of chain) {
+      const memberToken = canvas?.tokens?.get(memberId);
+      if (memberToken?.actor?.hasTrait("Satellite Uplink")) {
+        return true;
+      }
+    }
+    return this.canSeeViaChainTerrain(firingTokenId, targetTokenId);
   }
 
   /**

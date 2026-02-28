@@ -102,6 +102,9 @@ export default class DetectionLayer extends PIXI.Container {
    * @private
    */
   _drawDetectionRangeRing() {
+    // Check if detection ring is enabled
+    if (!game.settings.get("star-mercs", "showDetectionRing")) return;
+
     const controlled = canvas.tokens.controlled;
     if (!controlled?.length) return;
 
@@ -109,8 +112,8 @@ export default class DetectionLayer extends PIXI.Container {
     if (!token?.actor || token.actor.type !== "unit") return;
 
     const sensors = token.actor.system.sensors ?? 0;
-    const defaultSig = 2; // Show range against a standard signature-2 target
-    const detRange = sensors + defaultSig;
+    const targetSig = game.settings.get("star-mercs", "detectionRingTargetSig") ?? 2;
+    const detRange = sensors + targetSig;
     if (detRange <= 0) return;
 
     const g = this.rangeGraphics;

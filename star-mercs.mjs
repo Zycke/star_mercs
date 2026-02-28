@@ -164,6 +164,30 @@ Hooks.once("init", () => {
     }
   });
 
+  game.settings.register("star-mercs", "showDetectionRing", {
+    name: "Show Detection Ring",
+    hint: "Display the detection range ring around the selected token.",
+    scope: "client",
+    config: false,
+    type: Boolean,
+    default: true,
+    onChange: () => {
+      game.starmercs?.detectionLayer?.drawDetection();
+    }
+  });
+
+  game.settings.register("star-mercs", "detectionRingTargetSig", {
+    name: "Target Signature Size",
+    hint: "The assumed target signature for the detection range ring display.",
+    scope: "client",
+    config: false,
+    type: Number,
+    default: 2,
+    onChange: () => {
+      game.starmercs?.detectionLayer?.drawDetection();
+    }
+  });
+
   // --- World Settings (GM only) ---
   game.settings.register("star-mercs", "teamAssignments", {
     name: "Team Assignments",
@@ -586,6 +610,39 @@ Hooks.on("renderCombatTracker", (app, html, data) => {
     const icon = nextTurnBtn.querySelector("i");
     if (icon) icon.setAttribute("title", "Next Phase");
   }
+
+  // Inject detection ring controls below the phase display
+  html.querySelectorAll(".star-mercs-detection-controls").forEach(el => el.remove());
+  const ringEnabled = game.settings.get("star-mercs", "showDetectionRing");
+  const targetSig = game.settings.get("star-mercs", "detectionRingTargetSig");
+  const detControlsHtml = `
+    <div class="star-mercs-detection-controls">
+      <label class="sm-det-toggle">
+        <input type="checkbox" class="sm-detection-ring-toggle" ${ringEnabled ? "checked" : ""}/>
+        Sensor Ring
+      </label>
+      <label class="sm-det-sig">
+        Target Sig:
+        <input type="number" class="sm-detection-ring-sig" value="${targetSig}" min="-5" max="10" step="1"/>
+      </label>
+    </div>
+  `;
+  const phaseEl = html.querySelector(".star-mercs-phase-display");
+  if (phaseEl) {
+    phaseEl.insertAdjacentHTML("afterend", detControlsHtml);
+  }
+
+  // Wire up detection ring controls
+  html.querySelectorAll(".sm-detection-ring-toggle").forEach(cb => {
+    cb.addEventListener("change", (event) => {
+      game.settings.set("star-mercs", "showDetectionRing", event.target.checked);
+    });
+  });
+  html.querySelectorAll(".sm-detection-ring-sig").forEach(inp => {
+    inp.addEventListener("change", (event) => {
+      game.settings.set("star-mercs", "detectionRingTargetSig", Number(event.target.value));
+    });
+  });
 });
 
 /* ============================================ */

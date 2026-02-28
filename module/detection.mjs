@@ -130,9 +130,11 @@ export function canDetect(observerToken, targetToken) {
 export function getDetectionLevel(observerToken, targetToken) {
   const result = canDetect(observerToken, targetToken);
 
+  // Adjacent units (distance ≤ 1) always fully detect each other
+  if (result.distance <= 1) return "visible";
+
   if (result.detectionRange <= 0) {
-    // If detection range is 0 or negative, only detect if literally adjacent
-    if (result.distance <= 1) return result.hasLOS ? "visible" : "blip";
+    // If detection range is 0 or negative, only detect if close
     if (result.distance <= 2) return "blip";
     return "hidden";
   }
