@@ -21,6 +21,7 @@ import TeamSettingsForm from "./module/apps/team-settings.mjs";
 import * as detection from "./module/detection.mjs";
 import DetectionLayer from "./module/canvas/detection-layer.mjs";
 import MovementPathLayer from "./module/canvas/movement-path-layer.mjs";
+import DamageOverlayLayer from "./module/canvas/damage-overlay-layer.mjs";
 import TurnControlPanel from "./module/apps/turn-control.mjs";
 
 /* ============================================ */
@@ -38,7 +39,8 @@ Hooks.once("init", () => {
     combat,
     dice,
     commsLinkManager: new CommsLinkManager(),
-    hexUtils
+    hexUtils,
+    detection
   };
 
   // Assign system configuration object
@@ -262,6 +264,17 @@ Hooks.on("createActor", async (actor, options, userId) => {
   if (traitData.length > 0) {
     await actor.createEmbeddedDocuments("Item", traitData);
   }
+
+  // Set default prototype token properties
+  await actor.update({
+    "prototypeToken.width": 0.5,
+    "prototypeToken.height": 0.5,
+    "prototypeToken.texture.anchorX": 0.5,
+    "prototypeToken.texture.anchorY": 0.5,
+    "prototypeToken.displayName": CONST.TOKEN_DISPLAY_MODES.OWNER,
+    "prototypeToken.displayBars": CONST.TOKEN_DISPLAY_MODES.OWNER,
+    "prototypeToken.lockRotation": true
+  });
 });
 
 /* ============================================ */
@@ -322,12 +335,23 @@ Hooks.on("canvasReady", () => {
   const movementPathLayer = new MovementPathLayer();
   game.starmercs.movementPathLayer = movementPathLayer;
   canvas.interface.addChild(movementPathLayer);
+
+  // Damage overlay
+  const previousDamageOverlay = game.starmercs.damageOverlayLayer;
+  if (previousDamageOverlay) {
+    previousDamageOverlay.destroy({ children: true });
+  }
+  const damageOverlayLayer = new DamageOverlayLayer();
+  game.starmercs.damageOverlayLayer = damageOverlayLayer;
+  canvas.interface.addChild(damageOverlayLayer);
+  damageOverlayLayer.drawDamageNumbers();
 });
 
 /** Redraw arrows when a token is visually refreshed (position change, etc.). */
 Hooks.on("refreshToken", () => {
   game.starmercs?.targetingArrowLayer?.drawArrows();
   game.starmercs?.commsLinkLayer?.drawLinks();
+  game.starmercs?.damageOverlayLayer?.drawDamageNumbers();
 });
 
 /**
@@ -438,6 +462,11 @@ Hooks.on("updateToken", (tokenDoc, changes, options) => {
   if (foundry.utils.hasProperty(changes, "flags.star-mercs.moveDestination")
       || foundry.utils.hasProperty(changes, "flags.star-mercs.assaultTarget")) {
     game.starmercs?.targetingArrowLayer?.drawArrows();
+  }
+
+  // Redraw damage overlay when pending damage changes
+  if (foundry.utils.hasProperty(changes, "flags.star-mercs.pendingDamage")) {
+    game.starmercs?.damageOverlayLayer?.drawDamageNumbers();
   }
 
   // Track movement points spent during tactical phase (skip for GM override moves)
@@ -756,7 +785,7 @@ Hooks.on("renderChatMessageHTML", (message, html) => {
     });
   });
 
-  // Maneuver fire: target selection button
+  // Maneuver fire: fire only weapons that have assigned targets
   html.querySelectorAll(".maneuver-fire-btn").forEach(btn => {
     btn.addEventListener("click", async (event) => {
       event.preventDefault();
@@ -774,32 +803,44 @@ Hooks.on("renderChatMessageHTML", (message, html) => {
       btn.disabled = true;
       btn.textContent = "Firing...";
 
-      // Fire all weapons at currently targeted enemies (set via Foundry targeting)
-      const targets = Array.from(game.user.targets);
-      if (targets.length === 0) {
-        ui.notifications.warn("Select targets first using Foundry's targeting (T key + click).");
-        btn.disabled = false;
-        btn.textContent = "Fire Weapons";
-        return;
-      }
-
+      let firedAny = false;
       for (const weapon of token.actor.items) {
         if (weapon.type !== "weapon") continue;
         if (weapon.system.artillery || weapon.system.aircraft) continue;
         if (!weapon.system.range) continue;
 
-        // Fire at the first in-range target
-        for (const targetToken of targets) {
-          if (!targetToken.actor || targetToken.actor.system.team === token.actor.system.team) continue;
-          const dist = documents.StarMercsActor.getHexDistance(token, targetToken);
-          if (dist <= weapon.system.range) {
-            await token.actor.rollAttack(weapon, targetToken.actor);
-            break;
-          }
+        // Only fire weapons that have an assigned target
+        const targetId = weapon.system.targetId;
+        if (!targetId) continue;
+
+        const targetToken = canvas.tokens.placeables.find(t => t.document.id === targetId);
+        if (!targetToken?.actor) continue;
+        if (targetToken.actor.system.team === token.actor.system.team) continue;
+
+        const dist = documents.StarMercsActor.getHexDistance(token, targetToken);
+        if (dist <= weapon.system.range) {
+          await token.actor.rollAttack(weapon, targetToken.actor);
+          firedAny = true;
         }
       }
 
+      if (!firedAny) {
+        ui.notifications.info("No weapons had assigned targets in range.");
+      }
       btn.textContent = "Fired!";
+    });
+  });
+
+  // Chat card unit links: click to select token and pan camera
+  html.querySelectorAll(".unit-link[data-token-id]").forEach(el => {
+    el.addEventListener("click", (event) => {
+      event.preventDefault();
+      const tokenId = el.dataset.tokenId;
+      if (!tokenId) return;
+      const token = canvas.tokens.placeables.find(t => t.document.id === tokenId);
+      if (!token) return;
+      token.control({ releaseOthers: true });
+      canvas.animatePan({ x: token.center.x, y: token.center.y, duration: 250 });
     });
   });
 });
@@ -924,6 +965,22 @@ Hooks.on("refreshToken", (token) => {
 /** Redraw detection overlay on token movement. */
 Hooks.on("refreshToken", () => {
   game.starmercs?.detectionLayer?.drawDetection();
+});
+
+/** Reduce token nameplate font size (~1/3 of default) and shrink token bars (2/3 size). */
+Hooks.on("refreshToken", (token) => {
+  // Shrink nameplate text
+  if (token.nameplate) {
+    token.nameplate.style.fontSize = 10;
+  }
+
+  // Shrink token bars to 2/3 width and height
+  if (token.bars) {
+    token.bars.scale.set(0.67, 0.67);
+    // Re-center bars horizontally
+    const tokenW = token.w ?? token.document.width * canvas.grid.size;
+    token.bars.position.x = tokenW * (1 - 0.67) / 2;
+  }
 });
 
 /* ============================================ */

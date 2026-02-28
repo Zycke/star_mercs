@@ -238,16 +238,12 @@ export function getDetectionLevel(observerToken, targetToken) {
   // Adjacent units (distance ≤ 1) always fully detect each other
   if (result.distance <= 1) return "visible";
 
-  if (result.detectionRange <= 0) {
-    // If detection range is 0 or negative, only detect if close
-    if (result.distance <= 2) return "blip";
-    return "hidden";
-  }
+  // No LOS = no detection at any range
+  if (!result.hasLOS) return "hidden";
 
-  // Cap at "blip" when LOS is blocked — units without line of sight can never be "visible"
-  if (result.distance <= result.detectionRange) {
-    return result.hasLOS ? "visible" : "blip";
-  }
+  // With LOS: normal detection range logic
+  if (result.detectionRange <= 0) return "hidden";
+  if (result.distance <= result.detectionRange) return "visible";
   if (result.distance <= result.detectionRange * 2) return "blip";
   return "hidden";
 }

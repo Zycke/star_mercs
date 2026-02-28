@@ -59,10 +59,21 @@ export default class CommsLinkLayer extends PIXI.Container {
     manager.refresh();
     const links = manager.getDirectLinks();
 
+    // Non-GM players only see their own team's links
+    const assignments = game.settings.get("star-mercs", "teamAssignments") ?? {};
+    const myTeam = game.user.isGM ? null : (assignments[game.user.id] ?? null);
+
     for (const { token1Id, token2Id, chainIndex } of links) {
       const t1 = canvas.tokens.get(token1Id);
       const t2 = canvas.tokens.get(token2Id);
       if (!t1 || !t2) continue;
+
+      // Filter: non-GM players only see links for their own team
+      if (myTeam) {
+        const team1 = t1.actor?.system?.team ?? "a";
+        const team2 = t2.actor?.system?.team ?? "a";
+        if (team1 !== myTeam && team2 !== myTeam) continue;
+      }
 
       const color = CommsLinkLayer.CHAIN_COLORS[chainIndex % CommsLinkLayer.CHAIN_COLORS.length];
       this._drawDottedLine(t1.center, t2.center, color);
