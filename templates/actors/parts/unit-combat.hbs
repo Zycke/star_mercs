@@ -93,6 +93,29 @@
     {{/if}}
   </div>
 
+  {{!-- Advanced Recon Equipment targeting (Orders phase) --}}
+  {{#if hasAdvancedRecon}}
+    <div class="status-block recon-block">
+      <label><i class="fas fa-eye"></i> Recon Target</label>
+      {{#if isOrdersPhase}}
+        {{#if advReconTargetId}}
+          <span class="status-value recon-active">{{advReconTargetName}}</span>
+          <button type="button" class="clear-recon-target">
+            <i class="fas fa-times"></i> Clear
+          </button>
+        {{else}}
+          <button type="button" class="set-recon-target">
+            <i class="fas fa-crosshairs"></i> Designate Target
+          </button>
+        {{/if}}
+      {{else}}
+        <span class="status-value">
+          {{#if advReconTargetId}}{{advReconTargetName}}{{else}}None{{/if}}
+        </span>
+      {{/if}}
+    </div>
+  {{/if}}
+
   {{!-- Movement Points (shown during active combat) --}}
   {{#if combatActive}}
     <div class="status-block mp-block">
@@ -114,6 +137,34 @@
       </div>
     </div>
   {{/if}}
+
+  {{!-- Active Signature --}}
+  <div class="status-block active-sig-block">
+    <label>Active Signature</label>
+    <div class="active-sig-display">
+      <span class="active-sig-value">{{activeSignature}}</span>
+      {{#if hasSignatureModifiers}}
+        <span class="sig-breakdown">
+          (base {{baseSignature}}{{#each signatureModifiers}} {{value}} {{label}}{{/each}})
+        </span>
+      {{/if}}
+    </div>
+  </div>
+
+  {{!-- Sensor Ring Controls --}}
+  <div class="status-block sensor-ring-block">
+    <label>Sensor Ring</label>
+    <div class="sensor-ring-controls">
+      <label class="sm-ring-toggle-label">
+        <input type="checkbox" class="sm-sheet-ring-toggle" {{#if showDetectionRing}}checked{{/if}}/>
+        Show
+      </label>
+      <label class="sm-ring-sig-label">
+        Target Sig:
+        <input type="number" class="sm-sheet-ring-sig" value="{{detectionRingTargetSig}}" min="-5" max="10" step="1"/>
+      </label>
+    </div>
+  </div>
 
   {{!-- Penalties Section (separate panel) --}}
   <div class="combat-penalties-section">

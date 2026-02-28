@@ -13,6 +13,7 @@
  */
 
 import { getHexElevation, snapToHexCenter } from "./hex-utils.mjs";
+import { getTerrainCoverMod } from "./detection.mjs";
 
 /**
  * Validate whether a weapon can target a specific unit based on attack type
@@ -115,9 +116,38 @@ export function calculateAccuracy(weapon, attacker, target = null) {
     }
   }
 
-  const effective = Math.max(2, Math.min(10, base - accurateMod + inaccurateMod + readinessMod + ewarMod + disorderedMod + standDownMod + orderAccuracyMod + elevationMod + areaVsInfantryMod));
+  // Terrain cover: target's terrain provides defense based on Infantry/Vehicle trait
+  // Does NOT apply during assault orders (for either attacker or defender)
+  let terrainCoverMod = 0;
+  const isAssault = attacker.system.currentOrder === "assault";
+  const isTargetAssault = target?.system?.currentOrder === "assault";
+  if (target && !isAssault && !isTargetAssault) {
+    const targetTokenCover = canvas?.tokens?.placeables.find(t => t.actor === target);
+    if (targetTokenCover) {
+      const cover = getTerrainCoverMod(targetTokenCover);
+      terrainCoverMod = cover.mod;
+    }
+  }
 
-  return { effective, base, readinessMod, ewarMod, accurateMod, inaccurateMod, disorderedMod, standDownMod, orderAccuracyMod, elevationMod, areaVsInfantryMod };
+  // Advanced Recon Equipment: -1 to threshold (easier to hit) if target is designated
+  let advReconMod = 0;
+  if (target) {
+    const targetTokenRecon = canvas?.tokens?.placeables.find(t => t.actor === target);
+    if (targetTokenRecon) {
+      // Check if any enemy has designated this target via Advanced Recon Equipment
+      for (const tok of canvas.tokens.placeables) {
+        if (!tok.actor || tok.actor === attacker) continue;
+        if (tok.document?.getFlag("star-mercs", "advReconTarget") === targetTokenRecon.id) {
+          advReconMod = -1;
+          break;
+        }
+      }
+    }
+  }
+
+  const effective = Math.max(2, Math.min(10, base - accurateMod + inaccurateMod + readinessMod + ewarMod + disorderedMod + standDownMod + orderAccuracyMod + elevationMod + areaVsInfantryMod + terrainCoverMod + advReconMod));
+
+  return { effective, base, readinessMod, ewarMod, accurateMod, inaccurateMod, disorderedMod, standDownMod, orderAccuracyMod, elevationMod, areaVsInfantryMod, terrainCoverMod, advReconMod };
 }
 
 /**

@@ -1963,34 +1963,53 @@ select:focus,
 }
 
 /* ============================= */
-/*  Detection Ring Controls      */
+/*  Active Signature Block       */
 /* ============================= */
 
-.star-mercs-detection-controls {
+.active-sig-block .active-sig-display {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.active-sig-block .active-sig-value {
+  font-size: 16px;
+  font-weight: bold;
+  color: var(--sm-accent-light, #ddb94a);
+}
+
+.active-sig-block .sig-breakdown {
+  font-size: 10px;
+  color: var(--sm-text-muted, #999);
+}
+
+/* ============================= */
+/*  Sensor Ring Controls         */
+/* ============================= */
+
+.sensor-ring-block .sensor-ring-controls {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 4px 8px;
-  background: rgba(0, 204, 255, 0.08);
-  border-bottom: 1px solid rgba(0, 204, 255, 0.2);
-  font-size: 11px;
-  color: #b0d0e0;
 }
 
-.star-mercs-detection-controls label {
+.sensor-ring-controls .sm-ring-toggle-label,
+.sensor-ring-controls .sm-ring-sig-label {
   display: flex;
   align-items: center;
   gap: 4px;
   cursor: pointer;
+  font-size: 11px;
+  color: var(--sm-text-muted, #999);
 }
 
-.star-mercs-detection-controls input[type="checkbox"] {
+.sensor-ring-controls input[type="checkbox"] {
   margin: 0;
   cursor: pointer;
 }
 
-.star-mercs-detection-controls input[type="number"] {
-  width: 40px;
+.sensor-ring-controls input[type="number"] {
+  width: 42px;
   text-align: center;
   padding: 1px 4px;
   font-size: 11px;
@@ -1998,4 +2017,41 @@ select:focus,
   color: var(--sm-text, #e0e0e0);
   border: 1px solid var(--sm-border, #3a3a5a);
   border-radius: 3px;
+}
+
+/* ============================= */
+/*  Recon Target Block           */
+/* ============================= */
+
+.recon-block label {
+  color: rgba(0, 204, 255, 0.9);
+}
+
+.recon-block .recon-active {
+  color: #00ccff;
+  font-weight: bold;
+}
+
+.recon-block button {
+  font-size: 11px;
+  padding: 2px 8px;
+  cursor: pointer;
+  border-radius: var(--sm-radius, 4px);
+  border: 1px solid var(--sm-border, #3a3a5a);
+  background: var(--sm-bg-light, #1f2f4d);
+  color: var(--sm-text, #e0e0e0);
+}
+
+.recon-block button:hover {
+  background: var(--sm-primary, #2d5a27);
+  border-color: var(--sm-primary-light, #4a7c59);
+}
+
+.recon-block .clear-recon-target {
+  background: var(--sm-danger, #a83232);
+  border-color: var(--sm-danger-light, #cc4444);
+}
+
+.recon-block .clear-recon-target:hover {
+  background: var(--sm-danger-light, #cc4444);
 }

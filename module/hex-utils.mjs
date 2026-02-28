@@ -185,8 +185,8 @@ export function validatePath(token, path) {
       return { valid: false, blockedAt: hexCenter, reason: terrainReason };
     }
 
-    // Elevation restriction (skip for Flying/Hover)
-    if (!isFlying && !isHover) {
+    // Elevation restriction (skip for Flying only; Hover must obey)
+    if (!isFlying) {
       const prevElev = getHexElevation(prevCenter);
       const nextElev = getHexElevation(hexCenter);
       if (Math.abs(nextElev - prevElev) > 1) {
@@ -381,8 +381,17 @@ export function getMovementCost(hexCenter, actor = null) {
   const isHover = actor?.hasTrait?.("Hover") ?? false;
   const isAmphibious = actor?.hasTrait?.("Amphibious") ?? false;
 
-  // Flying and Hover units always cost 1 MP
-  if (isFlying || isHover) return { cost: 1, passable: true, reason: null };
+  // Flying units always cost 1 MP regardless of terrain
+  if (isFlying) return { cost: 1, passable: true, reason: null };
+
+  // Hover units can cross any terrain including water at terrain cost - 1 (min 1)
+  if (isHover) {
+    const terrainCost = config.movementCost ?? 1;
+    const hasRoad = data.road || config.hasRoad;
+    let cost = Math.max(1, terrainCost - 1);
+    if (hasRoad) cost = Math.max(1, cost - 1);
+    return { cost, passable: true, reason: null };
+  }
 
   // Water terrain check
   if (config.waterTerrain) {
@@ -433,8 +442,8 @@ export function calculatePathCost(fromCenter, path, actor = null) {
     const hexCenter = path[i];
 
     // Elevation restriction: can't move into hex with >1 elevation difference
-    // (Flying and Hover units are exempt)
-    if (!isFlying && !isHover) {
+    // (Flying units are exempt; Hover units are NOT exempt)
+    if (!isFlying) {
       const prevElev = getHexElevation(prevCenter);
       const nextElev = getHexElevation(hexCenter);
       if (Math.abs(nextElev - prevElev) > 1) {

@@ -90,7 +90,112 @@ export function checkLOS(fromCenter, toCenter) {
 }
 
 /**
+ * Compute a token's active signature, factoring in terrain modifiers.
+ *
+ * Infantry terrain modifiers:
+ *   Woods, Hills, Swamp: -1
+ *   Mountains, Urban (Light): -2
+ *   Urban (Dense): -3
+ *
+ * Vehicle terrain modifiers:
+ *   Urban (Light): -1
+ *   Urban (Dense): -2
+ *
+ * @param {Token} token - The token whose signature to compute.
+ * @returns {{ active: number, base: number, totalMod: number, modifiers: Array<{label: string, value: number}> }}
+ */
+export function getActiveSignature(token) {
+  const actor = token?.actor;
+  if (!actor) return { active: 0, base: 0, totalMod: 0, modifiers: [] };
+
+  const baseSig = actor.system.signature ?? 0;
+  const modifiers = [];
+  let totalMod = 0;
+  const hexCenter = snapToHexCenter(token.center);
+  const terrainType = getHexTerrain(hexCenter);
+  const terrainLabel = CONFIG.STARMERCS?.terrainTypes?.[terrainType] ?? terrainType;
+
+  // Infantry terrain signature modifiers
+  if (actor.hasTrait("Infantry") && terrainType) {
+    let mod = 0;
+    switch (terrainType) {
+      case "forest": case "hill": case "swamp": mod = -1; break;
+      case "mountain": case "urbanLight": mod = -2; break;
+      case "urbanDense": mod = -3; break;
+    }
+    if (mod !== 0) {
+      totalMod += mod;
+      modifiers.push({ label: `Infantry in ${terrainLabel}`, value: mod });
+    }
+  }
+
+  // Vehicle terrain signature modifiers
+  if (actor.hasTrait("Vehicle") && terrainType) {
+    let mod = 0;
+    switch (terrainType) {
+      case "urbanLight": mod = -1; break;
+      case "urbanDense": mod = -2; break;
+    }
+    if (mod !== 0) {
+      totalMod += mod;
+      modifiers.push({ label: `Vehicle in ${terrainLabel}`, value: mod });
+    }
+  }
+
+  return { active: baseSig + totalMod, base: baseSig, totalMod, modifiers };
+}
+
+/**
+ * Compute terrain cover attack penalty for a target token.
+ *
+ * Infantry cover:
+ *   Woods, Hills, Swamp, Mountains, Urban (Light): +1 to attacker accuracy (harder to hit)
+ *   Urban (Dense): +2
+ *
+ * Vehicle cover:
+ *   Urban (Dense): +1
+ *
+ * @param {Token} targetToken - The target being attacked.
+ * @returns {{ mod: number, modifiers: Array<{label: string, value: number}> }}
+ */
+export function getTerrainCoverMod(targetToken) {
+  const actor = targetToken?.actor;
+  if (!actor) return { mod: 0, modifiers: [] };
+
+  const hexCenter = snapToHexCenter(targetToken.center);
+  const terrainType = getHexTerrain(hexCenter);
+  const terrainLabel = CONFIG.STARMERCS?.terrainTypes?.[terrainType] ?? terrainType;
+  const modifiers = [];
+  let mod = 0;
+
+  if (actor.hasTrait("Infantry") && terrainType) {
+    switch (terrainType) {
+      case "forest": case "hill": case "swamp": case "mountain": case "urbanLight":
+        mod += 1;
+        modifiers.push({ label: `Infantry cover (${terrainLabel})`, value: 1 });
+        break;
+      case "urbanDense":
+        mod += 2;
+        modifiers.push({ label: `Infantry cover (${terrainLabel})`, value: 2 });
+        break;
+    }
+  }
+
+  if (actor.hasTrait("Vehicle") && terrainType) {
+    switch (terrainType) {
+      case "urbanDense":
+        mod += 1;
+        modifiers.push({ label: `Vehicle cover (${terrainLabel})`, value: 1 });
+        break;
+    }
+  }
+
+  return { mod, modifiers };
+}
+
+/**
  * Check if an observer token can detect a target token.
+ * Uses active signature (base + terrain modifiers) for detection range.
  * @param {Token} observerToken
  * @param {Token} targetToken
  * @returns {{ detected: boolean, distance: number, detectionRange: number, hasLOS: boolean }}
@@ -101,7 +206,7 @@ export function canDetect(observerToken, targetToken) {
   }
 
   const sensors = observerToken.actor.system.sensors ?? 0;
-  const signature = targetToken.actor.system.signature ?? 0;
+  const { active: signature } = getActiveSignature(targetToken);
 
   // Check hex-based LOS
   const hasLOS = checkLOS(observerToken.center, targetToken.center);
