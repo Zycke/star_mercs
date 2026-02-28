@@ -1686,10 +1686,22 @@ export default class StarMercsCombat extends Combat {
         }
       }
 
-      // Move token to final destination
-      const finalHex = path[path.length - 1];
-      const topLeft = canvas.grid.getTopLeftPoint(finalHex);
-      await mover.token.update({ x: topLeft.x, y: topLeft.y }, { _starMercsAutoMove: true });
+      // Move token through waypoints for visible step-by-step movement
+      const moveWaypoints = mover.token.getFlag("star-mercs", "moveWaypoints");
+      if (moveWaypoints && moveWaypoints.length > 1) {
+        // Animate through each waypoint with brief pauses
+        for (const wp of moveWaypoints) {
+          const wpSnapped = snapToHexCenter(wp);
+          const wpTopLeft = canvas.grid.getTopLeftPoint(wpSnapped);
+          await mover.token.update({ x: wpTopLeft.x, y: wpTopLeft.y }, { _starMercsAutoMove: true });
+          await new Promise(r => setTimeout(r, 200));
+        }
+      } else {
+        // Single destination — move directly
+        const finalHex = path[path.length - 1];
+        const topLeft = canvas.grid.getTopLeftPoint(finalHex);
+        await mover.token.update({ x: topLeft.x, y: topLeft.y }, { _starMercsAutoMove: true });
+      }
       await mover.token.setFlag("star-mercs", "movementUsed", totalCost);
       movedCount++;
     }

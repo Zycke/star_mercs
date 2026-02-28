@@ -545,6 +545,36 @@ Hooks.on("deleteItem", (item) => {
 });
 
 /* ============================================ */
+/*  Token Control — Show Planned Movement Path */
+/* ============================================ */
+
+/** When a token is selected, display its planned movement path (if any). */
+Hooks.on("controlToken", (token, controlled) => {
+  const pathLayer = game.starmercs?.movementPathLayer;
+  if (!pathLayer) return;
+
+  if (!controlled) {
+    // Token deselected — clear path display
+    pathLayer.clear();
+    return;
+  }
+
+  const dest = token.document.getFlag("star-mercs", "moveDestination");
+  if (!dest) {
+    pathLayer.clear();
+    return;
+  }
+
+  // Build waypoint array for the path layer
+  const waypoints = token.document.getFlag("star-mercs", "moveWaypoints");
+  const wpList = (waypoints && waypoints.length > 1)
+    ? waypoints.map(wp => hexUtils.snapToHexCenter(wp))
+    : [hexUtils.snapToHexCenter(dest)];
+
+  pathLayer.drawPath(token, wpList, null);
+});
+
+/* ============================================ */
 /*  Combat Phase Hooks                         */
 /* ============================================ */
 
@@ -618,7 +648,7 @@ Hooks.on("renderCombatTracker", (app, html, data) => {
 /* ============================================ */
 
 /** Handle chat message button clicks (v13: html is a DOM element, not jQuery). */
-Hooks.on("renderChatMessage", (message, html) => {
+Hooks.on("renderChatMessageHTML", (message, html) => {
   // Morale button
   html.querySelectorAll(".roll-morale-btn").forEach(btn => {
     btn.addEventListener("click", async (event) => {
