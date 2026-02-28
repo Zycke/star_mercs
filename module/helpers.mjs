@@ -45,7 +45,9 @@ export async function preloadHandlebarsTemplates() {
     // Chat card templates
     "systems/star-mercs/templates/chat/attack-result.hbs",
     "systems/star-mercs/templates/chat/skill-check.hbs",
-    "systems/star-mercs/templates/chat/morale-button.hbs"
+    "systems/star-mercs/templates/chat/morale-button.hbs",
+    // App templates
+    "systems/star-mercs/templates/apps/turn-control.hbs"
   ];
   return loadTemplates(templatePaths);
 }

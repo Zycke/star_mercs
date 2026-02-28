@@ -287,16 +287,17 @@ export function findBestAdjacentHex(targetToken, attackerToken) {
  */
 export function normalizeHexData(entry) {
   if (typeof entry === "string") {
-    return { type: entry, elevation: 0, road: false };
+    return { type: entry, elevation: 0, road: false, objective: null };
   }
   if (entry && typeof entry === "object") {
     return {
       type: entry.type ?? "plain",
       elevation: entry.elevation ?? 0,
-      road: entry.road ?? false
+      road: entry.road ?? false,
+      objective: entry.objective ?? null
     };
   }
-  return { type: "plain", elevation: 0, road: false };
+  return { type: "plain", elevation: 0, road: false, objective: null };
 }
 
 /**

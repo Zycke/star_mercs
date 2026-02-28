@@ -399,6 +399,16 @@ STARMERCS.arrowColors = {
 };
 
 /**
+ * Objective types for hex scoring.
+ * points: base VP scored per consolidation when occupied
+ * color: PIXI hex color for the star icon
+ */
+STARMERCS.objectives = {
+  primary:   { label: "Primary Objective",   points: 3, color: 0xFFD700 },
+  secondary: { label: "Secondary Objective", points: 1, color: 0xC0C0C0 }
+};
+
+/**
  * Trait activation modes.
  */
 STARMERCS.traitModes = {

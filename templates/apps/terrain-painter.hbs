@@ -20,6 +20,15 @@
   </div>
 
   <div class="form-group">
+    <label>Objective</label>
+    <select name="selectedObjective">
+      <option value="none" {{#if (eq selectedObjective "none")}}selected{{/if}}>None</option>
+      <option value="primary" {{#if (eq selectedObjective "primary")}}selected{{/if}}>Primary (3 pts)</option>
+      <option value="secondary" {{#if (eq selectedObjective "secondary")}}selected{{/if}}>Secondary (1 pt)</option>
+    </select>
+  </div>
+
+  <div class="form-group">
     <label>Brush Size: {{brushSize}}</label>
     <input type="range" name="brushSize" value="{{brushSize}}" min="1" max="5" step="1"/>
   </div>

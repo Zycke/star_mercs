@@ -2,7 +2,7 @@ import StarMercsActor from "./actor.mjs";
 import { snapToHexCenter, hexKey, getAdjacentHexCenters, getTokensAtHex,
   areAdjacent, getAdjacentEnemies, isEngaged, computeHexPath,
   validatePath, findBestAdjacentHex, getLastSafeHex,
-  calculatePathCost } from "../hex-utils.mjs";
+  calculatePathCost, normalizeHexData } from "../hex-utils.mjs";
 import { getDetectionLevel } from "../detection.mjs";
 
 /**
@@ -81,6 +81,13 @@ export default class StarMercsCombat extends Combat {
 
   /** @override — Advance to the next phase; if all 4 done, advance round. */
   async nextTurn() {
+    // Clear all player ready flags on phase/step advance
+    for (const user of game.users) {
+      if (user.getFlag("star-mercs", "combatReady")) {
+        await user.unsetFlag("star-mercs", "combatReady");
+      }
+    }
+
     const currentIndex = this.phaseIndex;
 
     // If currently IN tactical, advance sub-step instead of phase
@@ -521,14 +528,17 @@ export default class StarMercsCombat extends Combat {
       }
     }
 
-    // 5. Store damage-taken map as a combat flag so the morale button can access it
+    // 5. Score objectives
+    await this._scoreObjectives();
+
+    // 6. Store damage-taken map as a combat flag so the morale button can access it
     const dmgMapObj = {};
     for (const [tokenId, dmg] of damageTakenMap) {
       dmgMapObj[tokenId] = dmg;
     }
     await this.setFlag("star-mercs", "damageTakenThisTurn", dmgMapObj);
 
-    // 6. Post morale button chat card instead of auto-running morale
+    // 7. Post morale button chat card instead of auto-running morale
     const moraleContent = await renderTemplate(
       "systems/star-mercs/templates/chat/morale-button.hbs",
       { combatId: this.id }
@@ -1974,6 +1984,104 @@ export default class StarMercsCombat extends Combat {
   /* ---------------------------------------- */
   /*  Helpers                                 */
   /* ---------------------------------------- */
+
+  /* ---------------------------------------- */
+  /*  Objective Scoring                       */
+  /* ---------------------------------------- */
+
+  /**
+   * Score objective hexes at the end of the consolidation phase.
+   * Primary objectives score 3 VP, secondary objectives score 1 VP.
+   * Engaged units (enemy adjacent) score 1 less point.
+   * Scores are cumulative across rounds.
+   * @private
+   */
+  async _scoreObjectives() {
+    if (!canvas?.scene) return;
+
+    const terrainMap = canvas.scene.getFlag("star-mercs", "terrainMap");
+    if (!terrainMap || typeof terrainMap !== "object") return;
+
+    const objectiveConfig = CONFIG.STARMERCS?.objectives ?? {};
+    const currentScores = this.getFlag("star-mercs", "teamScores") ?? {};
+    const roundScores = {};
+    const scoringDetails = [];
+
+    for (const [key, rawEntry] of Object.entries(terrainMap)) {
+      const hexData = normalizeHexData(rawEntry);
+      if (!hexData.objective || !objectiveConfig[hexData.objective]) continue;
+
+      const [xStr, yStr] = key.split(",");
+      const center = { x: parseFloat(xStr), y: parseFloat(yStr) };
+
+      // Find token occupying this hex
+      const tokens = getTokensAtHex(center);
+      if (tokens.length === 0) continue;
+
+      const token = tokens[0];
+      const team = token.actor?.system?.team;
+      if (!team) continue;
+
+      const basePoints = objectiveConfig[hexData.objective].points;
+      const engaged = isEngaged(token);
+      const points = Math.max(0, basePoints - (engaged ? 1 : 0));
+
+      if (points <= 0) continue;
+
+      if (!roundScores[team]) roundScores[team] = 0;
+      roundScores[team] += points;
+
+      const unitName = token.document?.name ?? token.actor?.name ?? "Unknown";
+      const objLabel = objectiveConfig[hexData.objective].label;
+      const engagedNote = engaged ? " (Engaged: -1)" : "";
+      scoringDetails.push(`${unitName} holds ${objLabel}: +${points} VP${engagedNote} (${team === "a" ? "Team A" : "Team B"})`);
+    }
+
+    // Update cumulative scores
+    const updatedScores = { ...currentScores };
+    for (const [team, pts] of Object.entries(roundScores)) {
+      updatedScores[team] = (updatedScores[team] ?? 0) + pts;
+    }
+    await this.setFlag("star-mercs", "teamScores", updatedScores);
+
+    // Post scoring summary to chat
+    if (scoringDetails.length > 0) {
+      const teamSummary = Object.entries(updatedScores)
+        .map(([t, s]) => `${t === "a" ? "Team A" : "Team B"}: ${s} VP`)
+        .join(" | ");
+
+      await ChatMessage.create({
+        content: `<div class="star-mercs chat-card consolidation-combined">
+          <div class="summary-header"><i class="fas fa-star"></i> Objective Scoring</div>
+          <div class="consolidation-section">
+            <div class="status-update">${scoringDetails.join("<br/>")}</div>
+          </div>
+          <div class="consolidation-section">
+            <div class="consolidation-section-header"><i class="fas fa-trophy"></i> Total Scores</div>
+            <div class="status-update"><strong>${teamSummary}</strong></div>
+          </div>
+        </div>`,
+        speaker: { alias: "Star Mercs" }
+      });
+    } else {
+      const teamSummary = Object.entries(updatedScores)
+        .filter(([, s]) => s > 0)
+        .map(([t, s]) => `${t === "a" ? "Team A" : "Team B"}: ${s} VP`)
+        .join(" | ") || "No points scored yet";
+
+      await ChatMessage.create({
+        content: `<div class="star-mercs chat-card consolidation-combined">
+          <div class="summary-header"><i class="fas fa-star"></i> Objective Scoring</div>
+          <div class="status-update">No objectives held this round.</div>
+          <div class="consolidation-section">
+            <div class="consolidation-section-header"><i class="fas fa-trophy"></i> Total Scores</div>
+            <div class="status-update"><strong>${teamSummary}</strong></div>
+          </div>
+        </div>`,
+        speaker: { alias: "Star Mercs" }
+      });
+    }
+  }
 
   /**
    * End-of-consolidation cleanup: runs when LEAVING consolidation phase.

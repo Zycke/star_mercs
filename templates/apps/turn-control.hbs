@@ -1,0 +1,74 @@
+<div class="star-mercs turn-control-panel">
+
+  {{!-- Phase Display --}}
+  {{#if hasCombat}}
+  <div class="turn-control-phase phase-{{phase}}">
+    <i class="fas fa-flag"></i>
+    Round {{round}} &mdash; {{phaseLabel}}
+  </div>
+  {{#if tacticalStepLabel}}
+  <div class="turn-control-substep">
+    <i class="fas fa-chevron-right"></i> {{tacticalStepLabel}}
+  </div>
+  {{/if}}
+
+  {{!-- Scores --}}
+  <div class="turn-control-section">
+    <div class="turn-control-section-header">Scores</div>
+    <div class="turn-control-scores">
+      {{#each teams as |team|}}
+      <div class="score-entry">
+        <span class="team-badge team-{{team.key}}">{{team.label}}</span>
+        <span class="score-value">{{team.score}}</span>
+      </div>
+      {{/each}}
+    </div>
+  </div>
+
+  {{!-- Ready Checkmarks --}}
+  <div class="turn-control-section">
+    <div class="turn-control-section-header">Ready</div>
+    <div class="turn-control-ready">
+      {{#each players as |player|}}
+      <div class="ready-row">
+        <label class="ready-label {{#unless player.canToggle}}disabled{{/unless}}">
+          <input type="checkbox" class="ready-checkbox"
+                 data-user-id="{{player.id}}"
+                 {{#if player.ready}}checked{{/if}}
+                 {{#unless player.canToggle}}disabled{{/unless}} />
+          <span class="player-name">{{player.name}}</span>
+          <span class="team-badge team-{{player.team}}">{{player.teamLabel}}</span>
+        </label>
+      </div>
+      {{/each}}
+      {{#unless players.length}}
+      <p class="notes">No players assigned to teams.</p>
+      {{/unless}}
+    </div>
+  </div>
+
+  {{!-- Actions --}}
+  <div class="turn-control-actions">
+    <button type="button" class="next-phase-btn" {{#unless canAdvance}}disabled{{/unless}}>
+      <i class="fas fa-forward"></i> Next Phase
+    </button>
+    {{#if isGM}}
+    <div class="gm-actions">
+      <button type="button" class="prev-phase-btn">
+        <i class="fas fa-backward"></i> Prev Phase
+      </button>
+      <button type="button" class="gm-override-btn">
+        <i class="fas fa-shield-alt"></i> GM Override
+      </button>
+    </div>
+    {{/if}}
+  </div>
+
+  {{else}}
+  <div class="turn-control-no-combat">
+    <i class="fas fa-exclamation-triangle"></i>
+    No active combat encounter.
+  </div>
+  {{/if}}
+
+</div>
