@@ -205,6 +205,13 @@ export default class StarMercsActor extends Actor {
     const result = await resolveAttack(weapon, this, target);
     const attackTypeLabels = { soft: "Soft", hard: "Hard", antiAir: "Anti-Air" };
 
+    // Compute whisper IDs for both attacker and target teams
+    const atkTeam = this.system.team ?? "a";
+    const defTeam = target.system.team ?? "a";
+    const whisperIds = game.combat?.constructor?.getBothTeamsWhisperIds
+      ? game.combat.constructor.getBothTeamsWhisperIds(atkTeam, defTeam)
+      : [];
+
     // Attack was invalid (wrong weapon type, etc.)
     if (!result.valid) {
       return ChatMessage.create({
@@ -221,7 +228,8 @@ export default class StarMercsActor extends Actor {
             invalidReason: result.reason
           }
         ),
-        speaker: ChatMessage.getSpeaker({ actor: this })
+        speaker: ChatMessage.getSpeaker({ actor: this }),
+        whisper: whisperIds.length > 0 ? whisperIds : undefined
       });
     }
 
@@ -333,7 +341,8 @@ export default class StarMercsActor extends Actor {
     return ChatMessage.create({
       content,
       speaker: ChatMessage.getSpeaker({ actor: this }),
-      rolls: [result.roll]
+      rolls: [result.roll],
+      whisper: whisperIds.length > 0 ? whisperIds : undefined
     });
   }
 
@@ -575,7 +584,16 @@ export default class StarMercsActor extends Actor {
 
     // Phase 3: Post individual attack results to chat
     const attackTypeLabels = { soft: "Soft", hard: "Hard", antiAir: "Anti-Air" };
+    const myTeam = this.system.team ?? "a";
+
     for (const result of results) {
+      // Compute whisper for each attack (attacker + target teams)
+      const targetActor = result.target;
+      const tgtTeam = targetActor?.system?.team ?? "a";
+      const atkWhisper = game.combat?.constructor?.getBothTeamsWhisperIds
+        ? game.combat.constructor.getBothTeamsWhisperIds(myTeam, tgtTeam)
+        : [];
+
       if (!result.valid) {
         await ChatMessage.create({
           content: await renderTemplate(
@@ -591,7 +609,8 @@ export default class StarMercsActor extends Actor {
               invalidReason: result.reason
             }
           ),
-          speaker: ChatMessage.getSpeaker({ actor: this })
+          speaker: ChatMessage.getSpeaker({ actor: this }),
+          whisper: atkWhisper.length > 0 ? atkWhisper : undefined
         });
         continue;
       }
@@ -645,7 +664,8 @@ export default class StarMercsActor extends Actor {
           templateData
         ),
         speaker: ChatMessage.getSpeaker({ actor: this }),
-        rolls: [result.roll]
+        rolls: [result.roll],
+        whisper: atkWhisper.length > 0 ? atkWhisper : undefined
       });
     }
 
@@ -670,9 +690,17 @@ export default class StarMercsActor extends Actor {
       }
       statusHtml += `</div>`;
 
+      // Whisper to both attacker and target teams
+      const tgtToken = canvas?.tokens?.get(tokenId);
+      const dmgTgtTeam = tgtToken?.actor?.system?.team ?? "a";
+      const dmgWhisper = game.combat?.constructor?.getBothTeamsWhisperIds
+        ? game.combat.constructor.getBothTeamsWhisperIds(myTeam, dmgTgtTeam)
+        : [];
+
       await ChatMessage.create({
         content: statusHtml,
-        speaker: ChatMessage.getSpeaker({ actor: this })
+        speaker: ChatMessage.getSpeaker({ actor: this }),
+        whisper: dmgWhisper.length > 0 ? dmgWhisper : undefined
       });
     }
 

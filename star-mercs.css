@@ -2193,6 +2193,7 @@ select:focus,
 
 .player-name {
   flex: 1;
+  color: var(--sm-text);
 }
 
 /* Action Buttons */
@@ -2260,4 +2261,18 @@ select:focus,
   text-align: center;
   color: var(--sm-text-muted);
   font-size: 13px;
+}
+
+/* ============================= */
+/*  Token Nameplate & Bar Sizing */
+/* ============================= */
+
+/* Chat card clickable unit names */
+.star-mercs.chat-card .unit-link {
+  cursor: pointer;
+  text-decoration: underline;
+  color: var(--sm-accent-light);
+}
+.star-mercs.chat-card .unit-link:hover {
+  color: #fff;
 }

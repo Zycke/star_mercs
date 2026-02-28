@@ -312,6 +312,28 @@ export default class StarMercsCombat extends Combat {
   }
 
   /**
+   * Get user IDs to whisper a chat message to for a given team.
+   * Includes GM users and all players assigned to the specified team.
+   * @param {string} team - Team key ("a" or "b").
+   * @returns {string[]} Array of user IDs.
+   */
+  static getTeamWhisperIds(team) {
+    const assignments = game.settings.get("star-mercs", "teamAssignments") ?? {};
+    return game.users.filter(u => u.isGM || assignments[u.id] === team).map(u => u.id);
+  }
+
+  /**
+   * Get user IDs to whisper a chat message to for both teams (e.g. attack results).
+   * @param {string} teamA - First team key.
+   * @param {string} teamB - Second team key.
+   * @returns {string[]} Array of user IDs.
+   */
+  static getBothTeamsWhisperIds(teamA, teamB) {
+    const assignments = game.settings.get("star-mercs", "teamAssignments") ?? {};
+    return game.users.filter(u => u.isGM || assignments[u.id] === teamA || assignments[u.id] === teamB).map(u => u.id);
+  }
+
+  /**
    * Post a chat message announcing the current phase.
    * @private
    */
@@ -518,12 +540,14 @@ export default class StarMercsCombat extends Combat {
 
       // Post ONE combined chat card for this unit (if there are any sections)
       if (sections.length > 0) {
+        const unitTeam = actor.system.team ?? "a";
         await ChatMessage.create({
-          content: `<div class="star-mercs chat-card consolidation-combined">
-            <div class="summary-header"><i class="fas fa-cog"></i> <strong>${unitName}</strong> — Consolidation</div>
+          content: `<div class="star-mercs chat-card consolidation-combined" data-token-id="${token?.id ?? ""}">
+            <div class="summary-header unit-link" data-token-id="${token?.id ?? ""}"><i class="fas fa-cog"></i> <strong>${unitName}</strong> — Consolidation</div>
             ${sections.join("\n")}
           </div>`,
-          speaker: { alias: "Star Mercs" }
+          speaker: { alias: "Star Mercs" },
+          whisper: StarMercsCombat.getTeamWhisperIds(unitTeam)
         });
       }
     }
@@ -651,10 +675,11 @@ export default class StarMercsCombat extends Combat {
           await token.setFlag("star-mercs", "broken", false);
           await ChatMessage.create({
             content: `<div class="star-mercs chat-card morale-recovery">
-              <div class="summary-header"><i class="fas fa-shield-alt"></i> <strong>${token.name}</strong> — Morale Recovered</div>
+              <div class="summary-header unit-link" data-token-id="${token.id}"><i class="fas fa-shield-alt"></i> <strong>${token.name}</strong> — Morale Recovered</div>
               <div class="status-update">No damage taken — ${isBreaking ? "Breaking" : "Broken"} status removed.</div>
             </div>`,
-            speaker: { alias: "Star Mercs" }
+            speaker: { alias: "Star Mercs" },
+            whisper: StarMercsCombat.getTeamWhisperIds(actor.system.team ?? "a")
           });
           continue;
         }
@@ -728,7 +753,8 @@ export default class StarMercsCombat extends Combat {
         await ChatMessage.create({
           content: html,
           speaker: { alias: "Star Mercs" },
-          rolls: allRolls
+          rolls: allRolls,
+          whisper: StarMercsCombat.getTeamWhisperIds(actor.system.team ?? "a")
         });
         continue;
       }
@@ -813,7 +839,8 @@ export default class StarMercsCombat extends Combat {
       await ChatMessage.create({
         content: html,
         speaker: { alias: "Star Mercs" },
-        rolls: allRolls
+        rolls: allRolls,
+        whisper: StarMercsCombat.getTeamWhisperIds(actor.system.team ?? "a")
       });
 
       // Apply status and log
@@ -907,9 +934,10 @@ export default class StarMercsCombat extends Combat {
           await actor.addLogEntry(`Assault movement: -${hexesMoved} readiness (${hexesMoved} hex${hexesMoved > 1 ? "es" : ""} to target)`, "damage");
           await ChatMessage.create({
             content: `<div class="star-mercs chat-card consolidation-readiness">
-              <div class="summary-header"><i class="fas fa-fist-raised"></i> <strong>${token.name}</strong> — Assault Movement: -${hexesMoved} readiness (${distanceToTarget} hex${distanceToTarget > 1 ? "es" : ""} to target)</div>
+              <div class="summary-header unit-link" data-token-id="${token.id}"><i class="fas fa-fist-raised"></i> <strong>${token.name}</strong> — Assault Movement: -${hexesMoved} readiness (${distanceToTarget} hex${distanceToTarget > 1 ? "es" : ""} to target)</div>
             </div>`,
-            speaker: { alias: "Star Mercs" }
+            speaker: { alias: "Star Mercs" },
+            whisper: StarMercsCombat.getTeamWhisperIds(actor.system.team ?? "a")
           });
         }
       }
@@ -1090,10 +1118,13 @@ export default class StarMercsCombat extends Combat {
       }
       html += `</div>`;
 
+      const atkTeam = actor.system.team ?? "a";
+      const defTeam = targetActor.system.team ?? "a";
       await ChatMessage.create({
         content: html,
         speaker: { alias: "Star Mercs" },
-        rolls: allRolls
+        rolls: allRolls,
+        whisper: StarMercsCombat.getBothTeamsWhisperIds(atkTeam, defTeam)
       });
     }
   }
@@ -1218,7 +1249,8 @@ export default class StarMercsCombat extends Combat {
       await ChatMessage.create({
         content: html,
         speaker: { alias: "Star Mercs" },
-        rolls: allRolls
+        rolls: allRolls,
+        whisper: StarMercsCombat.getTeamWhisperIds(actor.system.team ?? "a")
       });
     }
   }
@@ -1498,7 +1530,8 @@ export default class StarMercsCombat extends Combat {
           content: `<div class="star-mercs chat-card tactical-step">
             <div class="status-alert"><i class="fas fa-exclamation-triangle"></i> <strong>${token.name}</strong> cannot reach assault target — all adjacent hexes blocked.</div>
           </div>`,
-          speaker: { alias: "Star Mercs" }
+          speaker: { alias: "Star Mercs" },
+          whisper: StarMercsCombat.getTeamWhisperIds(actor.system.team ?? "a")
         });
         continue;
       }
@@ -1521,10 +1554,11 @@ export default class StarMercsCombat extends Combat {
 
         await ChatMessage.create({
           content: `<div class="star-mercs chat-card tactical-step">
-            <div class="summary-header"><i class="fas fa-fist-raised"></i> <strong>${token.name}</strong> — Assault Movement</div>
+            <div class="summary-header unit-link" data-token-id="${token.id}"><i class="fas fa-fist-raised"></i> <strong>${token.name}</strong> — Assault Movement</div>
             <div class="status-update">Moved ${hexesMoved} hex${hexesMoved > 1 ? "es" : ""} to assault target. -${hexesMoved} readiness.</div>
           </div>`,
-          speaker: { alias: "Star Mercs" }
+          speaker: { alias: "Star Mercs" },
+          whisper: StarMercsCombat.getTeamWhisperIds(actor.system.team ?? "a")
         });
       }
 
@@ -1796,7 +1830,12 @@ export default class StarMercsCombat extends Combat {
       </div>
     </div>`;
 
-    await ChatMessage.create({ content: html, speaker: { alias: "Star Mercs" } });
+    const owTeam = overwatchToken.actor?.system?.team ?? "a";
+    await ChatMessage.create({
+      content: html,
+      speaker: { alias: "Star Mercs" },
+      whisper: StarMercsCombat.getTeamWhisperIds(owTeam)
+    });
   }
 
   /**
@@ -1914,17 +1953,17 @@ export default class StarMercsCombat extends Combat {
 
       await ChatMessage.create({
         content: `<div class="star-mercs chat-card maneuver-fire-card">
-          <div class="summary-header"><i class="fas fa-running"></i> <strong>${token.name}</strong> — Maneuver Fire</div>
+          <div class="summary-header unit-link" data-token-id="${token.id}"><i class="fas fa-running"></i> <strong>${token.name}</strong> — Maneuver Fire</div>
           <div class="status-update">Weapons: ${weaponList}</div>
-          <div class="status-update">Select targets using Foundry targeting (T + click), then click Fire.</div>
-          <div class="status-update"><em>Accuracy penalty: +1 (Maneuver order)</em></div>
+          <div class="status-update">Fires weapons with assigned targets. Accuracy penalty: +1 (Maneuver order)</div>
           <button class="maneuver-fire-btn"
             data-token-id="${token.id}"
             data-combat-id="${this.id}">
             <i class="fas fa-crosshairs"></i> Fire Weapons
           </button>
         </div>`,
-        speaker: { alias: "Star Mercs" }
+        speaker: { alias: "Star Mercs" },
+        whisper: StarMercsCombat.getTeamWhisperIds(actor.system.team ?? "a")
       });
 
       eligibleCount++;
