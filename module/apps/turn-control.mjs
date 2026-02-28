@@ -113,7 +113,12 @@ export default class TurnControlPanel extends FormApplication {
     html.find(".next-phase-btn").on("click", async () => {
       const combat = game.combat;
       if (!combat?.started) return;
-      await combat.nextTurn();
+      if (game.user.isGM) {
+        await combat.nextTurn();
+      } else {
+        // Non-GM: request the GM client to advance via socket
+        game.socket.emit("system.star-mercs", { action: "nextPhase" });
+      }
     });
 
     // GM Previous Phase

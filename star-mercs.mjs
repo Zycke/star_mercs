@@ -221,6 +221,15 @@ Hooks.once("init", () => {
 
 Hooks.once("ready", () => {
   console.log("Star Mercs | System Ready");
+
+  // Socket listener: GM executes phase advances requested by non-GM players
+  game.socket.on("system.star-mercs", async (data) => {
+    if (!game.user.isGM) return;
+    if (data.action === "nextPhase") {
+      const combat = game.combat;
+      if (combat?.started) await combat.nextTurn();
+    }
+  });
 });
 
 /**
