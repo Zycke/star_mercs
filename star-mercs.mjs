@@ -21,6 +21,7 @@ import TeamSettingsForm from "./module/apps/team-settings.mjs";
 import * as detection from "./module/detection.mjs";
 import DetectionLayer from "./module/canvas/detection-layer.mjs";
 import MovementPathLayer from "./module/canvas/movement-path-layer.mjs";
+import TurnControlPanel from "./module/apps/turn-control.mjs";
 
 /* ============================================ */
 /*  Foundry VTT Initialization                  */
@@ -606,6 +607,34 @@ Hooks.on("updateCombat", (combat, changes) => {
       app.render(false);
     }
   }
+
+  // Refresh turn control panel on any combat update
+  game.starmercs?.turnControlPanel?.render(false);
+});
+
+/** Refresh turn control panel when combat updates (tactical step changes, score changes, etc.). */
+Hooks.on("updateCombat", (combat, changes) => {
+  if (foundry.utils.hasProperty(changes, "flags.star-mercs.tacticalStep")
+      || foundry.utils.hasProperty(changes, "flags.star-mercs.teamScores")) {
+    game.starmercs?.turnControlPanel?.render(false);
+  }
+});
+
+/** Refresh turn control panel when any user's ready flag changes. */
+Hooks.on("updateUser", (user, changes) => {
+  if (foundry.utils.hasProperty(changes, "flags.star-mercs.combatReady")) {
+    game.starmercs?.turnControlPanel?.render(false);
+  }
+});
+
+/** Refresh turn control panel when combat starts. */
+Hooks.on("combatStart", () => {
+  game.starmercs?.turnControlPanel?.render(false);
+});
+
+/** Close turn control panel when combat is deleted. */
+Hooks.on("deleteCombat", () => {
+  game.starmercs?.turnControlPanel?.render(false);
 });
 
 /**
@@ -981,6 +1010,35 @@ Hooks.on("getSceneControlButtons", (controls) => {
     }
   };
 
+  const turnControlTool = {
+    name: "turnControl",
+    title: "Turn Control",
+    icon: "fas fa-flag-checkered",
+    visible: true,
+    toggle: true,
+    active: game.starmercs?.turnControlPanel?.rendered ?? false,
+    onChange: (event, active) => {
+      if (active) {
+        if (!game.starmercs.turnControlPanel) {
+          game.starmercs.turnControlPanel = new TurnControlPanel();
+        }
+        game.starmercs.turnControlPanel.render(true);
+      } else {
+        game.starmercs.turnControlPanel?.close();
+      }
+    },
+    onClick: (toggled) => {
+      if (toggled) {
+        if (!game.starmercs.turnControlPanel) {
+          game.starmercs.turnControlPanel = new TurnControlPanel();
+        }
+        game.starmercs.turnControlPanel.render(true);
+      } else {
+        game.starmercs.turnControlPanel?.close();
+      }
+    }
+  };
+
   if (isV13) {
     tool.order = Object.keys(tokenControls.tools).length;
     tokenControls.tools.targetingArrows = tool;
@@ -994,6 +1052,8 @@ Hooks.on("getSceneControlButtons", (controls) => {
     tokenControls.tools.detectionOverlay = detectionTool;
     teamSettingsTool.order = Object.keys(tokenControls.tools).length;
     tokenControls.tools.teamSettings = teamSettingsTool;
+    turnControlTool.order = Object.keys(tokenControls.tools).length;
+    tokenControls.tools.turnControl = turnControlTool;
   } else {
     tokenControls.tools.push(tool);
     tokenControls.tools.push(commsTool);
@@ -1001,5 +1061,6 @@ Hooks.on("getSceneControlButtons", (controls) => {
     tokenControls.tools.push(terrainPaintTool);
     tokenControls.tools.push(detectionTool);
     tokenControls.tools.push(teamSettingsTool);
+    tokenControls.tools.push(turnControlTool);
   }
 });

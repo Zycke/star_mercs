@@ -2055,3 +2055,209 @@ select:focus,
 .recon-block .clear-recon-target:hover {
   background: var(--sm-danger-light, #cc4444);
 }
+
+/* ============================= */
+/*  Turn Control Panel           */
+/* ============================= */
+
+.star-mercs.turn-control {
+  background: var(--sm-bg-dark);
+  color: var(--sm-text);
+  border: 1px solid var(--sm-border);
+  font-family: "Roboto", "Segoe UI", Tahoma, sans-serif;
+}
+
+.star-mercs.turn-control .window-content {
+  padding: 0;
+  background: var(--sm-bg-dark);
+}
+
+.turn-control-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.turn-control-phase {
+  text-align: center;
+  padding: 8px 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-size: 13px;
+}
+
+.turn-control-phase.phase-preparation { background: #2a3a1a; color: #8cc63f; }
+.turn-control-phase.phase-orders { background: #1a2a3a; color: #4ac6ff; }
+.turn-control-phase.phase-tactical { background: #3a1a1a; color: #ff6644; }
+.turn-control-phase.phase-consolidation { background: #2a2a1a; color: #c9a227; }
+
+.turn-control-substep {
+  text-align: center;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: var(--sm-text-muted);
+  background: var(--sm-bg-medium);
+  border-bottom: 1px solid var(--sm-border);
+}
+
+.turn-control-section {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--sm-border);
+}
+
+.turn-control-section-header {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--sm-text-muted);
+  margin-bottom: 4px;
+}
+
+/* Scores */
+.turn-control-scores {
+  display: flex;
+  justify-content: space-around;
+  gap: 8px;
+}
+
+.score-entry {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.score-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--sm-text);
+}
+
+.team-badge {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: 3px;
+  letter-spacing: 0.5px;
+}
+
+.team-badge.team-a {
+  background: #2d5a27;
+  color: #8cc63f;
+}
+
+.team-badge.team-b {
+  background: #1a2a5a;
+  color: #6699ff;
+}
+
+/* Ready Section */
+.turn-control-ready {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ready-row {
+  display: flex;
+  align-items: center;
+}
+
+.ready-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  width: 100%;
+  padding: 3px 4px;
+  border-radius: var(--sm-radius);
+}
+
+.ready-label:hover:not(.disabled) {
+  background: var(--sm-bg-light);
+}
+
+.ready-label.disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.ready-checkbox {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--sm-primary-light);
+}
+
+.player-name {
+  flex: 1;
+}
+
+/* Action Buttons */
+.turn-control-actions {
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.turn-control-actions button {
+  background: var(--sm-primary);
+  border: 1px solid var(--sm-primary-light);
+  color: #ffffff;
+  padding: 6px 12px;
+  border-radius: var(--sm-radius);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: bold;
+  transition: background 0.15s;
+  width: 100%;
+}
+
+.turn-control-actions button:hover:not(:disabled) {
+  background: var(--sm-primary-light);
+}
+
+.turn-control-actions button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.gm-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.gm-actions button {
+  flex: 1;
+  font-size: 11px;
+  padding: 4px 8px;
+}
+
+.prev-phase-btn {
+  background: var(--sm-bg-light) !important;
+  border-color: var(--sm-border) !important;
+}
+
+.prev-phase-btn:hover:not(:disabled) {
+  background: var(--sm-bg-medium) !important;
+}
+
+.gm-override-btn {
+  background: var(--sm-accent) !important;
+  border-color: var(--sm-accent-light) !important;
+  color: #000 !important;
+}
+
+.gm-override-btn:hover:not(:disabled) {
+  background: var(--sm-accent-light) !important;
+}
+
+.turn-control-no-combat {
+  padding: 16px;
+  text-align: center;
+  color: var(--sm-text-muted);
+  font-size: 13px;
+}

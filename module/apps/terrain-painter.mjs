@@ -33,6 +33,7 @@ export default class TerrainPainter extends FormApplication {
     this._selectedTerrain = "plain";
     this._selectedElevation = 0;
     this._selectedRoad = false;
+    this._selectedObjective = "none";
     this._brushSize = 1;
     this._active = false;
 
@@ -67,6 +68,7 @@ export default class TerrainPainter extends FormApplication {
       selectedTerrain: this._selectedTerrain,
       selectedElevation: this._selectedElevation,
       selectedRoad: this._selectedRoad,
+      selectedObjective: this._selectedObjective,
       brushSize: this._brushSize,
       maxElevation: CONFIG.STARMERCS.maxElevation ?? 5,
       isActive: this._active
@@ -82,6 +84,9 @@ export default class TerrainPainter extends FormApplication {
       this._selectedElevation = Math.max(0, Math.min(CONFIG.STARMERCS.maxElevation ?? 5, Number(formData.selectedElevation) || 0));
     }
     this._selectedRoad = !!formData.selectedRoad;
+    if (formData.selectedObjective != null) {
+      this._selectedObjective = formData.selectedObjective;
+    }
     if (formData.brushSize != null) {
       this._brushSize = Math.max(1, Math.min(5, Number(formData.brushSize) || 1));
     }
@@ -278,11 +283,15 @@ export default class TerrainPainter extends FormApplication {
         }
         // Skip hexes with no existing terrain — road needs a terrain base
       } else {
-        this._pendingTerrainMap[key] = {
+        const hexData = {
           type: this._selectedTerrain,
           elevation: this._selectedElevation,
           road: this._selectedRoad
         };
+        if (this._selectedObjective && this._selectedObjective !== "none") {
+          hexData.objective = this._selectedObjective;
+        }
+        this._pendingTerrainMap[key] = hexData;
       }
 
       this._changedKeys.add(key);

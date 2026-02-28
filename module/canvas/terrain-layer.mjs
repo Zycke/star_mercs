@@ -33,6 +33,10 @@ export default class TerrainLayer extends PIXI.Container {
     this.previewGraphics = new PIXI.Graphics();
     this.addChild(this.previewGraphics);
 
+    /** @type {PIXI.Graphics} — objective star icons */
+    this.objectiveGraphics = new PIXI.Graphics();
+    this.addChild(this.objectiveGraphics);
+
     /** @type {object|null} — cached shape + centroid to avoid recomputing per call */
     this._cachedShape = null;
   }
@@ -48,6 +52,10 @@ export default class TerrainLayer extends PIXI.Container {
   static ROAD_BORDER_ALPHA = 0.8;
   static ERASE_MASK_ALPHA = 0.6;
   static LABEL_FONT_SIZE = 10;
+  static STAR_PRIMARY_RADIUS = 14;
+  static STAR_SECONDARY_RADIUS = 10;
+  static STAR_INNER_RATIO = 0.4;
+  static STAR_ALPHA = 0.9;
 
   /* ---------------------------------------- */
   /*  Shape Cache                             */
@@ -87,6 +95,7 @@ export default class TerrainLayer extends PIXI.Container {
     this.terrainGraphics.clear();
     this.labelContainer.removeChildren();
     this.paintGraphics.clear();
+    this.objectiveGraphics.clear();
 
     // Invalidate shape cache on full redraw (scene may have changed)
     this._cachedShape = null;
@@ -102,6 +111,7 @@ export default class TerrainLayer extends PIXI.Container {
     const { shape, centerX, centerY } = cache;
 
     const terrainConfig = CONFIG.STARMERCS?.terrain ?? {};
+    const objectiveConfig = CONFIG.STARMERCS?.objectives ?? {};
 
     for (const [key, rawEntry] of Object.entries(terrainMap)) {
       const hexData = normalizeHexData(rawEntry);
@@ -119,7 +129,16 @@ export default class TerrainLayer extends PIXI.Container {
         this._drawRoadBorderOnGraphics(this.terrainGraphics, topLeft, shape);
       }
 
-      this._drawLabel(center, config.label ?? hexData.type, hexData.elevation, hexData.road);
+      this._drawLabel(center, config.label ?? hexData.type, hexData.elevation, hexData.road, hexData.objective);
+
+      // Draw objective star icon
+      if (hexData.objective && objectiveConfig[hexData.objective]) {
+        const objConf = objectiveConfig[hexData.objective];
+        const radius = hexData.objective === "primary"
+          ? TerrainLayer.STAR_PRIMARY_RADIUS
+          : TerrainLayer.STAR_SECONDARY_RADIUS;
+        this._drawStar(this.objectiveGraphics, center, radius, objConf.color);
+      }
     }
   }
 
@@ -138,6 +157,7 @@ export default class TerrainLayer extends PIXI.Container {
     const { shape, centerX, centerY } = cache;
 
     const terrainConfig = CONFIG.STARMERCS?.terrain ?? {};
+    const objectiveConfig = CONFIG.STARMERCS?.objectives ?? {};
     const g = this.paintGraphics;
 
     for (const key of changedKeys) {
@@ -157,6 +177,15 @@ export default class TerrainLayer extends PIXI.Container {
         const hasRoad = hexData.road || config.hasRoad;
         if (hasRoad) {
           this._drawRoadBorderOnGraphics(g, topLeft, shape);
+        }
+
+        // Draw objective star on paint overlay
+        if (hexData.objective && objectiveConfig[hexData.objective]) {
+          const objConf = objectiveConfig[hexData.objective];
+          const radius = hexData.objective === "primary"
+            ? TerrainLayer.STAR_PRIMARY_RADIUS
+            : TerrainLayer.STAR_SECONDARY_RADIUS;
+          this._drawStar(g, center, radius, objConf.color);
         }
       } else {
         // Erased hex — draw dark mask to visually hide the static hex underneath
@@ -265,17 +294,20 @@ export default class TerrainLayer extends PIXI.Container {
   }
 
   /**
-   * Draw terrain label with elevation and road indicators at a hex center.
+   * Draw terrain label with elevation, road, and objective indicators at a hex center.
    * @param {{x: number, y: number}} center - Hex center coordinates.
    * @param {string} label - Terrain type label.
    * @param {number} elevation - Hex elevation (0–5).
    * @param {boolean} road - Whether the hex has a road.
+   * @param {string|null} [objective=null] - Objective type ("primary", "secondary", or null).
    * @private
    */
-  _drawLabel(center, label, elevation, road) {
+  _drawLabel(center, label, elevation, road, objective = null) {
     const parts = [];
     if (elevation > 0) parts.push(`E:${elevation}`);
     if (road) parts.push("R");
+    if (objective === "primary") parts.push("P");
+    else if (objective === "secondary") parts.push("S");
     const subtitle = parts.join(" ");
 
     const displayText = subtitle ? `${label}\n${subtitle}` : label;
@@ -292,5 +324,35 @@ export default class TerrainLayer extends PIXI.Container {
     text.position.set(center.x, center.y);
     text.alpha = 0.7;
     this.labelContainer.addChild(text);
+  }
+
+  /**
+   * Draw a 5-pointed star icon at a hex center.
+   * @param {PIXI.Graphics} g - Target graphics object.
+   * @param {{x: number, y: number}} center - Hex center coordinates.
+   * @param {number} outerRadius - Outer radius of the star.
+   * @param {number} color - PIXI hex color.
+   * @private
+   */
+  _drawStar(g, center, outerRadius, color) {
+    const innerRadius = outerRadius * TerrainLayer.STAR_INNER_RATIO;
+    const points = 5;
+    const step = Math.PI / points;
+    const rotation = -Math.PI / 2; // Point upwards
+
+    g.lineStyle(1, 0x000000, 0.6);
+    g.beginFill(color, TerrainLayer.STAR_ALPHA);
+
+    for (let i = 0; i < 2 * points; i++) {
+      const r = i % 2 === 0 ? outerRadius : innerRadius;
+      const angle = rotation + i * step;
+      const px = center.x + r * Math.cos(angle);
+      const py = center.y + r * Math.sin(angle);
+      if (i === 0) g.moveTo(px, py);
+      else g.lineTo(px, py);
+    }
+
+    g.closePath();
+    g.endFill();
   }
 }
