@@ -1,6 +1,6 @@
 import StarMercsActor from "../documents/actor.mjs";
 import { snapToHexCenter, hexKey, computeHexPath, calculatePathCost } from "../hex-utils.mjs";
-import { checkLOS } from "../detection.mjs";
+import { checkLOS, getActiveSignature } from "../detection.mjs";
 
 /**
  * Sheet class for Star Mercs Unit actors.
@@ -179,6 +179,37 @@ export default class StarMercsUnitSheet extends ActorSheet {
     context.canTransferSupply = !combat?.started || combat?.phase === "preparation";
     context.supplyTransferRange = this.actor.getSupplyTransferRange();
 
+    // Active Signature (base + terrain modifiers)
+    if (activeToken) {
+      const sigData = getActiveSignature(activeToken);
+      context.activeSignature = sigData.active;
+      context.baseSignature = sigData.base;
+      context.signatureModifiers = sigData.modifiers;
+      context.hasSignatureModifiers = sigData.modifiers.length > 0;
+    } else {
+      context.activeSignature = this.actor.system.signature ?? 0;
+      context.baseSignature = this.actor.system.signature ?? 0;
+      context.signatureModifiers = [];
+      context.hasSignatureModifiers = false;
+    }
+
+    // Sensor ring controls (client settings)
+    context.showDetectionRing = game.settings.get("star-mercs", "showDetectionRing");
+    context.detectionRingTargetSig = game.settings.get("star-mercs", "detectionRingTargetSig");
+
+    // Advanced Recon Equipment: show targeting box if unit has the trait
+    context.hasAdvancedRecon = this.actor.hasTrait("Advanced Recon Equipment");
+    if (context.hasAdvancedRecon && activeToken) {
+      const reconTargetId = activeToken.document?.getFlag("star-mercs", "advReconTarget") ?? "";
+      context.advReconTargetId = reconTargetId;
+      if (reconTargetId) {
+        const reconTargetToken = canvas?.tokens?.get(reconTargetId);
+        context.advReconTargetName = reconTargetToken?.name ?? "Unknown";
+      } else {
+        context.advReconTargetName = "";
+      }
+    }
+
     // GM overrides
     context.isGM = game.user.isGM;
     context.allOrders = allOrders;
@@ -301,6 +332,18 @@ export default class StarMercsUnitSheet extends ActorSheet {
     // GM overrides
     html.on("change", ".gm-toggle-breaking", this._onGMToggleBreaking.bind(this));
     html.on("change", ".gm-order-override", this._onGMOrderOverride.bind(this));
+
+    // Sensor ring controls
+    html.on("change", ".sm-sheet-ring-toggle", (event) => {
+      game.settings.set("star-mercs", "showDetectionRing", event.currentTarget.checked);
+    });
+    html.on("change", ".sm-sheet-ring-sig", (event) => {
+      game.settings.set("star-mercs", "detectionRingTargetSig", Number(event.currentTarget.value));
+    });
+
+    // Advanced Recon Equipment targeting
+    html.on("click", ".set-recon-target", this._onSetReconTarget.bind(this));
+    html.on("click", ".clear-recon-target", this._onClearReconTarget.bind(this));
   }
 
   /* ---------------------------------------- */
@@ -482,6 +525,72 @@ export default class StarMercsUnitSheet extends ActorSheet {
     }
     if (updates.length > 0) {
       await this.actor.updateEmbeddedDocuments("Item", updates);
+    }
+  }
+
+  /* ---------------------------------------- */
+  /*  Advanced Recon Equipment Targeting       */
+  /* ---------------------------------------- */
+
+  /**
+   * Set the Advanced Recon Equipment target by clicking a visible enemy token.
+   */
+  async _onSetReconTarget(event) {
+    event.preventDefault();
+    const activeToken = this.actor.getActiveTokens()?.[0];
+    if (!activeToken) {
+      ui.notifications.warn("No active token found on canvas.");
+      return;
+    }
+
+    ui.notifications.info("Click an enemy unit to designate as the Recon target.");
+
+    const handler = async (event) => {
+      canvas.stage.off("pointerdown", handler);
+      const pos = event.getLocalPosition?.(canvas.stage)
+        ?? canvas.stage.toLocal(event.global);
+      const clicked = canvas.tokens.placeables.find(t => {
+        const dx = pos.x - t.center.x;
+        const dy = pos.y - t.center.y;
+        return Math.sqrt(dx * dx + dy * dy) < t.w;
+      });
+      if (!clicked?.actor || clicked.actor.type !== "unit") {
+        ui.notifications.warn("No valid unit clicked.");
+        return;
+      }
+      // Must be an enemy
+      const myTeam = this.actor.system.team ?? "a";
+      const targetTeam = clicked.actor.system.team ?? "a";
+      if (myTeam === targetTeam) {
+        ui.notifications.warn("Cannot designate a friendly unit.");
+        return;
+      }
+      // Must be visible-level detection
+      const det = game.starmercs?.detection;
+      if (det) {
+        const detLevel = det.getDetectionLevel(activeToken, clicked);
+        if (detLevel !== "visible") {
+          ui.notifications.warn("Target must be fully detected (visible) to designate.");
+          return;
+        }
+      }
+      await activeToken.document.setFlag("star-mercs", "advReconTarget", clicked.id);
+      ui.notifications.info(`Designated ${clicked.name} as Recon target.`);
+      this.render(false);
+    };
+
+    canvas.stage.on("pointerdown", handler);
+  }
+
+  /**
+   * Clear the Advanced Recon Equipment target.
+   */
+  async _onClearReconTarget(event) {
+    event.preventDefault();
+    const activeToken = this.actor.getActiveTokens()?.[0];
+    if (activeToken?.document) {
+      await activeToken.document.unsetFlag("star-mercs", "advReconTarget");
+      this.render(false);
     }
   }
 

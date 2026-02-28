@@ -1995,6 +1995,8 @@ export default class StarMercsCombat extends Combat {
         await token.unsetFlag("star-mercs", "moveDestination");
         await token.unsetFlag("star-mercs", "moveWaypoints");
         await token.unsetFlag("star-mercs", "assaultTarget");
+        // 2b. Clear Advanced Recon Equipment target
+        await token.unsetFlag("star-mercs", "advReconTarget");
         // 3. Clear per-type weapons fired counters
         await token.unsetFlag("star-mercs", "weaponsFired_smallArms");
         await token.unsetFlag("star-mercs", "weaponsFired_heavyWeapons");
