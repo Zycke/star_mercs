@@ -19,6 +19,11 @@
     </label>
   </div>
 
+  <div class="form-group">
+    <label>Brush Size: {{brushSize}}</label>
+    <input type="range" name="brushSize" value="{{brushSize}}" min="1" max="5" step="1"/>
+  </div>
+
   <div class="form-group terrain-painter-buttons">
     <button type="button" class="toggle-painting {{#if isActive}}active{{/if}}">
       <i class="fas {{#if isActive}}fa-stop{{else}}fa-paint-brush{{/if}}"></i>

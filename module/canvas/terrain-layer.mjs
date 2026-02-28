@@ -18,6 +18,10 @@ export default class TerrainLayer extends PIXI.Container {
     /** @type {PIXI.Container} */
     this.labelContainer = new PIXI.Container();
     this.addChild(this.labelContainer);
+
+    /** @type {PIXI.Graphics} — brush preview highlight (separate so it can be cleared independently) */
+    this.previewGraphics = new PIXI.Graphics();
+    this.addChild(this.previewGraphics);
   }
 
   /* ---------------------------------------- */
@@ -27,6 +31,8 @@ export default class TerrainLayer extends PIXI.Container {
   static HEX_FILL_ALPHA = 0.25;
   static HEX_BORDER_ALPHA = 0.5;
   static HEX_BORDER_WIDTH = 2;
+  static ROAD_BORDER_WIDTH = 3;
+  static ROAD_BORDER_ALPHA = 0.8;
   static LABEL_FONT_SIZE = 10;
 
   /* ---------------------------------------- */
@@ -70,8 +76,50 @@ export default class TerrainLayer extends PIXI.Container {
       const topLeft = { x: center.x - shapeCenterX, y: center.y - shapeCenterY };
 
       this._drawHexOverlay(topLeft, shape, config.color ?? 0x888888);
+
+      // Draw black border on road hexes
+      const hasRoad = hexData.road || config.hasRoad;
+      if (hasRoad) {
+        this._drawRoadBorder(topLeft, shape);
+      }
+
       this._drawLabel(center, config.label ?? hexData.type, hexData.elevation, hexData.road);
     }
+  }
+
+  /**
+   * Draw a brush preview highlight over the given hex centers.
+   * @param {Array<{x: number, y: number}>} hexCenters - Array of hex center coordinates.
+   */
+  drawBrushPreview(hexCenters) {
+    this.previewGraphics.clear();
+    if (!hexCenters || hexCenters.length === 0) return;
+
+    const shape = canvas.grid.getShape();
+    if (!shape || shape.length < 3) return;
+
+    const shapeCenterX = shape.reduce((sum, p) => sum + p.x, 0) / shape.length;
+    const shapeCenterY = shape.reduce((sum, p) => sum + p.y, 0) / shape.length;
+
+    const g = this.previewGraphics;
+    for (const center of hexCenters) {
+      const topLeft = { x: center.x - shapeCenterX, y: center.y - shapeCenterY };
+      g.lineStyle(2, 0xFFFF00, 0.7);
+      g.beginFill(0xFFFF00, 0.2);
+      g.moveTo(topLeft.x + shape[0].x, topLeft.y + shape[0].y);
+      for (let i = 1; i < shape.length; i++) {
+        g.lineTo(topLeft.x + shape[i].x, topLeft.y + shape[i].y);
+      }
+      g.closePath();
+      g.endFill();
+    }
+  }
+
+  /**
+   * Clear the brush preview highlight.
+   */
+  clearBrushPreview() {
+    this.previewGraphics.clear();
   }
 
   /* ---------------------------------------- */
@@ -89,6 +137,24 @@ export default class TerrainLayer extends PIXI.Container {
     const g = this.terrainGraphics;
     g.lineStyle(TerrainLayer.HEX_BORDER_WIDTH, color, TerrainLayer.HEX_BORDER_ALPHA);
     g.beginFill(color, TerrainLayer.HEX_FILL_ALPHA);
+    g.moveTo(topLeft.x + shape[0].x, topLeft.y + shape[0].y);
+    for (let i = 1; i < shape.length; i++) {
+      g.lineTo(topLeft.x + shape[i].x, topLeft.y + shape[i].y);
+    }
+    g.closePath();
+    g.endFill();
+  }
+
+  /**
+   * Draw a black border on a hex to indicate a road.
+   * @param {{x: number, y: number}} topLeft - Top-left corner of the hex cell.
+   * @param {Array<{x: number, y: number}>} shape - Hex vertex offsets.
+   * @private
+   */
+  _drawRoadBorder(topLeft, shape) {
+    const g = this.terrainGraphics;
+    g.lineStyle(TerrainLayer.ROAD_BORDER_WIDTH, 0x000000, TerrainLayer.ROAD_BORDER_ALPHA);
+    g.beginFill(0, 0); // no fill
     g.moveTo(topLeft.x + shape[0].x, topLeft.y + shape[0].y);
     for (let i = 1; i < shape.length; i++) {
       g.lineTo(topLeft.x + shape[i].x, topLeft.y + shape[i].y);

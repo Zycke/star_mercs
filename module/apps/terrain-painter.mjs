@@ -1,4 +1,4 @@
-import { snapToHexCenter, hexKey } from "../hex-utils.mjs";
+import { snapToHexCenter, hexKey, getAdjacentHexCenters } from "../hex-utils.mjs";
 
 /**
  * Terrain Painter — a floating panel that lets the GM paint terrain types onto hex cells.
@@ -30,6 +30,7 @@ export default class TerrainPainter extends FormApplication {
     this._selectedTerrain = "plain";
     this._selectedElevation = 0;
     this._selectedRoad = false;
+    this._brushSize = 1;
     this._active = false;
 
     // Bound event handlers (assigned in _startPainting, removed in _stopPainting)
@@ -51,11 +52,15 @@ export default class TerrainPainter extends FormApplication {
     for (const [key, config] of Object.entries(CONFIG.STARMERCS.terrain)) {
       terrainChoices[key] = config.label;
     }
+    // Add special "Road Only" brush
+    terrainChoices["road"] = "Road Only";
+
     return {
       terrainChoices,
       selectedTerrain: this._selectedTerrain,
       selectedElevation: this._selectedElevation,
       selectedRoad: this._selectedRoad,
+      brushSize: this._brushSize,
       maxElevation: CONFIG.STARMERCS.maxElevation ?? 5,
       isActive: this._active
     };
@@ -70,6 +75,9 @@ export default class TerrainPainter extends FormApplication {
       this._selectedElevation = Math.max(0, Math.min(CONFIG.STARMERCS.maxElevation ?? 5, Number(formData.selectedElevation) || 0));
     }
     this._selectedRoad = !!formData.selectedRoad;
+    if (formData.brushSize != null) {
+      this._brushSize = Math.max(1, Math.min(5, Number(formData.brushSize) || 1));
+    }
   }
 
   /** @override */
@@ -98,6 +106,42 @@ export default class TerrainPainter extends FormApplication {
     });
   }
 
+  /* ---------------------------------------- */
+  /*  Hex Radius Helpers                      */
+  /* ---------------------------------------- */
+
+  /**
+   * Get all hex centers within a given radius of a center hex using BFS.
+   * @param {{x: number, y: number}} center - Center hex coordinates.
+   * @param {number} radius - Radius in hexes (0 = just the center).
+   * @returns {Array<{x: number, y: number}>}
+   * @private
+   */
+  _getHexesInRadius(center, radius) {
+    const visited = new Set();
+    visited.add(hexKey(center));
+    let frontier = [center];
+    const all = [center];
+    for (let d = 0; d < radius; d++) {
+      const next = [];
+      for (const hex of frontier) {
+        for (const n of getAdjacentHexCenters(hex)) {
+          const k = hexKey(n);
+          if (visited.has(k)) continue;
+          visited.add(k);
+          next.push(n);
+          all.push(n);
+        }
+      }
+      frontier = next;
+    }
+    return all;
+  }
+
+  /* ---------------------------------------- */
+  /*  Painting Mode                           */
+  /* ---------------------------------------- */
+
   /**
    * Activate painting mode: register canvas event handlers for click-and-drag painting.
    * Left-click/drag paints terrain, right-click/drag erases terrain.
@@ -107,8 +151,7 @@ export default class TerrainPainter extends FormApplication {
   _startPainting() {
     if (this._onPointerDown) return;
 
-    // Helper: extract canvas position from PIXI event (v5–v7 compatible)
-    // Extract canvas position from PIXI event (compatible with v5–v8 / Foundry v12–v13)
+    // Helper: extract canvas position from PIXI event (compatible with v5–v8 / Foundry v12–v13)
     this._getEventPos = (e) => {
       if (typeof e.getLocalPosition === 'function') return e.getLocalPosition(canvas.stage);
       if (e.data?.getLocalPosition) return e.data.getLocalPosition(canvas.stage);
@@ -129,10 +172,21 @@ export default class TerrainPainter extends FormApplication {
     };
 
     this._onPointerMove = (event) => {
-      if (!this._active || !this._isDragging) return;
+      if (!this._active) return;
       const pos = this._getEventPos(event);
       if (!pos) return;
-      this._applyToHex(pos);
+
+      if (this._isDragging) {
+        // Painting/erasing — apply to hex under cursor
+        game.starmercs?.terrainLayer?.clearBrushPreview();
+        this._applyToHex(pos);
+      } else {
+        // Hovering — show brush preview
+        const center = snapToHexCenter(pos);
+        const radius = this._brushSize - 1;
+        const hexes = this._getHexesInRadius(center, radius);
+        game.starmercs?.terrainLayer?.drawBrushPreview(hexes);
+      }
     };
 
     this._onPointerUp = async () => {
@@ -170,31 +224,48 @@ export default class TerrainPainter extends FormApplication {
       canvas.scene.getFlag("star-mercs", "terrainMap") ?? {}
     );
 
+    // Clear hover preview while dragging
+    game.starmercs?.terrainLayer?.clearBrushPreview();
+
     const pos = this._getEventPos?.(event);
     if (pos) this._applyToHex(pos);
   }
 
   /**
-   * Paint or erase a single hex during a drag operation.
+   * Paint or erase hexes within the brush radius during a drag operation.
    * Skips hexes already visited in the current drag stroke.
    * @param {{x: number, y: number}} pos - Canvas position.
    * @private
    */
   _applyToHex(pos) {
     const center = snapToHexCenter(pos);
-    const key = hexKey(center);
-    if (this._dragVisitedKeys.has(key)) return;
+    const radius = this._brushSize - 1;
+    const hexes = this._getHexesInRadius(center, radius);
 
-    this._dragVisitedKeys.add(key);
+    for (const hex of hexes) {
+      const key = hexKey(hex);
+      if (this._dragVisitedKeys.has(key)) continue;
+      this._dragVisitedKeys.add(key);
 
-    if (this._isErasing) {
-      delete this._pendingTerrainMap[key];
-    } else {
-      this._pendingTerrainMap[key] = {
-        type: this._selectedTerrain,
-        elevation: this._selectedElevation,
-        road: this._selectedRoad
-      };
+      if (this._isErasing) {
+        delete this._pendingTerrainMap[key];
+      } else if (this._selectedTerrain === "road") {
+        // Road Only brush: add road to existing terrain without changing type/elevation
+        const existing = this._pendingTerrainMap[key];
+        if (existing) {
+          const normalized = (typeof existing === "string")
+            ? { type: existing, elevation: 0, road: true }
+            : { ...existing, road: true };
+          this._pendingTerrainMap[key] = normalized;
+        }
+        // Skip hexes with no existing terrain — road needs a terrain base
+      } else {
+        this._pendingTerrainMap[key] = {
+          type: this._selectedTerrain,
+          elevation: this._selectedElevation,
+          road: this._selectedRoad
+        };
+      }
     }
 
     // Live preview using the pending map (not yet saved to the scene flag)
@@ -226,6 +297,7 @@ export default class TerrainPainter extends FormApplication {
     this._isDragging = false;
     this._pendingTerrainMap = null;
     this._dragVisitedKeys.clear();
+    game.starmercs?.terrainLayer?.clearBrushPreview();
     ui.notifications.info("Terrain Painter deactivated.");
   }
 
