@@ -1095,7 +1095,8 @@ export default class StarMercsCombat extends Combat {
     // For now, return true as a default — the GM will manually move the token.
     // A full hex-adjacency check would require grid topology analysis.
     // We just check if there are fewer enemy tokens adjacent than total adjacent hexes.
-    const neighbors = canvas?.grid?.getAdjacentPositions?.(retreatingToken.center);
+    const offsets = canvas?.grid?.getAdjacentOffsets?.(retreatingToken.center);
+    const neighbors = offsets?.map(offset => canvas.grid.getCenterPoint(offset));
     if (!neighbors || neighbors.length === 0) return true;
 
     // Count occupied adjacent positions
