@@ -5,6 +5,9 @@ import { snapToHexCenter, hexKey, getAdjacentHexCenters } from "../hex-utils.mjs
  * When active, left-click a hex to assign the selected terrain type,
  * right-click to erase terrain from that hex.
  *
+ * Performance: During drag-painting, only changed hexes are drawn on a dynamic overlay
+ * (no full map redraw). The full static layer is redrawn once on pointer-up (commit).
+ *
  * Terrain data is stored in the scene flag `star-mercs.terrainMap`.
  */
 export default class TerrainPainter extends FormApplication {
@@ -43,7 +46,11 @@ export default class TerrainPainter extends FormApplication {
     this._isDragging = false;
     this._isErasing = false;
     this._dragVisitedKeys = new Set();
+    this._changedKeys = new Set();
     this._pendingTerrainMap = null;
+
+    // Hover deduplication
+    this._lastPreviewKey = null;
   }
 
   /** @override */
@@ -177,12 +184,15 @@ export default class TerrainPainter extends FormApplication {
       if (!pos) return;
 
       if (this._isDragging) {
-        // Painting/erasing — apply to hex under cursor
-        game.starmercs?.terrainLayer?.clearBrushPreview();
+        // Painting/erasing — apply to hex under cursor (dynamic overlay only)
         this._applyToHex(pos);
       } else {
-        // Hovering — show brush preview
+        // Hovering — show brush preview (skip if same hex as last event)
         const center = snapToHexCenter(pos);
+        const key = hexKey(center);
+        if (key === this._lastPreviewKey) return;
+        this._lastPreviewKey = key;
+
         const radius = this._brushSize - 1;
         const hexes = this._getHexesInRadius(center, radius);
         game.starmercs?.terrainLayer?.drawBrushPreview(hexes);
@@ -194,11 +204,16 @@ export default class TerrainPainter extends FormApplication {
       this._isDragging = false;
 
       if (this._pendingTerrainMap && this._dragVisitedKeys.size > 0) {
+        // Commit to scene flag, then do one full static redraw
         await canvas.scene.setFlag("star-mercs", "terrainMap", this._pendingTerrainMap);
         game.starmercs?.terrainLayer?.drawTerrain();
+      } else {
+        // No changes — just clear the paint overlay
+        game.starmercs?.terrainLayer?.clearPaintOverlay();
       }
 
       this._dragVisitedKeys.clear();
+      this._changedKeys.clear();
       this._pendingTerrainMap = null;
     };
 
@@ -220,6 +235,7 @@ export default class TerrainPainter extends FormApplication {
     this._isDragging = true;
     this._isErasing = erasing;
     this._dragVisitedKeys.clear();
+    this._changedKeys.clear();
     this._pendingTerrainMap = foundry.utils.deepClone(
       canvas.scene.getFlag("star-mercs", "terrainMap") ?? {}
     );
@@ -233,7 +249,7 @@ export default class TerrainPainter extends FormApplication {
 
   /**
    * Paint or erase hexes within the brush radius during a drag operation.
-   * Skips hexes already visited in the current drag stroke.
+   * Only draws changed hexes on the dynamic overlay (not a full redraw).
    * @param {{x: number, y: number}} pos - Canvas position.
    * @private
    */
@@ -242,10 +258,12 @@ export default class TerrainPainter extends FormApplication {
     const radius = this._brushSize - 1;
     const hexes = this._getHexesInRadius(center, radius);
 
+    let anyNew = false;
     for (const hex of hexes) {
       const key = hexKey(hex);
       if (this._dragVisitedKeys.has(key)) continue;
       this._dragVisitedKeys.add(key);
+      anyNew = true;
 
       if (this._isErasing) {
         delete this._pendingTerrainMap[key];
@@ -266,10 +284,14 @@ export default class TerrainPainter extends FormApplication {
           road: this._selectedRoad
         };
       }
+
+      this._changedKeys.add(key);
     }
 
-    // Live preview using the pending map (not yet saved to the scene flag)
-    game.starmercs?.terrainLayer?.drawTerrain(this._pendingTerrainMap);
+    // Only update the dynamic paint overlay if something actually changed
+    if (anyNew) {
+      game.starmercs?.terrainLayer?.drawPaintOverlay(this._changedKeys, this._pendingTerrainMap);
+    }
   }
 
   /**
@@ -297,6 +319,9 @@ export default class TerrainPainter extends FormApplication {
     this._isDragging = false;
     this._pendingTerrainMap = null;
     this._dragVisitedKeys.clear();
+    this._changedKeys.clear();
+    this._lastPreviewKey = null;
+    game.starmercs?.terrainLayer?.clearPaintOverlay();
     game.starmercs?.terrainLayer?.clearBrushPreview();
     ui.notifications.info("Terrain Painter deactivated.");
   }
