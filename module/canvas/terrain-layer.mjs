@@ -48,11 +48,10 @@ export default class TerrainLayer extends PIXI.Container {
   static HEX_FILL_ALPHA = 0.35;
   static HEX_BORDER_ALPHA = 0.5;
   static HEX_BORDER_WIDTH = 2;
-  static ROAD_BORDER_WIDTH = 3;
-  static ROAD_BORDER_ALPHA = 0.85;
-  static ROAD_COLOR = 0x8B6914;
-  static ROAD_DASH_LENGTH = 6;
-  static ROAD_GAP_LENGTH = 4;
+  static ROAD_COLOR = 0x000000;
+  static ROAD_LINE_WIDTH = 2;
+  static ROAD_LINE_ALPHA = 0.7;
+  static ROAD_DOT_RADIUS = 3;
   static ERASE_MASK_ALPHA = 0.6;
   static LABEL_FONT_SIZE = 10;
   static STAR_PRIMARY_RADIUS = 14;
@@ -147,13 +146,15 @@ export default class TerrainLayer extends PIXI.Container {
     const terrainConfig = CONFIG.STARMERCS?.terrain ?? {};
     const objectiveConfig = CONFIG.STARMERCS?.objectives ?? {};
 
-    // Pre-build lookup maps for terrain group borders and contour lines
+    // Pre-build lookup maps for terrain group borders, contour lines, and road network
     const typeByKey = new Map();
     const elevByKey = new Map();
+    const roadByKey = new Set();
     for (const [key, rawEntry] of Object.entries(terrainMap)) {
       const hexData = normalizeHexData(rawEntry);
       typeByKey.set(key, hexData.type);
       elevByKey.set(key, hexData.elevation ?? 0);
+      if (hexData.road || terrainConfig[hexData.type]?.hasRoad) roadByKey.add(key);
     }
 
     for (const [key, rawEntry] of Object.entries(terrainMap)) {
@@ -180,13 +181,7 @@ export default class TerrainLayer extends PIXI.Container {
         this._drawPatternOnHex(this.terrainGraphics, topLeft, shape, pattern, color);
       }
 
-      // Draw road border (dashed brown)
-      const hasRoad = hexData.road || config.hasRoad;
-      if (hasRoad) {
-        this._drawRoadBorderOnGraphics(this.terrainGraphics, topLeft, shape);
-      }
-
-      this._drawLabel(center, config.label ?? hexData.type, elevation, hexData.road, hexData.objective);
+      this._drawLabel(center, config.label ?? hexData.type, elevation, hexData.objective);
 
       // Draw objective star icon (offset below label)
       if (hexData.objective && objectiveConfig[hexData.objective]) {
@@ -198,6 +193,9 @@ export default class TerrainLayer extends PIXI.Container {
         this._drawStar(this.objectiveGraphics, starCenter, radius, objConf.color);
       }
     }
+
+    // Draw road network lines (second pass — renders on top of all terrain fills/patterns)
+    this._drawRoadNetwork(this.terrainGraphics, roadByKey, shape, centerX, centerY, edgeOutwardDirs);
   }
 
   /**
@@ -240,9 +238,16 @@ export default class TerrainLayer extends PIXI.Container {
           this._drawPatternOnHex(g, topLeft, shape, pattern, color);
         }
 
+        // Draw road lines for this hex during paint overlay
         const hasRoad = hexData.road || config.hasRoad;
         if (hasRoad) {
-          this._drawRoadBorderOnGraphics(g, topLeft, shape);
+          this._drawRoadLinesForHex(g, center, shape, centerX, centerY, cache.edgeOutwardDirs, (nKey) => {
+            const nEntry = pendingMap[nKey];
+            if (!nEntry) return false;
+            const nData = normalizeHexData(nEntry);
+            const nConfig = terrainConfig[nData.type];
+            return nData.road || nConfig?.hasRoad || false;
+          });
         }
 
         // Draw objective star on paint overlay (offset below center)
@@ -407,65 +412,81 @@ export default class TerrainLayer extends PIXI.Container {
   }
 
   /**
-   * Draw a dashed brown border on a hex to indicate a road.
+   * Draw the full road network — lines from each road hex center to edge midpoints
+   * facing adjacent road hexes, forming a connected road graph.
    * @param {PIXI.Graphics} g - Target graphics object.
-   * @param {{x: number, y: number}} topLeft - Top-left corner of the hex cell.
+   * @param {Set<string>} roadByKey - Set of hex keys that have roads.
    * @param {Array<{x: number, y: number}>} shape - Hex vertex offsets.
+   * @param {number} centerX - Shape centroid X offset.
+   * @param {number} centerY - Shape centroid Y offset.
+   * @param {Array<{x: number, y: number}>} edgeOutwardDirs - Precomputed outward unit vectors per edge.
    * @private
    */
-  _drawRoadBorderOnGraphics(g, topLeft, shape) {
-    for (let i = 0; i < shape.length; i++) {
-      const next = (i + 1) % shape.length;
-      const x1 = topLeft.x + shape[i].x;
-      const y1 = topLeft.y + shape[i].y;
-      const x2 = topLeft.x + shape[next].x;
-      const y2 = topLeft.y + shape[next].y;
-      this._drawDashedLine(
-        g, x1, y1, x2, y2,
-        TerrainLayer.ROAD_DASH_LENGTH,
-        TerrainLayer.ROAD_GAP_LENGTH,
-        TerrainLayer.ROAD_COLOR,
-        TerrainLayer.ROAD_BORDER_WIDTH,
-        TerrainLayer.ROAD_BORDER_ALPHA
-      );
+  _drawRoadNetwork(g, roadByKey, shape, centerX, centerY, edgeOutwardDirs) {
+    for (const key of roadByKey) {
+      const [xStr, yStr] = key.split(",");
+      const center = { x: parseFloat(xStr), y: parseFloat(yStr) };
+      this._drawRoadLinesForHex(g, center, shape, centerX, centerY, edgeOutwardDirs, (nKey) => roadByKey.has(nKey));
     }
   }
 
   /**
-   * Draw a dashed line segment between two points.
+   * Draw road lines for a single hex — from center to edge midpoints facing road neighbors.
+   * If isolated (no adjacent roads), draws a small circle at center.
    * @param {PIXI.Graphics} g - Target graphics object.
-   * @param {number} x1 - Start X.
-   * @param {number} y1 - Start Y.
-   * @param {number} x2 - End X.
-   * @param {number} y2 - End Y.
-   * @param {number} dashLen - Length of each dash.
-   * @param {number} gapLen - Length of each gap.
-   * @param {number} color - PIXI hex color.
-   * @param {number} width - Line width.
-   * @param {number} alpha - Line alpha.
+   * @param {{x: number, y: number}} center - Hex center coordinates.
+   * @param {Array<{x: number, y: number}>} shape - Hex vertex offsets.
+   * @param {number} centerX - Shape centroid X offset.
+   * @param {number} centerY - Shape centroid Y offset.
+   * @param {Array<{x: number, y: number}>} edgeOutwardDirs - Precomputed outward unit vectors per edge.
+   * @param {function(string): boolean} isRoad - Predicate: does the given hex key have a road?
    * @private
    */
-  _drawDashedLine(g, x1, y1, x2, y2, dashLen, gapLen, color, width, alpha) {
-    const dx = x2 - x1;
-    const dy = y2 - y1;
-    const totalLen = Math.sqrt(dx * dx + dy * dy);
-    if (totalLen === 0) return;
-    const ux = dx / totalLen;
-    const uy = dy / totalLen;
+  _drawRoadLinesForHex(g, center, shape, centerX, centerY, edgeOutwardDirs, isRoad) {
+    const topLeft = { x: center.x - centerX, y: center.y - centerY };
+    const neighbors = getAdjacentHexCenters(center);
 
-    g.lineStyle(width, color, alpha);
-    let pos = 0;
-    let drawing = true;
-    while (pos < totalLen) {
-      if (drawing) {
-        const segEnd = Math.min(pos + dashLen, totalLen);
-        g.moveTo(x1 + ux * pos, y1 + uy * pos);
-        g.lineTo(x1 + ux * segEnd, y1 + uy * segEnd);
-        pos = segEnd;
-      } else {
-        pos += gapLen;
+    // Match each neighbor to an edge via dot product
+    let connectedEdges = 0;
+    const edgeMidpoints = [];
+    for (let edgeIdx = 0; edgeIdx < shape.length; edgeIdx++) {
+      const dir = edgeOutwardDirs[edgeIdx];
+      let bestKey = null;
+      let bestDot = -Infinity;
+      for (const n of neighbors) {
+        const dx = n.x - center.x;
+        const dy = n.y - center.y;
+        const len = Math.sqrt(dx * dx + dy * dy);
+        if (len === 0) continue;
+        const dot = (dx / len) * dir.x + (dy / len) * dir.y;
+        if (dot > bestDot) {
+          bestDot = dot;
+          bestKey = hexKey(n);
+        }
       }
-      drawing = !drawing;
+      if (bestKey && isRoad(bestKey)) {
+        const next = (edgeIdx + 1) % shape.length;
+        const midX = topLeft.x + (shape[edgeIdx].x + shape[next].x) / 2;
+        const midY = topLeft.y + (shape[edgeIdx].y + shape[next].y) / 2;
+        edgeMidpoints.push({ x: midX, y: midY });
+        connectedEdges++;
+      }
+    }
+
+    g.lineStyle(TerrainLayer.ROAD_LINE_WIDTH, TerrainLayer.ROAD_COLOR, TerrainLayer.ROAD_LINE_ALPHA);
+
+    if (connectedEdges === 0) {
+      // Isolated road hex — draw a small circle indicator at center
+      g.lineStyle(0);
+      g.beginFill(TerrainLayer.ROAD_COLOR, TerrainLayer.ROAD_LINE_ALPHA);
+      g.drawCircle(center.x, center.y, TerrainLayer.ROAD_DOT_RADIUS);
+      g.endFill();
+    } else {
+      // Draw lines from center to each connected edge midpoint
+      for (const mid of edgeMidpoints) {
+        g.moveTo(center.x, center.y);
+        g.lineTo(mid.x, mid.y);
+      }
     }
   }
 
@@ -799,18 +820,16 @@ export default class TerrainLayer extends PIXI.Container {
   /* ---------------------------------------- */
 
   /**
-   * Draw terrain label with elevation, road, and objective indicators at a hex center.
+   * Draw terrain label with elevation and objective indicators at a hex center.
    * @param {{x: number, y: number}} center - Hex center coordinates.
    * @param {string} label - Terrain type label.
    * @param {number} elevation - Hex elevation (0–5).
-   * @param {boolean} road - Whether the hex has a road.
    * @param {string|null} [objective=null] - Objective type ("primary", "secondary", or null).
    * @private
    */
-  _drawLabel(center, label, elevation, road, objective = null) {
+  _drawLabel(center, label, elevation, objective = null) {
     const parts = [];
     if (elevation > 0) parts.push(`E:${elevation}`);
-    if (road) parts.push("R");
     if (objective === "primary") parts.push("P");
     else if (objective === "secondary") parts.push("S");
     const subtitle = parts.join(" ");
