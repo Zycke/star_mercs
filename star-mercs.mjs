@@ -969,17 +969,22 @@ Hooks.on("refreshToken", () => {
 
 /** Reduce token nameplate font size (~1/3 of default) and shrink token bars (2/3 size). */
 Hooks.on("refreshToken", (token) => {
-  // Shrink nameplate text
+  // Shrink nameplate text and reposition just below token
   if (token.nameplate) {
     token.nameplate.style.fontSize = 10;
+    // Position nameplate just below the token graphic
+    const tokenH = token.h ?? token.document.height * canvas.grid.size;
+    token.nameplate.position.y = tokenH + 2;
   }
 
-  // Shrink token bars to 2/3 width and height
+  // Shrink token bars to 2/3 size, centered on the token
   if (token.bars) {
-    token.bars.scale.set(0.67, 0.67);
-    // Re-center bars horizontally
+    const scale = 0.67;
+    token.bars.scale.set(scale, scale);
+    // Compute offset to keep bars centered after scaling
     const tokenW = token.w ?? token.document.width * canvas.grid.size;
-    token.bars.position.x = tokenW * (1 - 0.67) / 2;
+    token.bars.position.x = tokenW * (1 - scale) / 2;
+    // Keep bars at their default Y (Foundry positions them relative to token bottom)
   }
 });
 

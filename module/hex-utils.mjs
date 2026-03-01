@@ -173,6 +173,8 @@ export function validatePath(token, path) {
   const actor = token.actor;
   const isFlying = actor.hasTrait?.("Flying") ?? false;
   const isHover = actor.hasTrait?.("Hover") ?? false;
+  const isJumpCapable = actor.hasTrait?.("Jump Capable") ?? false;
+  const maxElevChange = isJumpCapable ? 2 : 1;
 
   let prevCenter = snapToHexCenter(token.center);
 
@@ -189,11 +191,11 @@ export function validatePath(token, path) {
     if (!isFlying) {
       const prevElev = getHexElevation(prevCenter);
       const nextElev = getHexElevation(hexCenter);
-      if (Math.abs(nextElev - prevElev) > 1) {
+      if (Math.abs(nextElev - prevElev) > maxElevChange) {
         return {
           valid: false,
           blockedAt: hexCenter,
-          reason: `Elevation change too steep (${prevElev} → ${nextElev}). Max difference is 1.`
+          reason: `Elevation change too steep (${prevElev} → ${nextElev}). Max difference is ${maxElevChange}.`
         };
       }
     }
@@ -417,6 +419,18 @@ export function getMovementCost(hexCenter, actor = null) {
     cost = Math.max(1, cost - 1);
   }
 
+  // Mech trait: -1 MP for all non-water terrain (min 1)
+  const isMech = actor?.hasTrait?.("Mech") ?? false;
+  if (isMech && !config.waterTerrain) {
+    cost = Math.max(1, cost - 1);
+  }
+
+  // Powered trait: -1 MP for all non-water terrain (min 1)
+  const isPowered = actor?.hasTrait?.("Powered") ?? false;
+  if (isPowered && !config.waterTerrain) {
+    cost = Math.max(1, cost - 1);
+  }
+
   return { cost, passable: true, reason: null };
 }
 
@@ -434,6 +448,8 @@ export function calculatePathCost(fromCenter, path, actor = null) {
 
   const isFlying = actor?.hasTrait?.("Flying") ?? false;
   const isHover = actor?.hasTrait?.("Hover") ?? false;
+  const isJumpCapable = actor?.hasTrait?.("Jump Capable") ?? false;
+  const maxElevChange = isJumpCapable ? 2 : 1;
 
   let totalCost = 0;
   const costs = [];
@@ -442,18 +458,17 @@ export function calculatePathCost(fromCenter, path, actor = null) {
   for (let i = 0; i < path.length; i++) {
     const hexCenter = path[i];
 
-    // Elevation restriction: can't move into hex with >1 elevation difference
-    // (Flying units are exempt; Hover units are NOT exempt)
+    // Elevation restriction (Flying exempt; Jump Capable allows ±2)
     if (!isFlying) {
       const prevElev = getHexElevation(prevCenter);
       const nextElev = getHexElevation(hexCenter);
-      if (Math.abs(nextElev - prevElev) > 1) {
+      if (Math.abs(nextElev - prevElev) > maxElevChange) {
         return {
           totalCost,
           costs,
           passable: false,
           blockedIndex: i,
-          reason: `Elevation change too steep (${prevElev} → ${nextElev}). Max difference is 1.`
+          reason: `Elevation change too steep (${prevElev} → ${nextElev}). Max difference is ${maxElevChange}.`
         };
       }
     }
