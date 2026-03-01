@@ -224,6 +224,7 @@ STARMERCS.terrain = {
   forest: {
     label: "Dense Woods",
     color: 0x228B22,
+    pattern: "dots",
     icon: "fas fa-tree",
     movementCost: 3,
     waterTerrain: false,
@@ -240,6 +241,7 @@ STARMERCS.terrain = {
   plain: {
     label: "Plain",
     color: 0xC2B280,
+    pattern: "none",
     icon: "fas fa-seedling",
     movementCost: 2,
     waterTerrain: false,
@@ -256,6 +258,7 @@ STARMERCS.terrain = {
   hill: {
     label: "Hill",
     color: 0x8B7355,
+    pattern: "horizontal",
     icon: "fas fa-mountain",
     movementCost: 3,
     waterTerrain: false,
@@ -271,7 +274,8 @@ STARMERCS.terrain = {
   },
   mountain: {
     label: "Mountain",
-    color: 0x696969,
+    color: 0x505050,
+    pattern: "zigzag",
     icon: "fas fa-mountain",
     movementCost: 4,
     waterTerrain: false,
@@ -288,6 +292,7 @@ STARMERCS.terrain = {
   swamp: {
     label: "Swamp",
     color: 0x556B2F,
+    pattern: "wave",
     icon: "fas fa-water",
     movementCost: 3,
     waterTerrain: false,
@@ -304,6 +309,7 @@ STARMERCS.terrain = {
   river: {
     label: "River",
     color: 0x4682B4,
+    pattern: "chevron",
     icon: "fas fa-water",
     movementCost: 2,
     waterTerrain: true,
@@ -320,6 +326,7 @@ STARMERCS.terrain = {
   lake: {
     label: "Lake",
     color: 0x1E90FF,
+    pattern: "horizontal",
     icon: "fas fa-water",
     movementCost: 2,
     waterTerrain: true,
@@ -336,6 +343,7 @@ STARMERCS.terrain = {
   ocean: {
     label: "Ocean",
     color: 0x000080,
+    pattern: "wave",
     icon: "fas fa-water",
     movementCost: 2,
     waterTerrain: true,
@@ -351,7 +359,8 @@ STARMERCS.terrain = {
   },
   urbanDense: {
     label: "Urban (Dense)",
-    color: 0x808080,
+    color: 0x606060,
+    pattern: "crosshatch",
     icon: "fas fa-city",
     movementCost: 2,
     waterTerrain: false,
@@ -367,7 +376,8 @@ STARMERCS.terrain = {
   },
   urbanLight: {
     label: "Urban (Light)",
-    color: 0xA9A9A9,
+    color: 0xBBBBBB,
+    pattern: "diagonal",
     icon: "fas fa-building",
     movementCost: 2,
     waterTerrain: false,
