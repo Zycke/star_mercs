@@ -191,6 +191,13 @@ export default class StarMercsCombat extends Combat {
     return this;
   }
 
+  /** @override — Clean up firing blips when combat ends. */
+  async endCombat() {
+    const { default: FiringBlipLayer } = await import("../canvas/firing-blip-layer.mjs");
+    await FiringBlipLayer.clearAllFiringBlips();
+    return super.endCombat();
+  }
+
   /* ---------------------------------------- */
   /*  Phase Enforcement                       */
   /* ---------------------------------------- */

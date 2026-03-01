@@ -22,6 +22,7 @@ import * as detection from "./module/detection.mjs";
 import DetectionLayer from "./module/canvas/detection-layer.mjs";
 import MovementPathLayer from "./module/canvas/movement-path-layer.mjs";
 import DamageOverlayLayer from "./module/canvas/damage-overlay-layer.mjs";
+import FiringBlipLayer from "./module/canvas/firing-blip-layer.mjs";
 import TurnControlPanel from "./module/apps/turn-control.mjs";
 
 /* ============================================ */
@@ -345,6 +346,16 @@ Hooks.on("canvasReady", () => {
   game.starmercs.damageOverlayLayer = damageOverlayLayer;
   canvas.interface.addChild(damageOverlayLayer);
   damageOverlayLayer.drawDamageNumbers();
+
+  // Firing blip overlay
+  const previousFiringBlipLayer = game.starmercs.firingBlipLayer;
+  if (previousFiringBlipLayer) {
+    previousFiringBlipLayer.destroy({ children: true });
+  }
+  const firingBlipLayer = new FiringBlipLayer();
+  game.starmercs.firingBlipLayer = firingBlipLayer;
+  canvas.interface.addChild(firingBlipLayer);
+  firingBlipLayer.drawFiringBlips();
 });
 
 /** Redraw arrows when a token is visually refreshed (position change, etc.). */
@@ -352,6 +363,15 @@ Hooks.on("refreshToken", () => {
   game.starmercs?.targetingArrowLayer?.drawArrows();
   game.starmercs?.commsLinkLayer?.drawLinks();
   game.starmercs?.damageOverlayLayer?.drawDamageNumbers();
+});
+
+/** Redraw firing blips when scene flags change (blip created/removed by any client). */
+Hooks.on("updateScene", (scene, changes) => {
+  if (scene.id !== canvas.scene?.id) return;
+  if (changes?.flags?.["star-mercs"]?.firingBlips !== undefined
+      || changes?.flags?.["star-mercs"]?.["-=firingBlips"] !== undefined) {
+    game.starmercs?.firingBlipLayer?.drawFiringBlips();
+  }
 });
 
 /**

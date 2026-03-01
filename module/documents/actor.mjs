@@ -1,5 +1,7 @@
 import { resolveAttack, validateAttack, calculateAccuracy, determineHitResult, calculateDamage, HIT_LABELS } from "../combat.mjs";
 import { skillCheck } from "../dice.mjs";
+import { computeBestDetectionLevel } from "../detection.mjs";
+import FiringBlipLayer from "../canvas/firing-blip-layer.mjs";
 
 /**
  * Extended Actor class for Star Mercs units.
@@ -335,6 +337,13 @@ export default class StarMercsActor extends Actor {
       const firedEffect = CONFIG.statusEffects.find(e => e.id === "fired");
       if (firedEffect && !attackerToken.document.hasStatusEffect("fired")) {
         await attackerToken.document.toggleActiveEffect(firedEffect, { active: true });
+      }
+
+      // Create firing blip if attacker is hidden from the defending team
+      const defTeam = target.system.team ?? "a";
+      const attackerDetLevel = computeBestDetectionLevel(defTeam, attackerToken);
+      if (attackerDetLevel === "hidden") {
+        await FiringBlipLayer.createFiringBlip(attackerToken, defTeam);
       }
     }
 
