@@ -37,16 +37,14 @@ export default class DamageOverlayLayer extends PIXI.Container {
       if (pending.readiness > 0) parts.push(`-${pending.readiness} RDY`);
       const text = parts.join(" / ");
 
-      const label = new PIXI.Text({
-        text,
-        style: {
-          fontFamily: "Roboto, Segoe UI, sans-serif",
-          fontSize: 14,
-          fontWeight: "bold",
-          fill: 0xFF4444,
-          stroke: { color: 0x000000, width: 3 },
-          align: "center"
-        }
+      const label = new PIXI.Text(text, {
+        fontFamily: "Roboto, Segoe UI, sans-serif",
+        fontSize: 14,
+        fontWeight: "bold",
+        fill: 0xFF4444,
+        stroke: 0x000000,
+        strokeThickness: 3,
+        align: "center"
       });
 
       label.anchor.set(0.5, 1);

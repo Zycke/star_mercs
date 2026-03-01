@@ -51,26 +51,10 @@ Hooks.once("init", () => {
 
   // --- Register Custom Status Effects ---
   CONFIG.statusEffects.push(
-    {
-      id: "fired",
-      label: "Fired",
-      icon: "icons/svg/explosion.svg"
-    },
-    {
-      id: "breaking",
-      label: "Breaking",
-      icon: "icons/svg/skull.svg"
-    },
-    {
-      id: "engaged",
-      label: "Engaged",
-      icon: "icons/svg/sword.svg"
-    },
-    {
-      id: "entrenched",
-      label: "Entrenched",
-      icon: "icons/svg/shield.svg"
-    }
+    { id: "fired",      name: "Fired",      img: "icons/svg/explosion.svg" },
+    { id: "breaking",   name: "Breaking",   img: "icons/svg/skull.svg" },
+    { id: "engaged",    name: "Engaged",    img: "icons/svg/sword.svg" },
+    { id: "entrenched", name: "Entrenched", img: "icons/svg/shield.svg" }
   );
 
   // --- Register Document Classes ---
@@ -536,9 +520,6 @@ Hooks.on("updateToken", (tokenDoc, changes) => {
   if (!("x" in changes) && !("y" in changes)) return;
   if (!canvas?.tokens?.placeables) return;
 
-  const engagedEffect = CONFIG.statusEffects.find(e => e.id === "engaged");
-  if (!engagedEffect) return;
-
   for (const token of canvas.tokens.placeables) {
     if (!token.actor || token.actor.type !== "unit") continue;
     if (token.actor.system.strength.value <= 0) continue;
@@ -546,9 +527,9 @@ Hooks.on("updateToken", (tokenDoc, changes) => {
     const engaged = hexUtils.isEngaged(token);
     const hasEffect = token.document.hasStatusEffect("engaged");
     if (engaged && !hasEffect) {
-      token.document.toggleActiveEffect(engagedEffect, { active: true });
+      token.actor.toggleStatusEffect("engaged", { active: true });
     } else if (!engaged && hasEffect) {
-      token.document.toggleActiveEffect(engagedEffect, { active: false });
+      token.actor.toggleStatusEffect("engaged", { active: false });
     }
   }
 });
@@ -557,13 +538,13 @@ Hooks.on("updateToken", (tokenDoc, changes) => {
 Hooks.on("updateToken", (tokenDoc, changes) => {
   if (foundry.utils.hasProperty(changes, "flags.star-mercs.breaking")) {
     const isBreaking = foundry.utils.getProperty(changes, "flags.star-mercs.breaking");
-    const breakingEffect = CONFIG.statusEffects.find(e => e.id === "breaking");
-    if (breakingEffect) {
+    const actor = tokenDoc.actor;
+    if (actor) {
       const hasEffect = tokenDoc.hasStatusEffect("breaking");
       if (isBreaking && !hasEffect) {
-        tokenDoc.toggleActiveEffect(breakingEffect, { active: true });
+        actor.toggleStatusEffect("breaking", { active: true });
       } else if (!isBreaking && hasEffect) {
-        tokenDoc.toggleActiveEffect(breakingEffect, { active: false });
+        actor.toggleStatusEffect("breaking", { active: false });
       }
     }
   }
@@ -588,14 +569,11 @@ Hooks.on("updateItem", (item, changes) => {
       if (actor?.type === "unit") {
         const token = actor.getActiveTokens()?.[0]?.document;
         if (token) {
-          const entrenchedEffect = CONFIG.statusEffects.find(e => e.id === "entrenched");
-          if (entrenchedEffect) {
-            const hasEffect = token.hasStatusEffect("entrenched");
-            if (isActive && !hasEffect) {
-              token.toggleActiveEffect(entrenchedEffect, { active: true });
-            } else if (!isActive && hasEffect) {
-              token.toggleActiveEffect(entrenchedEffect, { active: false });
-            }
+          const hasEffect = token.hasStatusEffect("entrenched");
+          if (isActive && !hasEffect) {
+            actor.toggleStatusEffect("entrenched", { active: true });
+          } else if (!isActive && hasEffect) {
+            actor.toggleStatusEffect("entrenched", { active: false });
           }
         }
       }

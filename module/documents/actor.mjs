@@ -217,7 +217,7 @@ export default class StarMercsActor extends Actor {
     // Attack was invalid (wrong weapon type, etc.)
     if (!result.valid) {
       return ChatMessage.create({
-        content: await renderTemplate(
+        content: await foundry.applications.handlebars.renderTemplate(
           "systems/star-mercs/templates/chat/attack-result.hbs",
           {
             attackerName: this.name,
@@ -314,7 +314,7 @@ export default class StarMercsActor extends Actor {
       readinessLost: damageApplied?.readinessLost ?? 0
     };
 
-    const content = await renderTemplate(
+    const content = await foundry.applications.handlebars.renderTemplate(
       "systems/star-mercs/templates/chat/attack-result.hbs",
       templateData
     );
@@ -334,9 +334,8 @@ export default class StarMercsActor extends Actor {
       }
 
       // Toggle "Fired" visual status effect on the token
-      const firedEffect = CONFIG.statusEffects.find(e => e.id === "fired");
-      if (firedEffect && !attackerToken.document.hasStatusEffect("fired")) {
-        await attackerToken.document.toggleActiveEffect(firedEffect, { active: true });
+      if (attackerToken.actor && !attackerToken.document.hasStatusEffect("fired")) {
+        await attackerToken.actor.toggleStatusEffect("fired", { active: true });
       }
 
       // Create firing blip if attacker is hidden from the defending team
@@ -353,7 +352,7 @@ export default class StarMercsActor extends Actor {
 
           // Defender team message with hidden attacker name
           const defTemplateData = { ...templateData, attackerName: unknownName };
-          const defContent = await renderTemplate(
+          const defContent = await foundry.applications.handlebars.renderTemplate(
             "systems/star-mercs/templates/chat/attack-result.hbs",
             defTemplateData
           );
@@ -469,7 +468,7 @@ export default class StarMercsActor extends Actor {
       readinessLost: 0
     };
 
-    const content = await renderTemplate(
+    const content = await foundry.applications.handlebars.renderTemplate(
       "systems/star-mercs/templates/chat/attack-result.hbs",
       templateData
     );
@@ -641,7 +640,7 @@ export default class StarMercsActor extends Actor {
 
       if (!result.valid) {
         await ChatMessage.create({
-          content: await renderTemplate(
+          content: await foundry.applications.handlebars.renderTemplate(
             "systems/star-mercs/templates/chat/attack-result.hbs",
             {
               attackerName: this.name,
@@ -704,7 +703,7 @@ export default class StarMercsActor extends Actor {
       };
 
       await ChatMessage.create({
-        content: await renderTemplate(
+        content: await foundry.applications.handlebars.renderTemplate(
           "systems/star-mercs/templates/chat/attack-result.hbs",
           templateData
         ),
@@ -776,9 +775,8 @@ export default class StarMercsActor extends Actor {
       await attackerToken.document.setFlag("star-mercs", "firedWeapons", updatedFiredWeapons);
 
       // Toggle "Fired" visual status effect on the token
-      const firedEffect = CONFIG.statusEffects.find(e => e.id === "fired");
-      if (firedEffect && !attackerToken.document.hasStatusEffect("fired")) {
-        await attackerToken.document.toggleActiveEffect(firedEffect, { active: true });
+      if (attackerToken.actor && !attackerToken.document.hasStatusEffect("fired")) {
+        await attackerToken.actor.toggleStatusEffect("fired", { active: true });
       }
     }
 

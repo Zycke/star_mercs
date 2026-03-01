@@ -570,7 +570,7 @@ export default class StarMercsCombat extends Combat {
     await this.setFlag("star-mercs", "damageTakenThisTurn", dmgMapObj);
 
     // 7. Post morale button chat card instead of auto-running morale
-    const moraleContent = await renderTemplate(
+    const moraleContent = await foundry.applications.handlebars.renderTemplate(
       "systems/star-mercs/templates/chat/morale-button.hbs",
       { combatId: this.id }
     );
@@ -1547,9 +1547,9 @@ export default class StarMercsCombat extends Combat {
       const distance = StarMercsActor.getHexDistance(attackerToken, targetToken);
       const hexesMoved = Math.max(0, distance - 1);
 
-      // Derive top-left from hex center using Foundry's grid API
-      const topLeft = canvas.grid.getTopLeftPoint(adjacentHex);
-      await token.update({ x: topLeft.x, y: topLeft.y }, { _starMercsAutoMove: true });
+      // Snap to hex center for proper token positioning
+      const snapped = snapToHexCenter(adjacentHex);
+      await token.update({ x: snapped.x, y: snapped.y }, { _starMercsAutoMove: true });
 
       // Track movement for fuel consumption
       await token.setFlag("star-mercs", "movementUsed", hexesMoved);
@@ -1720,8 +1720,8 @@ export default class StarMercsCombat extends Combat {
         const safePath = path.slice(0, -1);
         if (safePath.length > 0) {
           const safeHex = safePath[safePath.length - 1];
-          const topLeft = canvas.grid.getTopLeftPoint(safeHex);
-          await mover.token.update({ x: topLeft.x, y: topLeft.y }, { _starMercsAutoMove: true });
+          const snapped = snapToHexCenter(safeHex);
+          await mover.token.update({ x: snapped.x, y: snapped.y }, { _starMercsAutoMove: true });
           const { totalCost: safeCost } = calculatePathCost(canvasToken.center, safePath, mover.actor);
           await mover.token.setFlag("star-mercs", "movementUsed", safeCost);
         }
@@ -1743,15 +1743,14 @@ export default class StarMercsCombat extends Combat {
         // Animate through each waypoint with brief pauses
         for (const wp of moveWaypoints) {
           const wpSnapped = snapToHexCenter(wp);
-          const wpTopLeft = canvas.grid.getTopLeftPoint(wpSnapped);
-          await mover.token.update({ x: wpTopLeft.x, y: wpTopLeft.y }, { _starMercsAutoMove: true });
+          await mover.token.update({ x: wpSnapped.x, y: wpSnapped.y }, { _starMercsAutoMove: true });
           await new Promise(r => setTimeout(r, 200));
         }
       } else {
         // Single destination — move directly
         const finalHex = path[path.length - 1];
-        const topLeft = canvas.grid.getTopLeftPoint(finalHex);
-        await mover.token.update({ x: topLeft.x, y: topLeft.y }, { _starMercsAutoMove: true });
+        const snapped = snapToHexCenter(finalHex);
+        await mover.token.update({ x: snapped.x, y: snapped.y }, { _starMercsAutoMove: true });
       }
       await mover.token.setFlag("star-mercs", "movementUsed", totalCost);
       movedCount++;
@@ -1911,8 +1910,7 @@ export default class StarMercsCombat extends Combat {
    * @private
    */
   _refreshEngagementStatus() {
-    const engagedEffect = CONFIG.statusEffects.find(e => e.id === "engaged");
-    if (!engagedEffect || !canvas?.tokens?.placeables) return;
+    if (!canvas?.tokens?.placeables) return;
 
     for (const token of canvas.tokens.placeables) {
       if (!token.actor || token.actor.type !== "unit") continue;
@@ -1921,9 +1919,9 @@ export default class StarMercsCombat extends Combat {
       const engaged = isEngaged(token);
       const hasEffect = token.document.hasStatusEffect("engaged");
       if (engaged && !hasEffect) {
-        token.document.toggleActiveEffect(engagedEffect, { active: true });
+        token.actor.toggleStatusEffect("engaged", { active: true });
       } else if (!engaged && hasEffect) {
-        token.document.toggleActiveEffect(engagedEffect, { active: false });
+        token.actor.toggleStatusEffect("engaged", { active: false });
       }
     }
   }
@@ -2173,9 +2171,8 @@ export default class StarMercsCombat extends Combat {
         await token.unsetFlag("star-mercs", "firedAtThisTurn");
         // 6. Clear per-weapon fired list and "Fired" status effect
         await token.unsetFlag("star-mercs", "firedWeapons");
-        if (token.hasStatusEffect("fired")) {
-          const firedEffect = CONFIG.statusEffects.find(e => e.id === "fired");
-          if (firedEffect) await token.toggleActiveEffect(firedEffect, { active: false });
+        if (token.hasStatusEffect("fired") && actor) {
+          await actor.toggleStatusEffect("fired", { active: false });
         }
       }
 
