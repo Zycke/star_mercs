@@ -209,8 +209,18 @@ export default class TerrainPainter extends FormApplication {
       this._isDragging = false;
 
       if (this._pendingTerrainMap && this._dragVisitedKeys.size > 0) {
-        // Commit to scene flag, then do one full static redraw
-        await canvas.scene.setFlag("star-mercs", "terrainMap", this._pendingTerrainMap);
+        // Build update object with proper deletion syntax for erased hexes.
+        // setFlag() deep-merges, which silently preserves deleted keys.
+        // scene.update() with Foundry's "-=key" convention actually removes them.
+        const updateData = {};
+        for (const key of this._dragVisitedKeys) {
+          if (key in this._pendingTerrainMap) {
+            updateData[`flags.star-mercs.terrainMap.${key}`] = this._pendingTerrainMap[key];
+          } else {
+            updateData[`flags.star-mercs.terrainMap.-=${key}`] = null;
+          }
+        }
+        await canvas.scene.update(updateData);
         game.starmercs?.terrainLayer?.drawTerrain();
       } else {
         // No changes — just clear the paint overlay
@@ -286,11 +296,11 @@ export default class TerrainPainter extends FormApplication {
         const hexData = {
           type: this._selectedTerrain,
           elevation: this._selectedElevation,
-          road: this._selectedRoad
+          road: this._selectedRoad,
+          objective: (this._selectedObjective && this._selectedObjective !== "none")
+            ? this._selectedObjective
+            : null
         };
-        if (this._selectedObjective && this._selectedObjective !== "none") {
-          hexData.objective = this._selectedObjective;
-        }
         this._pendingTerrainMap[key] = hexData;
       }
 
