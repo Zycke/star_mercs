@@ -1,4 +1,4 @@
-import { normalizeHexData } from "../hex-utils.mjs";
+import { normalizeHexData, getAdjacentHexCenters, hexKey } from "../hex-utils.mjs";
 
 /**
  * PIXI.Container that renders terrain type overlays on hex cells.
@@ -45,17 +45,39 @@ export default class TerrainLayer extends PIXI.Container {
   /*  Constants                               */
   /* ---------------------------------------- */
 
-  static HEX_FILL_ALPHA = 0.25;
+  static HEX_FILL_ALPHA = 0.35;
   static HEX_BORDER_ALPHA = 0.5;
   static HEX_BORDER_WIDTH = 2;
   static ROAD_BORDER_WIDTH = 3;
-  static ROAD_BORDER_ALPHA = 0.8;
+  static ROAD_BORDER_ALPHA = 0.85;
+  static ROAD_COLOR = 0x8B6914;
+  static ROAD_DASH_LENGTH = 6;
+  static ROAD_GAP_LENGTH = 4;
   static ERASE_MASK_ALPHA = 0.6;
   static LABEL_FONT_SIZE = 10;
   static STAR_PRIMARY_RADIUS = 14;
   static STAR_SECONDARY_RADIUS = 10;
   static STAR_INNER_RATIO = 0.4;
   static STAR_ALPHA = 0.9;
+  static STAR_VERTICAL_OFFSET = 14;
+
+  // Pattern constants
+  static PATTERN_LINE_WIDTH = 1;
+  static PATTERN_ALPHA = 0.35;
+  static PATTERN_SPACING = 10;
+  static PATTERN_DOT_RADIUS = 2;
+
+  // Group border constants
+  static GROUP_BORDER_INNER_WIDTH = 1;
+  static GROUP_BORDER_INNER_ALPHA = 0.15;
+  static GROUP_BORDER_OUTER_WIDTH = 3;
+  static GROUP_BORDER_OUTER_ALPHA = 0.7;
+
+  // Elevation contour constants
+  static CONTOUR_COLOR = 0x654321;
+  static CONTOUR_WIDTH = 2;
+  static CONTOUR_HEAVY_WIDTH = 3;
+  static CONTOUR_ALPHA = 0.7;
 
   /* ---------------------------------------- */
   /*  Shape Cache                             */
@@ -63,7 +85,8 @@ export default class TerrainLayer extends PIXI.Container {
 
   /**
    * Get the cached hex shape and centroid, computing if needed.
-   * @returns {{shape: Array, centerX: number, centerY: number}|null}
+   * Also precomputes edge outward direction unit vectors for neighbor matching.
+   * @returns {{shape: Array, centerX: number, centerY: number, edgeOutwardDirs: Array}|null}
    * @private
    */
   _ensureShapeCache() {
@@ -72,7 +95,18 @@ export default class TerrainLayer extends PIXI.Container {
     if (!shape || shape.length < 3) return null;
     const centerX = shape.reduce((sum, p) => sum + p.x, 0) / shape.length;
     const centerY = shape.reduce((sum, p) => sum + p.y, 0) / shape.length;
-    this._cachedShape = { shape, centerX, centerY };
+
+    // Precompute unit outward direction for each edge (midpoint direction from centroid)
+    const edgeOutwardDirs = [];
+    for (let i = 0; i < shape.length; i++) {
+      const next = (i + 1) % shape.length;
+      const mx = (shape[i].x + shape[next].x) / 2 - centerX;
+      const my = (shape[i].y + shape[next].y) / 2 - centerY;
+      const len = Math.sqrt(mx * mx + my * my);
+      edgeOutwardDirs.push(len > 0 ? { x: mx / len, y: my / len } : { x: 0, y: 0 });
+    }
+
+    this._cachedShape = { shape, centerX, centerY, edgeOutwardDirs };
     return this._cachedShape;
   }
 
@@ -108,10 +142,19 @@ export default class TerrainLayer extends PIXI.Container {
 
     const cache = this._ensureShapeCache();
     if (!cache) return;
-    const { shape, centerX, centerY } = cache;
+    const { shape, centerX, centerY, edgeOutwardDirs } = cache;
 
     const terrainConfig = CONFIG.STARMERCS?.terrain ?? {};
     const objectiveConfig = CONFIG.STARMERCS?.objectives ?? {};
+
+    // Pre-build lookup maps for terrain group borders and contour lines
+    const typeByKey = new Map();
+    const elevByKey = new Map();
+    for (const [key, rawEntry] of Object.entries(terrainMap)) {
+      const hexData = normalizeHexData(rawEntry);
+      typeByKey.set(key, hexData.type);
+      elevByKey.set(key, hexData.elevation ?? 0);
+    }
 
     for (const [key, rawEntry] of Object.entries(terrainMap)) {
       const hexData = normalizeHexData(rawEntry);
@@ -121,23 +164,38 @@ export default class TerrainLayer extends PIXI.Container {
       const [xStr, yStr] = key.split(",");
       const center = { x: parseFloat(xStr), y: parseFloat(yStr) };
       const topLeft = { x: center.x - centerX, y: center.y - centerY };
+      const color = config.color ?? 0x888888;
+      const elevation = hexData.elevation ?? 0;
 
-      this._drawHexOnGraphics(this.terrainGraphics, topLeft, shape, config.color ?? 0x888888);
+      // Draw hex fill with terrain group borders (bold at terrain transitions, thin within groups)
+      this._drawHexWithGroupBorders(
+        this.terrainGraphics, topLeft, shape, color,
+        center, hexData.type, elevation,
+        typeByKey, elevByKey, edgeOutwardDirs
+      );
 
+      // Draw fill pattern
+      const pattern = config.pattern ?? "none";
+      if (pattern !== "none") {
+        this._drawPatternOnHex(this.terrainGraphics, topLeft, shape, pattern, color);
+      }
+
+      // Draw road border (dashed brown)
       const hasRoad = hexData.road || config.hasRoad;
       if (hasRoad) {
         this._drawRoadBorderOnGraphics(this.terrainGraphics, topLeft, shape);
       }
 
-      this._drawLabel(center, config.label ?? hexData.type, hexData.elevation, hexData.road, hexData.objective);
+      this._drawLabel(center, config.label ?? hexData.type, elevation, hexData.road, hexData.objective);
 
-      // Draw objective star icon
+      // Draw objective star icon (offset below label)
       if (hexData.objective && objectiveConfig[hexData.objective]) {
         const objConf = objectiveConfig[hexData.objective];
         const radius = hexData.objective === "primary"
           ? TerrainLayer.STAR_PRIMARY_RADIUS
           : TerrainLayer.STAR_SECONDARY_RADIUS;
-        this._drawStar(this.objectiveGraphics, center, radius, objConf.color);
+        const starCenter = { x: center.x, y: center.y + TerrainLayer.STAR_VERTICAL_OFFSET };
+        this._drawStar(this.objectiveGraphics, starCenter, radius, objConf.color);
       }
     }
   }
@@ -145,6 +203,7 @@ export default class TerrainLayer extends PIXI.Container {
   /**
    * Draw only the changed hexes on the dynamic paint overlay.
    * Called during drag-painting instead of full drawTerrain().
+   * Uses simple per-hex borders for performance (no group border computation).
    * @param {Set<string>} changedKeys - Hex keys modified in the current stroke.
    * @param {object} pendingMap - The full pending terrain map (for looking up hex data).
    */
@@ -167,25 +226,33 @@ export default class TerrainLayer extends PIXI.Container {
 
       const rawEntry = pendingMap[key];
       if (rawEntry) {
-        // Painted hex — draw overlay + road border (no label for performance)
+        // Painted hex — draw overlay + pattern + road border (no label for performance)
         const hexData = normalizeHexData(rawEntry);
         const config = terrainConfig[hexData.type];
         if (!config) continue;
 
-        this._drawHexOnGraphics(g, topLeft, shape, config.color ?? 0x888888);
+        const color = config.color ?? 0x888888;
+        this._drawHexOnGraphics(g, topLeft, shape, color);
+
+        // Draw fill pattern on paint overlay too
+        const pattern = config.pattern ?? "none";
+        if (pattern !== "none") {
+          this._drawPatternOnHex(g, topLeft, shape, pattern, color);
+        }
 
         const hasRoad = hexData.road || config.hasRoad;
         if (hasRoad) {
           this._drawRoadBorderOnGraphics(g, topLeft, shape);
         }
 
-        // Draw objective star on paint overlay
+        // Draw objective star on paint overlay (offset below center)
         if (hexData.objective && objectiveConfig[hexData.objective]) {
           const objConf = objectiveConfig[hexData.objective];
           const radius = hexData.objective === "primary"
             ? TerrainLayer.STAR_PRIMARY_RADIUS
             : TerrainLayer.STAR_SECONDARY_RADIUS;
-          this._drawStar(g, center, radius, objConf.color);
+          const starCenter = { x: center.x, y: center.y + TerrainLayer.STAR_VERTICAL_OFFSET };
+          this._drawStar(g, starCenter, radius, objConf.color);
         }
       } else {
         // Erased hex — draw dark mask to visually hide the static hex underneath
@@ -239,7 +306,8 @@ export default class TerrainLayer extends PIXI.Container {
   /* ---------------------------------------- */
 
   /**
-   * Draw a filled hex polygon overlay on a given graphics object.
+   * Draw a filled hex polygon overlay on a given graphics object (simple borders).
+   * Used by the paint overlay for performance during drag.
    * @param {PIXI.Graphics} g - Target graphics object.
    * @param {{x: number, y: number}} topLeft - Top-left corner of the hex cell.
    * @param {Array<{x: number, y: number}>} shape - Hex vertex offsets.
@@ -258,21 +326,147 @@ export default class TerrainLayer extends PIXI.Container {
   }
 
   /**
-   * Draw a black border on a hex to indicate a road on a given graphics object.
+   * Draw a hex fill with terrain group borders — bold at terrain type transitions,
+   * thin within same-type groups. Also draws elevation contour lines.
+   * @param {PIXI.Graphics} g - Target graphics object.
+   * @param {{x: number, y: number}} topLeft - Top-left corner of the hex cell.
+   * @param {Array<{x: number, y: number}>} shape - Hex vertex offsets.
+   * @param {number} color - PIXI hex color.
+   * @param {{x: number, y: number}} center - Hex center coordinates.
+   * @param {string} terrainType - Terrain type key.
+   * @param {number} elevation - Hex elevation value.
+   * @param {Map<string, string>} typeByKey - Map of hex keys to terrain types.
+   * @param {Map<string, number>} elevByKey - Map of hex keys to elevation values.
+   * @param {Array<{x: number, y: number}>} edgeOutwardDirs - Precomputed outward unit vectors per edge.
+   * @private
+   */
+  _drawHexWithGroupBorders(g, topLeft, shape, color, center, terrainType, elevation, typeByKey, elevByKey, edgeOutwardDirs) {
+    // Build absolute vertex positions
+    const absVerts = shape.map(p => ({ x: topLeft.x + p.x, y: topLeft.y + p.y }));
+
+    // Draw hex fill with no border
+    g.lineStyle(0);
+    g.beginFill(color, TerrainLayer.HEX_FILL_ALPHA);
+    g.moveTo(absVerts[0].x, absVerts[0].y);
+    for (let i = 1; i < absVerts.length; i++) {
+      g.lineTo(absVerts[i].x, absVerts[i].y);
+    }
+    g.closePath();
+    g.endFill();
+
+    // Get neighbors for this hex
+    const neighbors = getAdjacentHexCenters(center);
+
+    // Match each neighbor to an edge via dot product with edge outward direction
+    const neighborKeyByEdge = new Array(shape.length).fill(null);
+    for (let edgeIdx = 0; edgeIdx < shape.length; edgeIdx++) {
+      const dir = edgeOutwardDirs[edgeIdx];
+      let bestKey = null;
+      let bestDot = -Infinity;
+      for (const n of neighbors) {
+        const dx = n.x - center.x;
+        const dy = n.y - center.y;
+        const len = Math.sqrt(dx * dx + dy * dy);
+        if (len === 0) continue;
+        const dot = (dx / len) * dir.x + (dy / len) * dir.y;
+        if (dot > bestDot) {
+          bestDot = dot;
+          bestKey = hexKey(n);
+        }
+      }
+      neighborKeyByEdge[edgeIdx] = bestKey;
+    }
+
+    // Draw each edge with appropriate weight based on terrain type match
+    for (let edgeIdx = 0; edgeIdx < shape.length; edgeIdx++) {
+      const nKey = neighborKeyByEdge[edgeIdx];
+      const neighborType = nKey ? (typeByKey.get(nKey) ?? null) : null;
+      const v1 = absVerts[edgeIdx];
+      const v2 = absVerts[(edgeIdx + 1) % absVerts.length];
+
+      if (neighborType === terrainType) {
+        // Same terrain — thin, faded border
+        g.lineStyle(TerrainLayer.GROUP_BORDER_INNER_WIDTH, color, TerrainLayer.GROUP_BORDER_INNER_ALPHA);
+      } else {
+        // Different terrain or empty — bold border
+        g.lineStyle(TerrainLayer.GROUP_BORDER_OUTER_WIDTH, color, TerrainLayer.GROUP_BORDER_OUTER_ALPHA);
+      }
+      g.moveTo(v1.x, v1.y);
+      g.lineTo(v2.x, v2.y);
+
+      // Elevation contour lines
+      const neighborElev = nKey ? (elevByKey.get(nKey) ?? 0) : 0;
+      if (neighborElev !== elevation) {
+        const diff = Math.abs(neighborElev - elevation);
+        const contourWidth = diff >= 2 ? TerrainLayer.CONTOUR_HEAVY_WIDTH : TerrainLayer.CONTOUR_WIDTH;
+        g.lineStyle(contourWidth, TerrainLayer.CONTOUR_COLOR, TerrainLayer.CONTOUR_ALPHA);
+        g.moveTo(v1.x, v1.y);
+        g.lineTo(v2.x, v2.y);
+      }
+    }
+  }
+
+  /**
+   * Draw a dashed brown border on a hex to indicate a road.
    * @param {PIXI.Graphics} g - Target graphics object.
    * @param {{x: number, y: number}} topLeft - Top-left corner of the hex cell.
    * @param {Array<{x: number, y: number}>} shape - Hex vertex offsets.
    * @private
    */
   _drawRoadBorderOnGraphics(g, topLeft, shape) {
-    g.lineStyle(TerrainLayer.ROAD_BORDER_WIDTH, 0x000000, TerrainLayer.ROAD_BORDER_ALPHA);
-    g.beginFill(0, 0);
-    g.moveTo(topLeft.x + shape[0].x, topLeft.y + shape[0].y);
-    for (let i = 1; i < shape.length; i++) {
-      g.lineTo(topLeft.x + shape[i].x, topLeft.y + shape[i].y);
+    for (let i = 0; i < shape.length; i++) {
+      const next = (i + 1) % shape.length;
+      const x1 = topLeft.x + shape[i].x;
+      const y1 = topLeft.y + shape[i].y;
+      const x2 = topLeft.x + shape[next].x;
+      const y2 = topLeft.y + shape[next].y;
+      this._drawDashedLine(
+        g, x1, y1, x2, y2,
+        TerrainLayer.ROAD_DASH_LENGTH,
+        TerrainLayer.ROAD_GAP_LENGTH,
+        TerrainLayer.ROAD_COLOR,
+        TerrainLayer.ROAD_BORDER_WIDTH,
+        TerrainLayer.ROAD_BORDER_ALPHA
+      );
     }
-    g.closePath();
-    g.endFill();
+  }
+
+  /**
+   * Draw a dashed line segment between two points.
+   * @param {PIXI.Graphics} g - Target graphics object.
+   * @param {number} x1 - Start X.
+   * @param {number} y1 - Start Y.
+   * @param {number} x2 - End X.
+   * @param {number} y2 - End Y.
+   * @param {number} dashLen - Length of each dash.
+   * @param {number} gapLen - Length of each gap.
+   * @param {number} color - PIXI hex color.
+   * @param {number} width - Line width.
+   * @param {number} alpha - Line alpha.
+   * @private
+   */
+  _drawDashedLine(g, x1, y1, x2, y2, dashLen, gapLen, color, width, alpha) {
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const totalLen = Math.sqrt(dx * dx + dy * dy);
+    if (totalLen === 0) return;
+    const ux = dx / totalLen;
+    const uy = dy / totalLen;
+
+    g.lineStyle(width, color, alpha);
+    let pos = 0;
+    let drawing = true;
+    while (pos < totalLen) {
+      if (drawing) {
+        const segEnd = Math.min(pos + dashLen, totalLen);
+        g.moveTo(x1 + ux * pos, y1 + uy * pos);
+        g.lineTo(x1 + ux * segEnd, y1 + uy * segEnd);
+        pos = segEnd;
+      } else {
+        pos += gapLen;
+      }
+      drawing = !drawing;
+    }
   }
 
   /**
@@ -292,6 +486,317 @@ export default class TerrainLayer extends PIXI.Container {
     g.closePath();
     g.endFill();
   }
+
+  /* ---------------------------------------- */
+  /*  Pattern Drawing                         */
+  /* ---------------------------------------- */
+
+  /**
+   * Draw a fill pattern inside a hex polygon.
+   * @param {PIXI.Graphics} g - Target graphics object.
+   * @param {{x: number, y: number}} topLeft - Top-left corner of the hex cell.
+   * @param {Array<{x: number, y: number}>} shape - Hex vertex offsets.
+   * @param {string} patternType - Pattern type: "dots", "horizontal", "diagonal", "crosshatch", "wave", "chevron", "zigzag".
+   * @param {number} color - PIXI hex color for pattern lines/dots.
+   * @private
+   */
+  _drawPatternOnHex(g, topLeft, shape, patternType, color) {
+    // Build absolute polygon vertices
+    const poly = shape.map(p => ({ x: topLeft.x + p.x, y: topLeft.y + p.y }));
+
+    // Compute bounding box
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const p of poly) {
+      if (p.x < minX) minX = p.x;
+      if (p.y < minY) minY = p.y;
+      if (p.x > maxX) maxX = p.x;
+      if (p.y > maxY) maxY = p.y;
+    }
+
+    const spacing = TerrainLayer.PATTERN_SPACING;
+    const lw = TerrainLayer.PATTERN_LINE_WIDTH;
+    const alpha = TerrainLayer.PATTERN_ALPHA;
+
+    switch (patternType) {
+      case "dots":
+        this._drawDotsPattern(g, poly, minX, minY, maxX, maxY, spacing, color, alpha);
+        break;
+      case "horizontal":
+        this._drawHorizontalPattern(g, poly, minX, minY, maxX, maxY, spacing, color, lw, alpha);
+        break;
+      case "diagonal":
+        this._drawDiagonalPattern(g, poly, minX, minY, maxX, maxY, spacing, color, lw, alpha);
+        break;
+      case "crosshatch":
+        this._drawDiagonalPattern(g, poly, minX, minY, maxX, maxY, spacing, color, lw, alpha);
+        this._drawAntiDiagonalPattern(g, poly, minX, minY, maxX, maxY, spacing, color, lw, alpha);
+        break;
+      case "wave":
+        this._drawWavePattern(g, poly, minX, minY, maxX, maxY, spacing, color, lw, alpha);
+        break;
+      case "chevron":
+        this._drawChevronPattern(g, poly, minX, minY, maxX, maxY, spacing, color, lw, alpha);
+        break;
+      case "zigzag":
+        this._drawZigzagPattern(g, poly, minX, minY, maxX, maxY, spacing, color, lw, alpha);
+        break;
+    }
+  }
+
+  /**
+   * Draw scattered dot pattern inside hex.
+   * @private
+   */
+  _drawDotsPattern(g, poly, minX, minY, maxX, maxY, spacing, color, alpha) {
+    g.lineStyle(0);
+    g.beginFill(color, alpha);
+    const r = TerrainLayer.PATTERN_DOT_RADIUS;
+    for (let x = minX + spacing / 2; x <= maxX; x += spacing) {
+      for (let y = minY + spacing / 2; y <= maxY; y += spacing) {
+        if (this._pointInPolygon(x, y, poly)) {
+          g.drawCircle(x, y, r);
+        }
+      }
+    }
+    g.endFill();
+  }
+
+  /**
+   * Draw horizontal line pattern inside hex.
+   * @private
+   */
+  _drawHorizontalPattern(g, poly, minX, minY, maxX, maxY, spacing, color, lw, alpha) {
+    g.lineStyle(lw, color, alpha);
+    for (let y = minY + spacing / 2; y <= maxY; y += spacing) {
+      const clipped = this._clipLineToHex(minX, y, maxX, y, poly);
+      if (clipped) {
+        g.moveTo(clipped.x1, clipped.y1);
+        g.lineTo(clipped.x2, clipped.y2);
+      }
+    }
+  }
+
+  /**
+   * Draw diagonal (top-left to bottom-right, 45 degrees) line pattern inside hex.
+   * @private
+   */
+  _drawDiagonalPattern(g, poly, minX, minY, maxX, maxY, spacing, color, lw, alpha) {
+    g.lineStyle(lw, color, alpha);
+    const rangeStart = minX + minY;
+    const rangeEnd = maxX + maxY;
+    for (let c = rangeStart + spacing; c <= rangeEnd; c += spacing) {
+      // Line: x + y = c  →  y = c - x
+      const lx1 = minX;
+      const ly1 = c - minX;
+      const lx2 = maxX;
+      const ly2 = c - maxX;
+      const clipped = this._clipLineToHex(lx1, ly1, lx2, ly2, poly);
+      if (clipped) {
+        g.moveTo(clipped.x1, clipped.y1);
+        g.lineTo(clipped.x2, clipped.y2);
+      }
+    }
+  }
+
+  /**
+   * Draw anti-diagonal (top-right to bottom-left, 135 degrees) line pattern inside hex.
+   * @private
+   */
+  _drawAntiDiagonalPattern(g, poly, minX, minY, maxX, maxY, spacing, color, lw, alpha) {
+    g.lineStyle(lw, color, alpha);
+    const rangeStart = minX - maxY;
+    const rangeEnd = maxX - minY;
+    for (let c = rangeStart + spacing; c <= rangeEnd; c += spacing) {
+      // Line: x - y = c  →  y = x - c
+      const lx1 = minX;
+      const ly1 = minX - c;
+      const lx2 = maxX;
+      const ly2 = maxX - c;
+      const clipped = this._clipLineToHex(lx1, ly1, lx2, ly2, poly);
+      if (clipped) {
+        g.moveTo(clipped.x1, clipped.y1);
+        g.lineTo(clipped.x2, clipped.y2);
+      }
+    }
+  }
+
+  /**
+   * Draw wavy horizontal line pattern inside hex.
+   * @private
+   */
+  _drawWavePattern(g, poly, minX, minY, maxX, maxY, spacing, color, lw, alpha) {
+    g.lineStyle(lw, color, alpha);
+    const amplitude = 2;
+    const wavelength = 8;
+    const step = 2;
+    for (let baseY = minY + spacing / 2; baseY <= maxY; baseY += spacing) {
+      let started = false;
+      for (let x = minX; x <= maxX; x += step) {
+        const y = baseY + amplitude * Math.sin((x - minX) * 2 * Math.PI / wavelength);
+        if (this._pointInPolygon(x, y, poly)) {
+          if (!started) {
+            g.moveTo(x, y);
+            started = true;
+          } else {
+            g.lineTo(x, y);
+          }
+        } else {
+          started = false;
+        }
+      }
+    }
+  }
+
+  /**
+   * Draw chevron (V-shape) pattern inside hex to indicate flow direction.
+   * @private
+   */
+  _drawChevronPattern(g, poly, minX, minY, maxX, maxY, spacing, color, lw, alpha) {
+    g.lineStyle(lw, color, alpha);
+    const chevronSize = 3;
+    for (let x = minX + spacing / 2; x <= maxX; x += spacing) {
+      for (let y = minY + spacing / 2; y <= maxY; y += spacing) {
+        if (this._pointInPolygon(x, y, poly)) {
+          // Draw a small V shape pointing down
+          const lx = x - chevronSize;
+          const rx = x + chevronSize;
+          const topY = y - chevronSize;
+          const botY = y;
+          if (this._pointInPolygon(lx, topY, poly) && this._pointInPolygon(rx, topY, poly)) {
+            g.moveTo(lx, topY);
+            g.lineTo(x, botY);
+            g.lineTo(rx, topY);
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Draw zigzag (mountain peak) pattern inside hex.
+   * @private
+   */
+  _drawZigzagPattern(g, poly, minX, minY, maxX, maxY, spacing, color, lw, alpha) {
+    g.lineStyle(lw, color, alpha);
+    const peakHeight = 4;
+    const peakWidth = 6;
+    for (let baseY = minY + spacing; baseY <= maxY; baseY += spacing) {
+      let started = false;
+      for (let x = minX; x <= maxX; x += peakWidth) {
+        const midX = x + peakWidth / 2;
+        const peakY = baseY - peakHeight;
+        const baseEndX = x + peakWidth;
+
+        // Draw upslope
+        if (this._pointInPolygon(x, baseY, poly) && this._pointInPolygon(midX, peakY, poly)) {
+          if (!started) {
+            g.moveTo(x, baseY);
+            started = true;
+          } else {
+            g.lineTo(x, baseY);
+          }
+          g.lineTo(midX, peakY);
+        } else {
+          started = false;
+          continue;
+        }
+
+        // Draw downslope
+        if (this._pointInPolygon(baseEndX, baseY, poly)) {
+          g.lineTo(baseEndX, baseY);
+        } else {
+          started = false;
+        }
+      }
+    }
+  }
+
+  /* ---------------------------------------- */
+  /*  Geometry Helpers                        */
+  /* ---------------------------------------- */
+
+  /**
+   * Test if a point is inside a convex polygon.
+   * @param {number} px - Point X.
+   * @param {number} py - Point Y.
+   * @param {Array<{x: number, y: number}>} polygon - Convex polygon vertices.
+   * @returns {boolean}
+   * @private
+   */
+  _pointInPolygon(px, py, polygon) {
+    const n = polygon.length;
+    let sign = 0;
+    for (let i = 0; i < n; i++) {
+      const j = (i + 1) % n;
+      const cross = (polygon[j].x - polygon[i].x) * (py - polygon[i].y)
+                   - (polygon[j].y - polygon[i].y) * (px - polygon[i].x);
+      if (cross > 0) {
+        if (sign < 0) return false;
+        sign = 1;
+      } else if (cross < 0) {
+        if (sign > 0) return false;
+        sign = -1;
+      }
+    }
+    return true;
+  }
+
+  /**
+   * Clip a line segment to a convex polygon. Returns the clipped segment or null.
+   * @param {number} x1 - Line start X.
+   * @param {number} y1 - Line start Y.
+   * @param {number} x2 - Line end X.
+   * @param {number} y2 - Line end Y.
+   * @param {Array<{x: number, y: number}>} polygon - Convex polygon vertices.
+   * @returns {{x1: number, y1: number, x2: number, y2: number}|null}
+   * @private
+   */
+  _clipLineToHex(x1, y1, x2, y2, polygon) {
+    let tMin = 0;
+    let tMax = 1;
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+
+    const n = polygon.length;
+    for (let i = 0; i < n; i++) {
+      const j = (i + 1) % n;
+      // Edge normal (inward for CCW polygon)
+      const ex = polygon[j].x - polygon[i].x;
+      const ey = polygon[j].y - polygon[i].y;
+      const nx = -ey;
+      const ny = ex;
+
+      const denom = nx * dx + ny * dy;
+      const num = nx * (x1 - polygon[i].x) + ny * (y1 - polygon[i].y);
+
+      if (Math.abs(denom) < 1e-10) {
+        // Line parallel to edge
+        if (num < 0) return null; // Outside
+      } else {
+        const t = -num / denom;
+        if (denom < 0) {
+          // Entering half-plane
+          if (t > tMin) tMin = t;
+        } else {
+          // Leaving half-plane
+          if (t < tMax) tMax = t;
+        }
+        if (tMin > tMax) return null;
+      }
+    }
+
+    if (tMin > tMax) return null;
+    return {
+      x1: x1 + dx * tMin,
+      y1: y1 + dy * tMin,
+      x2: x1 + dx * tMax,
+      y2: y1 + dy * tMax
+    };
+  }
+
+  /* ---------------------------------------- */
+  /*  Label & Star Drawing                    */
+  /* ---------------------------------------- */
 
   /**
    * Draw terrain label with elevation, road, and objective indicators at a hex center.
