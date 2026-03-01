@@ -104,7 +104,7 @@ export async function opposedCheck(attacker, defender, {
     : "Tie";
   const critText = isCritical ? " (Critical!)" : "";
 
-  const content = await renderTemplate(
+  const content = await foundry.applications.handlebars.renderTemplate(
     "systems/star-mercs/templates/chat/skill-check.hbs",
     {
       attackerName: attacker.name,
