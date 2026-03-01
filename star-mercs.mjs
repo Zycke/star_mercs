@@ -977,14 +977,22 @@ Hooks.on("refreshToken", (token) => {
     token.nameplate.position.y = tokenH + 2;
   }
 
-  // Shrink token bars to 2/3 size, centered on the token
+  // Shrink token bars to 2/3 size — scale each bar child individually
+  // so that each bar stays at its Foundry-assigned Y position
   if (token.bars) {
     const scale = 0.67;
-    token.bars.scale.set(scale, scale);
-    // Compute offset to keep bars centered after scaling
     const tokenW = token.w ?? token.document.width * canvas.grid.size;
-    token.bars.position.x = tokenW * (1 - scale) / 2;
-    // Keep bars at their default Y (Foundry positions them relative to token bottom)
+    const xOffset = tokenW * (1 - scale) / 2;
+
+    // Reset any container-level scaling from previous approach
+    token.bars.scale.set(1, 1);
+
+    for (const child of token.bars.children) {
+      child.scale.set(scale, scale);
+      // Store original X on first encounter to prevent accumulation
+      if (child._smOrigX === undefined) child._smOrigX = child.position.x;
+      child.position.x = child._smOrigX + xOffset;
+    }
   }
 });
 
