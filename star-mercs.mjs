@@ -23,6 +23,8 @@ import DetectionLayer from "./module/canvas/detection-layer.mjs";
 import MovementPathLayer from "./module/canvas/movement-path-layer.mjs";
 import DamageOverlayLayer from "./module/canvas/damage-overlay-layer.mjs";
 import FiringBlipLayer from "./module/canvas/firing-blip-layer.mjs";
+import TacticalMarkerLayer from "./module/canvas/tactical-marker-layer.mjs";
+import TacticalMarkerPainter from "./module/apps/tactical-marker-painter.mjs";
 import TurnControlPanel from "./module/apps/turn-control.mjs";
 
 /* ============================================ */
@@ -356,6 +358,16 @@ Hooks.on("canvasReady", () => {
   game.starmercs.firingBlipLayer = firingBlipLayer;
   canvas.interface.addChild(firingBlipLayer);
   firingBlipLayer.drawFiringBlips();
+
+  // Tactical marker overlay
+  const previousTacticalMarkerLayer = game.starmercs.tacticalMarkerLayer;
+  if (previousTacticalMarkerLayer) {
+    previousTacticalMarkerLayer.destroy({ children: true });
+  }
+  const tacticalMarkerLayer = new TacticalMarkerLayer();
+  game.starmercs.tacticalMarkerLayer = tacticalMarkerLayer;
+  canvas.interface.addChild(tacticalMarkerLayer);
+  tacticalMarkerLayer.drawMarkers();
 });
 
 /** Redraw arrows when a token is visually refreshed (position change, etc.). */
@@ -365,12 +377,17 @@ Hooks.on("refreshToken", () => {
   game.starmercs?.damageOverlayLayer?.drawDamageNumbers();
 });
 
-/** Redraw firing blips when scene flags change (blip created/removed by any client). */
+/** Redraw firing blips and tactical markers when scene flags change. */
 Hooks.on("updateScene", (scene, changes) => {
   if (scene.id !== canvas.scene?.id) return;
-  if (changes?.flags?.["star-mercs"]?.firingBlips !== undefined
-      || changes?.flags?.["star-mercs"]?.["-=firingBlips"] !== undefined) {
+  const smFlags = changes?.flags?.["star-mercs"];
+  if (!smFlags) return;
+
+  if (smFlags.firingBlips !== undefined || smFlags["-=firingBlips"] !== undefined) {
     game.starmercs?.firingBlipLayer?.drawFiringBlips();
+  }
+  if (smFlags.tacticalMarkers !== undefined || smFlags["-=tacticalMarkers"] !== undefined) {
+    game.starmercs?.tacticalMarkerLayer?.drawMarkers();
   }
 });
 
@@ -1109,6 +1126,17 @@ Hooks.on("getSceneControlButtons", (controls) => {
     }
   };
 
+  const tacticalMarkerTool = {
+    name: "tacticalMarkers",
+    title: "Tactical Markers",
+    icon: "fas fa-map-marker-alt",
+    visible: true,
+    toggle: false,
+    onClick: () => {
+      new TacticalMarkerPainter().render(true);
+    }
+  };
+
   const turnControlTool = {
     name: "turnControl",
     title: "Turn Control",
@@ -1151,6 +1179,8 @@ Hooks.on("getSceneControlButtons", (controls) => {
     tokenControls.tools.detectionOverlay = detectionTool;
     teamSettingsTool.order = Object.keys(tokenControls.tools).length;
     tokenControls.tools.teamSettings = teamSettingsTool;
+    tacticalMarkerTool.order = Object.keys(tokenControls.tools).length;
+    tokenControls.tools.tacticalMarkers = tacticalMarkerTool;
     turnControlTool.order = Object.keys(tokenControls.tools).length;
     tokenControls.tools.turnControl = turnControlTool;
   } else {
@@ -1160,6 +1190,7 @@ Hooks.on("getSceneControlButtons", (controls) => {
     tokenControls.tools.push(terrainPaintTool);
     tokenControls.tools.push(detectionTool);
     tokenControls.tools.push(teamSettingsTool);
+    tokenControls.tools.push(tacticalMarkerTool);
     tokenControls.tools.push(turnControlTool);
   }
 });

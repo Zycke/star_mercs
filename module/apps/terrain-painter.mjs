@@ -60,8 +60,10 @@ export default class TerrainPainter extends FormApplication {
     for (const [key, config] of Object.entries(CONFIG.STARMERCS.terrain)) {
       terrainChoices[key] = config.label;
     }
-    // Add special "Road Only" brush
+    // Add special brushes
     terrainChoices["road"] = "Road Only";
+    terrainChoices["removeRoad"] = "Remove Road";
+    terrainChoices["removeObjective"] = "Remove Objective";
 
     return {
       terrainChoices,
@@ -292,6 +294,24 @@ export default class TerrainPainter extends FormApplication {
           this._pendingTerrainMap[key] = normalized;
         }
         // Skip hexes with no existing terrain — road needs a terrain base
+      } else if (this._selectedTerrain === "removeRoad") {
+        // Remove Road brush: clear road flag, keep everything else
+        const existing = this._pendingTerrainMap[key];
+        if (existing) {
+          const normalized = (typeof existing === "string")
+            ? { type: existing, elevation: 0, road: false }
+            : { ...existing, road: false };
+          this._pendingTerrainMap[key] = normalized;
+        }
+      } else if (this._selectedTerrain === "removeObjective") {
+        // Remove Objective brush: clear objective, keep everything else
+        const existing = this._pendingTerrainMap[key];
+        if (existing) {
+          const normalized = (typeof existing === "string")
+            ? { type: existing, elevation: 0, objective: null }
+            : { ...existing, objective: null };
+          this._pendingTerrainMap[key] = normalized;
+        }
       } else {
         const hexData = {
           type: this._selectedTerrain,
