@@ -1,0 +1,59 @@
+<form class="star-mercs tactical-marker-painter-form">
+  <div class="form-group">
+    <label>Marker Type</label>
+    <select name="selectedType">
+      <optgroup label="Commands">
+        {{#each commandChoices}}
+          <option value="{{@key}}" {{#if (eq @key ../selectedType)}}selected{{/if}}>{{this}}</option>
+        {{/each}}
+      </optgroup>
+      <optgroup label="Spotted">
+        {{#each spottedChoices}}
+          <option value="{{@key}}" {{#if (eq @key ../selectedType)}}selected{{/if}}>{{this}}</option>
+        {{/each}}
+      </optgroup>
+    </select>
+  </div>
+
+  {{#if isTextType}}
+  <div class="form-group">
+    <label>Custom Text</label>
+    <input type="text" name="customText" value="{{customText}}" maxlength="30"
+           placeholder="Enter text..."/>
+  </div>
+  {{/if}}
+
+  <div class="form-group">
+    <label>Serial Number</label>
+    <input type="text" name="serialNumber" value="{{serialNumber}}" maxlength="3"
+           placeholder="001" style="width: 60px;"/>
+  </div>
+
+  {{#if isGM}}
+  <div class="form-group">
+    <label>Place for Team</label>
+    <select name="selectedTeam">
+      <option value="a" {{#if (eq selectedTeam "a")}}selected{{/if}}>Team A</option>
+      <option value="b" {{#if (eq selectedTeam "b")}}selected{{/if}}>Team B</option>
+    </select>
+  </div>
+  {{/if}}
+
+  <div class="form-group tactical-marker-buttons">
+    <button type="button" class="toggle-placing {{#if isActive}}active{{/if}}">
+      <i class="fas {{#if isActive}}fa-stop{{else}}fa-map-marker-alt{{/if}}"></i>
+      {{#if isActive}}Stop Placing{{else}}Start Placing{{/if}}
+    </button>
+  </div>
+
+  <div class="form-group">
+    <button type="button" class="clear-team-markers">
+      <i class="fas fa-trash"></i> Clear Team Markers
+    </button>
+  </div>
+
+  <p class="notes">
+    <strong>Left-click</strong> to place a marker.<br/>
+    <strong>Right-click</strong> an existing marker to edit or delete it.
+  </p>
+</form>

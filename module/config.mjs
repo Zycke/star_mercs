@@ -426,3 +426,27 @@ STARMERCS.traitModes = {
   active: "Active",
   conditional: "Conditional"
 };
+
+/**
+ * Tactical marker types for the team marker painter.
+ * icon: Unicode symbol or short text rendered on the marker
+ * color: PIXI hex color for the marker background border
+ * category: "command" or "spotted" for grouping in the dropdown
+ */
+STARMERCS.tacticalMarkerTypes = {
+  text:                 { label: "Text",           icon: "T",    color: 0xFFFFFF, category: "command" },
+  attack:               { label: "Attack Here",    icon: "\u2694",  color: 0xFF4444, category: "command" },
+  defend:               { label: "Defend Here",    icon: "\u26E8",  color: 0x4488FF, category: "command" },
+  move:                 { label: "Move Here",      icon: "\u279C",  color: 0x44DD44, category: "command" },
+  vision:               { label: "Need Vision",    icon: "\u25C9",  color: 0xFFDD00, category: "command" },
+  construct:            { label: "Construct Here", icon: "\u2692",  color: 0xFF8800, category: "command" },
+  "spotted-artillery":  { label: "Artillery",      icon: "A",    color: 0xFFAA00, category: "spotted" },
+  "spotted-infantry":   { label: "Infantry",       icon: "I",    color: 0xFFAA00, category: "spotted" },
+  "spotted-tanks":      { label: "Tanks",          icon: "T",    color: 0xFFAA00, category: "spotted" },
+  "spotted-mechs":      { label: "Mechs",          icon: "M",    color: 0xFFAA00, category: "spotted" },
+  "spotted-logistics":  { label: "Logistics",      icon: "L",    color: 0xFFAA00, category: "spotted" },
+  "spotted-unknown":    { label: "Unknown Unit",   icon: "?",    color: 0xFFAA00, category: "spotted" },
+  "spotted-outpost":    { label: "Outpost",        icon: "OP",   color: 0xFFAA00, category: "spotted" },
+  "spotted-base":       { label: "Base",           icon: "BS",   color: 0xFFAA00, category: "spotted" },
+  "spotted-bridge":     { label: "Bridge",         icon: "BR",   color: 0xFFAA00, category: "spotted" }
+};

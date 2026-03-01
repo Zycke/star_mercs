@@ -343,7 +343,43 @@ export default class StarMercsActor extends Actor {
       const defTeam = target.system.team ?? "a";
       const attackerDetLevel = computeBestDetectionLevel(defTeam, attackerToken);
       if (attackerDetLevel === "hidden") {
-        await FiringBlipLayer.createFiringBlip(attackerToken, defTeam);
+        const blip = await FiringBlipLayer.createFiringBlip(attackerToken, defTeam);
+
+        // Hidden attacker: send two separate chat messages
+        // Attacking team sees real name, defending team sees "Unknown Attacker ###"
+        if (blip?.serialNumber) {
+          const serialStr = String(blip.serialNumber).padStart(3, "0");
+          const unknownName = `Unknown Attacker ${serialStr}`;
+
+          // Defender team message with hidden attacker name
+          const defTemplateData = { ...templateData, attackerName: unknownName };
+          const defContent = await renderTemplate(
+            "systems/star-mercs/templates/chat/attack-result.hbs",
+            defTemplateData
+          );
+          const defWhisperIds = game.combat?.constructor?.getTeamWhisperIds
+            ? game.combat.constructor.getTeamWhisperIds(defTeam)
+            : [];
+
+          // Attacker team message with real name
+          const atkWhisperIds = game.combat?.constructor?.getTeamWhisperIds
+            ? game.combat.constructor.getTeamWhisperIds(atkTeam)
+            : [];
+
+          await ChatMessage.create({
+            content: defContent,
+            speaker: { alias: unknownName },
+            rolls: [result.roll],
+            whisper: defWhisperIds.length > 0 ? defWhisperIds : undefined
+          });
+
+          return ChatMessage.create({
+            content,
+            speaker: ChatMessage.getSpeaker({ actor: this }),
+            rolls: [result.roll],
+            whisper: atkWhisperIds.length > 0 ? atkWhisperIds : undefined
+          });
+        }
       }
     }
 

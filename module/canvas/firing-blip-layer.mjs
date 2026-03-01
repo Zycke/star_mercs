@@ -18,6 +18,18 @@ export default class FiringBlipLayer extends PIXI.Container {
     /** @type {PIXI.Container} — holds individual blip groups */
     this.blipContainer = new PIXI.Container();
     this.addChild(this.blipContainer);
+
+    /** @type {boolean} — flag to suppress browser context menu after right-click on blip */
+    this._suppressContextMenu = false;
+
+    // Prevent browser context menu when right-clicking on a blip
+    this._contextMenuHandler = (e) => {
+      if (this._suppressContextMenu) {
+        e.preventDefault();
+        this._suppressContextMenu = false;
+      }
+    };
+    document.addEventListener("contextmenu", this._contextMenuHandler, true);
   }
 
   /* ---------------------------------------- */
@@ -31,6 +43,8 @@ export default class FiringBlipLayer extends PIXI.Container {
   static BLIP_FONT_SIZE = 20;
   static BLIP_ROUND_FONT_SIZE = 9;
   static BLIP_ROUND_OFFSET_Y = 14;
+  static BLIP_SERIAL_FONT_SIZE = 10;
+  static BLIP_SERIAL_OFFSET_Y = 25;
 
   /* ---------------------------------------- */
   /*  Public API                              */
@@ -41,6 +55,8 @@ export default class FiringBlipLayer extends PIXI.Container {
    */
   drawFiringBlips() {
     this.blipContainer.removeChildren();
+    this.blipContainer.eventMode = "passive";
+    this.blipContainer.interactiveChildren = true;
 
     const blips = canvas.scene?.getFlag("star-mercs", "firingBlips") ?? [];
     if (!blips.length) return;
@@ -71,10 +87,10 @@ export default class FiringBlipLayer extends PIXI.Container {
    * Deduplicates: same hex + same team + same round = one blip.
    * @param {Token} attackerToken - The token that fired.
    * @param {string} opposingTeam - Team key that can see this blip.
-   * @returns {Promise<void>}
+   * @returns {Promise<object|null>} The created blip object (with serialNumber), or the existing duplicate, or null.
    */
   static async createFiringBlip(attackerToken, opposingTeam) {
-    if (!canvas.scene) return;
+    if (!canvas.scene) return null;
 
     const { snapToHexCenter, hexKey } = await import("../hex-utils.mjs");
     const hexCenter = snapToHexCenter(attackerToken.center);
@@ -83,21 +99,31 @@ export default class FiringBlipLayer extends PIXI.Container {
 
     const existing = canvas.scene.getFlag("star-mercs", "firingBlips") ?? [];
 
-    // Deduplicate: same hex + same team + same round
-    const isDuplicate = existing.some(
+    // Deduplicate: same hex + same team + same round — return existing blip
+    const duplicate = existing.find(
       b => b.hexKey === key && b.visibleTo === opposingTeam && b.createdRound === currentRound
     );
-    if (isDuplicate) return;
+    if (duplicate) return duplicate;
+
+    // Get next sequential serial number
+    const counter = canvas.scene.getFlag("star-mercs", "firingBlipCounter") ?? 0;
+    const nextCounter = counter + 1;
 
     const blip = {
       id: foundry.utils.randomID(),
       hexKey: key,
       createdRound: currentRound,
-      visibleTo: opposingTeam
+      visibleTo: opposingTeam,
+      serialNumber: nextCounter
     };
 
     existing.push(blip);
-    await canvas.scene.setFlag("star-mercs", "firingBlips", existing);
+    await canvas.scene.update({
+      "flags.star-mercs.firingBlips": existing,
+      "flags.star-mercs.firingBlipCounter": nextCounter
+    });
+
+    return blip;
   }
 
   /**
@@ -118,7 +144,10 @@ export default class FiringBlipLayer extends PIXI.Container {
    */
   static async clearAllFiringBlips() {
     if (!canvas.scene) return;
-    await canvas.scene.unsetFlag("star-mercs", "firingBlips");
+    await canvas.scene.update({
+      "flags.star-mercs.-=firingBlips": null,
+      "flags.star-mercs.-=firingBlipCounter": null
+    });
   }
 
   /* ---------------------------------------- */
@@ -188,11 +217,30 @@ export default class FiringBlipLayer extends PIXI.Container {
     roundText.position.set(0, FiringBlipLayer.BLIP_ROUND_OFFSET_Y);
     group.addChild(roundText);
 
-    // Make interactive for dismissal
+    // Serial number text below round label
+    const serialLabel = String(blip.serialNumber ?? 0).padStart(3, "0");
+    const serialText = new PIXI.Text(serialLabel, {
+      fontFamily: "Signika",
+      fontSize: FiringBlipLayer.BLIP_SERIAL_FONT_SIZE,
+      fill: 0xFFAAAA,
+      stroke: 0x000000,
+      strokeThickness: 2,
+      fontWeight: "bold",
+      align: "center"
+    });
+    serialText.anchor.set(0.5, 0);
+    serialText.position.set(0, FiringBlipLayer.BLIP_SERIAL_OFFSET_Y);
+    group.addChild(serialText);
+
+    // Make interactive for right-click dismissal
     group.eventMode = "static";
     group.cursor = "pointer";
-    group.on("pointerdown", async (event) => {
+    group.hitArea = new PIXI.Circle(0, 0, FiringBlipLayer.BLIP_BG_RADIUS + 6);
+
+    group.on("rightdown", async (event) => {
       event.stopPropagation();
+      // Suppress browser context menu for this interaction
+      this._suppressContextMenu = true;
 
       // GM can dismiss any blip; players can only dismiss blips for their team
       const myTeam = this._getViewerTeam();
