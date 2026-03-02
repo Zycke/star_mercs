@@ -30,6 +30,9 @@ export default class FiringBlipLayer extends PIXI.Container {
       }
     };
     document.addEventListener("contextmenu", this._contextMenuHandler, true);
+
+    // Right-click handler on canvas.stage (canvas.interface doesn't propagate events)
+    this._onCanvasRightDown = this._handleCanvasRightDown.bind(this);
   }
 
   /* ---------------------------------------- */
@@ -46,6 +49,9 @@ export default class FiringBlipLayer extends PIXI.Container {
   static BLIP_SERIAL_FONT_SIZE = 10;
   static BLIP_SERIAL_OFFSET_Y = 25;
 
+  /** Hit radius for right-click detection */
+  static HIT_RADIUS = 18;
+
   /* ---------------------------------------- */
   /*  Public API                              */
   /* ---------------------------------------- */
@@ -55,8 +61,6 @@ export default class FiringBlipLayer extends PIXI.Container {
    */
   drawFiringBlips() {
     this.blipContainer.removeChildren();
-    this.blipContainer.eventMode = "passive";
-    this.blipContainer.interactiveChildren = true;
 
     const blips = canvas.scene?.getFlag("star-mercs", "firingBlips") ?? [];
     if (!blips.length) return;
@@ -78,6 +82,13 @@ export default class FiringBlipLayer extends PIXI.Container {
 
       this._drawSingleBlip(center, blip, isGM);
     }
+  }
+
+  /**
+   * Register canvas.stage right-click handler. Called after the layer is added to canvas.
+   */
+  activateListeners() {
+    canvas.stage.on("rightdown", this._onCanvasRightDown);
   }
 
   /* ---------------------------------------- */
@@ -170,7 +181,7 @@ export default class FiringBlipLayer extends PIXI.Container {
   }
 
   /**
-   * Draw a single firing blip at a hex center.
+   * Draw a single firing blip at a hex center (display only — no event listeners).
    * @param {{x: number, y: number}} center - Hex center coordinates.
    * @param {object} blip - The blip data object.
    * @param {boolean} isGM - Whether the viewer is a GM.
@@ -204,7 +215,6 @@ export default class FiringBlipLayer extends PIXI.Container {
     // Round number text below
     let roundLabel = `R:${blip.createdRound}`;
     if (isGM) {
-      // GM sees which team the blip is for
       roundLabel += ` (${blip.visibleTo.toUpperCase()})`;
     }
     const roundText = new PIXI.Text(roundLabel, {
@@ -234,32 +244,61 @@ export default class FiringBlipLayer extends PIXI.Container {
     serialText.position.set(0, FiringBlipLayer.BLIP_SERIAL_OFFSET_Y);
     group.addChild(serialText);
 
-    // Make interactive for right-click dismissal
-    group.eventMode = "static";
-    group.cursor = "pointer";
-    group.hitArea = new PIXI.Circle(0, 0, FiringBlipLayer.BLIP_BG_RADIUS + 6);
-
-    group.on("rightdown", async (event) => {
-      event.stopPropagation();
-      // Suppress browser context menu for this interaction
-      this._suppressContextMenu = true;
-
-      // GM can dismiss any blip; players can only dismiss blips for their team
-      const myTeam = this._getViewerTeam();
-      if (!game.user.isGM && blip.visibleTo !== myTeam) return;
-
-      await FiringBlipLayer.removeFiringBlip(blip.id);
-    });
-
     this.blipContainer.addChild(group);
   }
 
+  /* ---------------------------------------- */
+  /*  Canvas-Level Right-Click Handling       */
+  /* ---------------------------------------- */
+
   /**
-   * Clean up document-level event listeners before destroying the layer.
+   * Handle right-click on canvas.stage — check if any visible blip was hit.
+   * @param {FederatedPointerEvent} event
+   * @private
+   */
+  _handleCanvasRightDown(event) {
+    const pos = event.getLocalPosition?.(canvas.stage)
+      ?? event.data?.getLocalPosition(canvas.stage)
+      ?? canvas.stage.toLocal(event.global);
+    if (!pos) return;
+
+    const blips = canvas.scene?.getFlag("star-mercs", "firingBlips") ?? [];
+    if (!blips.length) return;
+
+    const isGM = game.user.isGM;
+    const myTeam = this._getViewerTeam();
+    if (!isGM && !myTeam) return;
+
+    const hitRadius = FiringBlipLayer.HIT_RADIUS;
+
+    for (const blip of blips) {
+      // Skip blips not visible to this viewer
+      if (!isGM && blip.visibleTo !== myTeam) continue;
+
+      // Parse hex center from key
+      const parts = blip.hexKey?.split(",") ?? [];
+      if (parts.length !== 2) continue;
+      const center = { x: parseFloat(parts[0]), y: parseFloat(parts[1]) };
+      if (isNaN(center.x) || isNaN(center.y)) continue;
+
+      const dx = pos.x - center.x;
+      const dy = pos.y - center.y;
+      if (dx * dx + dy * dy <= hitRadius * hitRadius) {
+        // Hit! Suppress context menu and dismiss blip
+        this._suppressContextMenu = true;
+        FiringBlipLayer.removeFiringBlip(blip.id);
+        return;
+      }
+    }
+  }
+
+  /**
+   * Clean up event listeners before destroying the layer.
    * @param {object} [options] - PIXI destroy options.
    */
   destroy(options) {
     document.removeEventListener("contextmenu", this._contextMenuHandler, true);
+    canvas?.stage?.off("rightdown", this._onCanvasRightDown);
     super.destroy(options);
   }
 }

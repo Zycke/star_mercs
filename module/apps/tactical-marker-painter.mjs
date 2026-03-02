@@ -9,27 +9,34 @@ import TacticalMarkerLayer from "../canvas/tactical-marker-layer.mjs";
  * Right-click on an existing marker opens an edit/delete dialog.
  *
  * Data stored in scene flag `star-mercs.tacticalMarkers`.
+ *
+ * Uses Foundry v13 ApplicationV2 framework.
  */
-export default class TacticalMarkerPainter extends FormApplication {
+const { HandlebarsApplicationMixin, ApplicationV2 } = foundry.applications.api;
 
-  /** @override */
-  static get defaultOptions() {
-    return foundry.utils.mergeObject(super.defaultOptions, {
-      id: "star-mercs-tactical-marker-painter",
+export default class TacticalMarkerPainter extends HandlebarsApplicationMixin(ApplicationV2) {
+
+  static DEFAULT_OPTIONS = {
+    id: "star-mercs-tactical-marker-painter",
+    window: {
       title: "Tactical Markers",
-      template: "systems/star-mercs/templates/apps/tactical-marker-painter.hbs",
-      classes: ["star-mercs", "tactical-marker-painter"],
+      resizable: false
+    },
+    classes: ["star-mercs", "tactical-marker-painter"],
+    position: {
       width: 260,
-      height: "auto",
-      popOut: true,
-      resizable: false,
-      closeOnSubmit: false,
-      submitOnChange: true
-    });
-  }
+      height: "auto"
+    }
+  };
 
-  constructor(...args) {
-    super(...args);
+  static PARTS = {
+    form: {
+      template: "systems/star-mercs/templates/apps/tactical-marker-painter.hbs"
+    }
+  };
+
+  constructor(options = {}) {
+    super(options);
     this._selectedType = "attack";
     this._serialNumber = "001";
     this._customText = "";
@@ -43,7 +50,7 @@ export default class TacticalMarkerPainter extends FormApplication {
   }
 
   /** @override */
-  getData() {
+  async _prepareContext(options) {
     const markerTypes = CONFIG.STARMERCS.tacticalMarkerTypes;
 
     // Build grouped choices for the select dropdown
@@ -72,38 +79,43 @@ export default class TacticalMarkerPainter extends FormApplication {
   }
 
   /** @override */
-  async _updateObject(event, formData) {
-    if (formData.selectedType) {
-      this._selectedType = formData.selectedType;
-    }
-    if (formData.serialNumber != null) {
-      this._serialNumber = formData.serialNumber;
-    }
-    if (formData.customText != null) {
-      this._customText = formData.customText;
-    }
-    if (formData.selectedTeam) {
-      this._selectedTeam = formData.selectedTeam;
-    }
-    // Re-render to toggle text input visibility
-    this.render(false);
-  }
+  _onRender(context, options) {
+    const html = this.element;
 
-  /** @override */
-  activateListeners(html) {
-    super.activateListeners(html);
+    // Marker type select — re-render when changed to show/hide text input
+    html.querySelector('[name="selectedType"]')?.addEventListener("change", (e) => {
+      this._selectedType = e.target.value;
+      this.render();
+    });
 
-    html.find(".toggle-placing").on("click", () => {
+    // Serial number input
+    html.querySelector('[name="serialNumber"]')?.addEventListener("change", (e) => {
+      this._serialNumber = e.target.value;
+    });
+
+    // Custom text input
+    html.querySelector('[name="customText"]')?.addEventListener("change", (e) => {
+      this._customText = e.target.value;
+    });
+
+    // Team select (GM only)
+    html.querySelector('[name="selectedTeam"]')?.addEventListener("change", (e) => {
+      this._selectedTeam = e.target.value;
+    });
+
+    // Toggle placing button
+    html.querySelector(".toggle-placing")?.addEventListener("click", () => {
       this._active = !this._active;
       if (this._active) {
         this._startPlacing();
       } else {
         this._stopPlacing();
       }
-      this.render(false);
+      this.render();
     });
 
-    html.find(".clear-team-markers").on("click", async () => {
+    // Clear team markers button
+    html.querySelector(".clear-team-markers")?.addEventListener("click", async () => {
       const team = game.user.isGM ? this._selectedTeam : this._getPlayerTeam();
       if (!team) return;
 

@@ -1,3 +1,5 @@
+import { esc } from "../helpers.mjs";
+
 /**
  * PIXI.Container that renders team-visible tactical markers on the canvas.
  *
@@ -29,6 +31,9 @@ export default class TacticalMarkerLayer extends PIXI.Container {
       }
     };
     document.addEventListener("contextmenu", this._contextMenuHandler, true);
+
+    // Right-click handler on canvas.stage (canvas.interface doesn't propagate events)
+    this._onCanvasRightDown = this._handleCanvasRightDown.bind(this);
   }
 
   /* ---------------------------------------- */
@@ -42,6 +47,9 @@ export default class TacticalMarkerLayer extends PIXI.Container {
   static MARKER_SERIAL_FONT_SIZE = 9;
   static MARKER_SERIAL_OFFSET_Y = 16;
 
+  /** Hit radius for right-click detection */
+  static HIT_RADIUS = 18;
+
   /* ---------------------------------------- */
   /*  Public API                              */
   /* ---------------------------------------- */
@@ -51,8 +59,6 @@ export default class TacticalMarkerLayer extends PIXI.Container {
    */
   drawMarkers() {
     this.markerContainer.removeChildren();
-    this.markerContainer.eventMode = "passive";
-    this.markerContainer.interactiveChildren = true;
 
     const markers = canvas.scene?.getFlag("star-mercs", "tacticalMarkers") ?? [];
     if (!markers.length) return;
@@ -70,24 +76,35 @@ export default class TacticalMarkerLayer extends PIXI.Container {
     }
   }
 
+  /**
+   * Register canvas.stage right-click handler. Called after the layer is added to canvas.
+   */
+  activateListeners() {
+    canvas.stage.on("rightdown", this._onCanvasRightDown);
+  }
+
   /* ---------------------------------------- */
   /*  Static Helpers                          */
   /* ---------------------------------------- */
 
   /**
    * Create a new tactical marker.
+   * Players relay through GM via socket; GM writes directly.
    * @param {object} data - Marker data { x, y, type, team, serialNumber, text, createdBy }
    * @returns {Promise<void>}
    */
   static async createMarker(data) {
     if (!canvas.scene) return;
-    const existing = canvas.scene.getFlag("star-mercs", "tacticalMarkers") ?? [];
-    const marker = {
-      id: foundry.utils.randomID(),
-      ...data
-    };
-    existing.push(marker);
-    await canvas.scene.setFlag("star-mercs", "tacticalMarkers", existing);
+    if (game.user.isGM) {
+      const existing = canvas.scene.getFlag("star-mercs", "tacticalMarkers") ?? [];
+      const marker = { id: foundry.utils.randomID(), ...data };
+      existing.push(marker);
+      await canvas.scene.setFlag("star-mercs", "tacticalMarkers", existing);
+    } else {
+      game.socket.emit("system.star-mercs", {
+        action: "tacticalMarker", op: "create", data, sceneId: canvas.scene.id
+      });
+    }
   }
 
   /**
@@ -97,9 +114,15 @@ export default class TacticalMarkerLayer extends PIXI.Container {
    */
   static async removeMarker(markerId) {
     if (!canvas.scene) return;
-    const existing = canvas.scene.getFlag("star-mercs", "tacticalMarkers") ?? [];
-    const updated = existing.filter(m => m.id !== markerId);
-    await canvas.scene.setFlag("star-mercs", "tacticalMarkers", updated);
+    if (game.user.isGM) {
+      const existing = canvas.scene.getFlag("star-mercs", "tacticalMarkers") ?? [];
+      const updated = existing.filter(m => m.id !== markerId);
+      await canvas.scene.setFlag("star-mercs", "tacticalMarkers", updated);
+    } else {
+      game.socket.emit("system.star-mercs", {
+        action: "tacticalMarker", op: "remove", markerId, sceneId: canvas.scene.id
+      });
+    }
   }
 
   /**
@@ -110,11 +133,17 @@ export default class TacticalMarkerLayer extends PIXI.Container {
    */
   static async updateMarker(markerId, changes) {
     if (!canvas.scene) return;
-    const existing = canvas.scene.getFlag("star-mercs", "tacticalMarkers") ?? [];
-    const idx = existing.findIndex(m => m.id === markerId);
-    if (idx === -1) return;
-    Object.assign(existing[idx], changes);
-    await canvas.scene.setFlag("star-mercs", "tacticalMarkers", existing);
+    if (game.user.isGM) {
+      const existing = canvas.scene.getFlag("star-mercs", "tacticalMarkers") ?? [];
+      const idx = existing.findIndex(m => m.id === markerId);
+      if (idx === -1) return;
+      Object.assign(existing[idx], changes);
+      await canvas.scene.setFlag("star-mercs", "tacticalMarkers", existing);
+    } else {
+      game.socket.emit("system.star-mercs", {
+        action: "tacticalMarker", op: "update", markerId, changes, sceneId: canvas.scene.id
+      });
+    }
   }
 
   /**
@@ -124,12 +153,18 @@ export default class TacticalMarkerLayer extends PIXI.Container {
    */
   static async clearTeamMarkers(team) {
     if (!canvas.scene) return;
-    const existing = canvas.scene.getFlag("star-mercs", "tacticalMarkers") ?? [];
-    const updated = existing.filter(m => m.team !== team);
-    if (updated.length === 0) {
-      await canvas.scene.unsetFlag("star-mercs", "tacticalMarkers");
+    if (game.user.isGM) {
+      const existing = canvas.scene.getFlag("star-mercs", "tacticalMarkers") ?? [];
+      const updated = existing.filter(m => m.team !== team);
+      if (updated.length === 0) {
+        await canvas.scene.unsetFlag("star-mercs", "tacticalMarkers");
+      } else {
+        await canvas.scene.setFlag("star-mercs", "tacticalMarkers", updated);
+      }
     } else {
-      await canvas.scene.setFlag("star-mercs", "tacticalMarkers", updated);
+      game.socket.emit("system.star-mercs", {
+        action: "tacticalMarker", op: "clearTeam", team, sceneId: canvas.scene.id
+      });
     }
   }
 
@@ -151,7 +186,7 @@ export default class TacticalMarkerLayer extends PIXI.Container {
   }
 
   /**
-   * Draw a single tactical marker.
+   * Draw a single tactical marker (display only — no event listeners).
    * @param {object} marker - The marker data object.
    * @param {boolean} isGM - Whether the viewer is a GM.
    * @private
@@ -177,7 +212,6 @@ export default class TacticalMarkerLayer extends PIXI.Container {
     // Icon or custom text in center
     let iconText;
     if (marker.type === "text" && marker.text) {
-      // For text markers, show custom text (truncated to fit)
       iconText = marker.text.length > 3 ? marker.text.substring(0, 3) : marker.text;
     } else {
       iconText = markerConfig.icon;
@@ -228,23 +262,46 @@ export default class TacticalMarkerLayer extends PIXI.Container {
       group.addChild(fullText);
     }
 
-    // Make interactive for right-click edit/delete
-    group.eventMode = "static";
-    group.cursor = "pointer";
-    group.hitArea = new PIXI.Circle(0, 0, radius + 6);
-
-    group.on("rightdown", (event) => {
-      event.stopPropagation();
-      this._suppressContextMenu = true;
-
-      // Permission check: same-team or GM
-      const myTeam = this._getViewerTeam();
-      if (!game.user.isGM && marker.team !== myTeam) return;
-
-      this._showEditDialog(marker);
-    });
-
     this.markerContainer.addChild(group);
+  }
+
+  /* ---------------------------------------- */
+  /*  Canvas-Level Right-Click Handling       */
+  /* ---------------------------------------- */
+
+  /**
+   * Handle right-click on canvas.stage — check if any visible marker was hit.
+   * @param {FederatedPointerEvent} event
+   * @private
+   */
+  _handleCanvasRightDown(event) {
+    const pos = event.getLocalPosition?.(canvas.stage)
+      ?? event.data?.getLocalPosition(canvas.stage)
+      ?? canvas.stage.toLocal(event.global);
+    if (!pos) return;
+
+    const markers = canvas.scene?.getFlag("star-mercs", "tacticalMarkers") ?? [];
+    if (!markers.length) return;
+
+    const isGM = game.user.isGM;
+    const myTeam = this._getViewerTeam();
+    if (!isGM && !myTeam) return;
+
+    const hitRadius = TacticalMarkerLayer.HIT_RADIUS;
+
+    for (const marker of markers) {
+      // Skip markers not visible to this viewer
+      if (!isGM && marker.team !== myTeam) continue;
+
+      const dx = pos.x - marker.x;
+      const dy = pos.y - marker.y;
+      if (dx * dx + dy * dy <= hitRadius * hitRadius) {
+        // Hit! Suppress context menu and show edit dialog
+        this._suppressContextMenu = true;
+        this._showEditDialog(marker);
+        return;
+      }
+    }
   }
 
   /**
@@ -259,23 +316,23 @@ export default class TacticalMarkerLayer extends PIXI.Container {
     const content = `
       <form>
         <div class="form-group">
-          <label>Type: <strong>${markerConfig?.label ?? marker.type}</strong></label>
+          <label>Type: <strong>${esc(markerConfig?.label ?? marker.type)}</strong></label>
         </div>
         <div class="form-group">
           <label>Serial Number</label>
-          <input type="text" name="serialNumber" value="${marker.serialNumber || ""}"
+          <input type="text" name="serialNumber" value="${esc(marker.serialNumber || "")}"
                  maxlength="3" placeholder="001" style="width: 60px;"/>
         </div>
         ${isTextType ? `
         <div class="form-group">
           <label>Text</label>
-          <input type="text" name="text" value="${marker.text || ""}" maxlength="30"/>
+          <input type="text" name="text" value="${esc(marker.text || "")}" maxlength="30"/>
         </div>` : ""}
       </form>
     `;
 
     new Dialog({
-      title: `Edit Marker: ${markerConfig?.label ?? marker.type}`,
+      title: `Edit Marker: ${esc(markerConfig?.label ?? marker.type)}`,
       content,
       buttons: {
         save: {
@@ -304,11 +361,12 @@ export default class TacticalMarkerLayer extends PIXI.Container {
   }
 
   /**
-   * Clean up document-level event listeners before destroying the layer.
+   * Clean up event listeners before destroying the layer.
    * @param {object} [options] - PIXI destroy options.
    */
   destroy(options) {
     document.removeEventListener("contextmenu", this._contextMenuHandler, true);
+    canvas?.stage?.off("rightdown", this._onCanvasRightDown);
     super.destroy(options);
   }
 }
