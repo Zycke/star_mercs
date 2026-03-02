@@ -371,7 +371,7 @@ STARMERCS.terrain = {
     damageToNonFlying: 0,
     impassableVehicle: false,
     noFortification: false,
-    hasRoad: true,
+    hasRoad: false,
     blocksLOS: true
   },
   urbanLight: {
@@ -388,7 +388,7 @@ STARMERCS.terrain = {
     damageToNonFlying: 0,
     impassableVehicle: false,
     noFortification: false,
-    hasRoad: true,
+    hasRoad: false,
     blocksLOS: false
   }
 };

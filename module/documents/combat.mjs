@@ -4,7 +4,7 @@ import { snapToHexCenter, hexKey, getAdjacentHexCenters, getTokensAtHex,
   areAdjacent, getAdjacentEnemies, isEngaged, computeHexPath,
   validatePath, findBestAdjacentHex, getLastSafeHex,
   calculatePathCost, normalizeHexData } from "../hex-utils.mjs";
-import { getDetectionLevel } from "../detection.mjs";
+import { getDetectionLevel, checkLOS } from "../detection.mjs";
 
 /**
  * Extended Combat class for Star Mercs that implements phase-based rounds.
@@ -1803,9 +1803,17 @@ export default class StarMercsCombat extends Combat {
       );
 
       if (hasWeaponInRange) {
-        // Detection gate: overwatch only triggers if the target is detected (visible level)
-        const detLevel = getDetectionLevel(token, movingToken);
-        if (detLevel !== "visible") continue;
+        // Detection gate: compute at step position (token hasn't moved yet,
+        // so getDetectionLevel would use its starting position — wrong).
+        if (hexDist > 1) {
+          const hasLOS = checkLOS(owCenter, stepSnapped);
+          if (!hasLOS) continue;
+          const sensors = token.actor.system.sensors ?? 0;
+          const baseSig = movingToken.actor.system.signature ?? 0;
+          const detRange = sensors + baseSig;
+          if (detRange <= 0 || hexDist > detRange) continue;
+        }
+        // hexDist ≤ 1: adjacent units always detect each other
         triggers.push(token);
       }
     }
