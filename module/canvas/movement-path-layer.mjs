@@ -150,7 +150,7 @@ export default class MovementPathLayer extends PIXI.Container {
 
       if (!state.passable || state.runningCost > mpRemaining) {
         color = MovementPathLayer.COLOR_BLOCKED;
-      } else if (hKey === hexKey(hoverHex ?? {x: -999, y: -999})) {
+      } else if (hoverHex && hKey === hexKey(hoverHex)) {
         color = MovementPathLayer.COLOR_HOVER;
       } else if (waypointKeys.has(hKey)) {
         color = MovementPathLayer.COLOR_DESTINATION;

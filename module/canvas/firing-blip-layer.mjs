@@ -71,8 +71,10 @@ export default class FiringBlipLayer extends PIXI.Container {
       // Filter: players only see blips for their team; GM sees all
       if (!isGM && blip.visibleTo !== myTeam) continue;
 
-      const [xStr, yStr] = blip.hexKey.split(",");
-      const center = { x: parseFloat(xStr), y: parseFloat(yStr) };
+      const parts = blip.hexKey?.split(",") ?? [];
+      if (parts.length !== 2) continue;
+      const center = { x: parseFloat(parts[0]), y: parseFloat(parts[1]) };
+      if (isNaN(center.x) || isNaN(center.y)) continue;
 
       this._drawSingleBlip(center, blip, isGM);
     }
@@ -250,5 +252,14 @@ export default class FiringBlipLayer extends PIXI.Container {
     });
 
     this.blipContainer.addChild(group);
+  }
+
+  /**
+   * Clean up document-level event listeners before destroying the layer.
+   * @param {object} [options] - PIXI destroy options.
+   */
+  destroy(options) {
+    document.removeEventListener("contextmenu", this._contextMenuHandler, true);
+    super.destroy(options);
   }
 }

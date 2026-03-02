@@ -2,6 +2,7 @@ import { resolveAttack, validateAttack, calculateAccuracy, determineHitResult, c
 import { skillCheck } from "../dice.mjs";
 import { computeBestDetectionLevel } from "../detection.mjs";
 import FiringBlipLayer from "../canvas/firing-blip-layer.mjs";
+import { esc } from "../helpers.mjs";
 
 /**
  * Extended Actor class for Star Mercs units.
@@ -719,18 +720,20 @@ export default class StarMercsActor extends Actor {
       if (!entry) continue;
       const targetName = entry.targetName;
 
+      const safeName = esc(this.name);
+      const safeTarget = esc(targetName);
       let statusHtml = `<div class="star-mercs chat-card fire-all-summary">`;
-      statusHtml += `<div class="summary-header"><i class="fas fa-crosshairs"></i> <strong>${this.name}</strong> &rarr; <strong>${targetName}</strong></div>`;
+      statusHtml += `<div class="summary-header"><i class="fas fa-crosshairs"></i> <strong>${safeName}</strong> &rarr; <strong>${safeTarget}</strong></div>`;
       statusHtml += `<div class="summary-damage">Total Damage: <strong>${entry.totalDamage}</strong> (${entry.hitDamages.length} hit${entry.hitDamages.length > 1 ? "s" : ""})</div>`;
 
       if (dmgResult.pending) {
         statusHtml += `<div class="status-update pending"><i class="fas fa-clock"></i> Damage pending — applied in Consolidation</div>`;
       } else if (dmgResult.destroyed) {
-        statusHtml += `<div class="status-alert destroyed"><i class="fas fa-skull-crossbones"></i> ${targetName} DESTROYED</div>`;
+        statusHtml += `<div class="status-alert destroyed"><i class="fas fa-skull-crossbones"></i> ${safeTarget} DESTROYED</div>`;
       } else if (dmgResult.routed) {
-        statusHtml += `<div class="status-alert routed"><i class="fas fa-running"></i> ${targetName} ROUTED</div>`;
+        statusHtml += `<div class="status-alert routed"><i class="fas fa-running"></i> ${safeTarget} ROUTED</div>`;
       } else {
-        statusHtml += `<div class="status-update">${targetName}: STR ${dmgResult.newStrength} | RDY ${dmgResult.newReadiness} <span class="readiness-loss">(-${dmgResult.readinessLost} readiness)</span></div>`;
+        statusHtml += `<div class="status-update">${safeTarget}: STR ${dmgResult.newStrength} | RDY ${dmgResult.newReadiness} <span class="readiness-loss">(-${dmgResult.readinessLost} readiness)</span></div>`;
       }
       statusHtml += `</div>`;
 
@@ -941,7 +944,7 @@ export default class StarMercsActor extends Actor {
 
     await ChatMessage.create({
       content: `<div class="star-mercs chat-card supply-transfer">
-        <div class="summary-header"><i class="fas fa-truck"></i> <strong>${this.name}</strong> &rarr; <strong>${targetActor.name}</strong></div>
+        <div class="summary-header"><i class="fas fa-truck"></i> <strong>${esc(this.name)}</strong> &rarr; <strong>${esc(targetActor.name)}</strong></div>
         <div class="status-update">${transferredParts.join(" | ")}</div>
       </div>`,
       speaker: ChatMessage.getSpeaker({ actor: this })

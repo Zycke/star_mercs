@@ -16,6 +16,7 @@ export default class DamageOverlayLayer extends PIXI.Container {
   drawDamageNumbers() {
     // Remove old labels
     for (const label of this._labels.values()) {
+      this.removeChild(label);
       label.destroy();
     }
     this._labels.clear();
@@ -60,6 +61,7 @@ export default class DamageOverlayLayer extends PIXI.Container {
    */
   clear() {
     for (const label of this._labels.values()) {
+      this.removeChild(label);
       label.destroy();
     }
     this._labels.clear();
