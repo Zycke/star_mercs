@@ -157,6 +157,14 @@ export default class TerrainLayer extends PIXI.Container {
       if (hexData.road || terrainConfig[hexData.type]?.hasRoad) roadByKey.add(key);
     }
 
+    // Add completed bridge structures to road network
+    const structures = canvas.scene?.getFlag("star-mercs", "structures") ?? [];
+    for (const s of structures) {
+      if (s.type === "bridge" && s.turnsBuilt >= s.turnsRequired && s.strength > 0) {
+        roadByKey.add(s.hexKey);
+      }
+    }
+
     for (const [key, rawEntry] of Object.entries(terrainMap)) {
       const hexData = normalizeHexData(rawEntry);
       const config = terrainConfig[hexData.type];

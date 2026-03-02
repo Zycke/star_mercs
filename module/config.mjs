@@ -138,6 +138,16 @@ STARMERCS.orders = {
     supplyModifier: "1x",
     description: "Engineer unit constructs field structures."
   },
+  demolish: {
+    label: "Demolish",
+    category: "special",
+    requiredTrait: "Engineer",
+    allowsMovement: false,
+    allowsAttack: false,
+    readinessCost: -1,
+    supplyModifier: "1x",
+    description: "Engineer demolishes a structure at current or adjacent hex."
+  },
   meteoric_assault: {
     label: "Meteoric Assault",
     category: "special",
@@ -390,6 +400,74 @@ STARMERCS.terrain = {
     noFortification: false,
     hasRoad: false,
     blocksLOS: false
+  }
+};
+
+/* ============================================ */
+/*  Constructable Structures                   */
+/* ============================================ */
+
+/**
+ * Structure type definitions for buildable map objects.
+ * GM-overridable via world setting "star-mercs.structureOverrides".
+ */
+STARMERCS.structures = {
+  bridge: {
+    label: "Bridge",
+    icon: "fas fa-archway",
+    color: 0xA0522D,
+    maxStrength: 3,
+    turnsRequired: 2,
+    materialsPerTurn: 2,
+    canCapture: false,
+    requiresWater: true,
+    adjacentBuild: true,
+    grantsEntrenched: false,
+    description: "Allows non-aquatic units to cross water terrain."
+  },
+  minefield: {
+    label: "Minefield",
+    icon: "fas fa-bomb",
+    color: 0xFF4444,
+    maxStrength: 10,
+    turnsRequired: 1,
+    materialsPerTurn: 2,
+    canCapture: false,
+    hidden: true,
+    grantsEntrenched: false,
+    subTypes: {
+      antiPersonnel: { label: "Anti-Personnel", damageType: "soft" },
+      antiArmor: { label: "Anti-Armor", damageType: "hard" }
+    },
+    description: "Hidden explosives dealing damage to enemy units entering this hex."
+  },
+  outpost: {
+    label: "Outpost",
+    icon: "fas fa-fort-awesome",
+    color: 0x4488FF,
+    maxStrength: 5,
+    turnsRequired: 3,
+    materialsPerTurn: 3,
+    canCapture: true,
+    grantsEntrenched: true,
+    defaultCommsRange: 5,
+    defaultSupplyRange: 3,
+    defaultSupplyCapacity: {
+      smallArms: 10, heavyWeapons: 10, ordnance: 5,
+      fuel: 10, materials: 10, parts: 5, basicSupplies: 10
+    },
+    description: "Fortified position providing cover, supplies, and comms relay."
+  },
+  entrenchment: {
+    label: "Entrenchment",
+    icon: "fas fa-shield-alt",
+    color: 0x88AA44,
+    maxStrength: 2,
+    turnsRequired: 1,
+    materialsPerTurn: 1,
+    canCapture: false,
+    grantsEntrenched: true,
+    description: "Field fortifications granting Entrenched trait to any occupying unit."
   }
 };
 

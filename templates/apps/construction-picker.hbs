@@ -1,0 +1,58 @@
+<div class="star-mercs construction-picker-form">
+  <p class="notes">Select a structure to build. Materials available: <strong>{{materials}}</strong></p>
+
+  <div class="structure-choices">
+    {{#each choices}}
+    <div class="structure-choice {{#unless available}}disabled{{/unless}}" data-type="{{key}}">
+      <div class="choice-header">
+        <i class="{{icon}}"></i>
+        <strong>{{label}}</strong>
+        <span class="choice-cost">{{materialsPerTurn}} mat/turn &middot; {{turnsRequired}} turns</span>
+      </div>
+      <div class="choice-description">{{description}}</div>
+      {{#unless available}}
+      <div class="choice-unavailable"><i class="fas fa-ban"></i> {{reason}}</div>
+      {{/unless}}
+    </div>
+    {{/each}}
+  </div>
+
+  {{!-- Minefield sub-type selection --}}
+  <div class="sub-options" data-type="minefield" style="display:none;">
+    <div class="form-group">
+      <label>Minefield Type</label>
+      <div class="sub-type-radios">
+        {{#each mineSubTypes}}
+        <label class="radio-label">
+          <input type="radio" name="mineSubType" value="{{@key}}"/>
+          {{label}} ({{damageType}} damage)
+        </label>
+        {{/each}}
+      </div>
+    </div>
+  </div>
+
+  {{!-- Bridge target hex selection --}}
+  {{#if hasAdjacentWater}}
+  <div class="sub-options" data-type="bridge" style="display:none;">
+    <div class="form-group">
+      <label>Target Water Hex</label>
+      <select name="bridgeTarget">
+        <option value="">-- Select --</option>
+        {{#each adjacentWaterHexes}}
+        <option value="{{hexKey}}">{{label}} ({{hexKey}})</option>
+        {{/each}}
+      </select>
+    </div>
+  </div>
+  {{/if}}
+
+  <div class="form-group construction-picker-buttons">
+    <button type="button" class="confirm-construction">
+      <i class="fas fa-hammer"></i> Begin Construction
+    </button>
+    <button type="button" class="cancel-construction">
+      <i class="fas fa-times"></i> Cancel
+    </button>
+  </div>
+</div>

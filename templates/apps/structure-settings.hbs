@@ -1,0 +1,75 @@
+<div class="star-mercs structure-settings-form">
+  <p class="notes">Configure default values for constructable structure types. Changes apply to newly built structures.</p>
+
+  {{#each types}}
+  <fieldset class="structure-type-section" data-type="{{key}}">
+    <legend><i class="{{icon}}"></i> {{label}}</legend>
+
+    <div class="form-group">
+      <label>Max Strength</label>
+      <input type="number" name="{{key}}.maxStrength" value="{{maxStrength}}" min="1" step="1"/>
+    </div>
+
+    <div class="form-group">
+      <label>Build Turns</label>
+      <input type="number" name="{{key}}.turnsRequired" value="{{turnsRequired}}" min="1" step="1"/>
+    </div>
+
+    <div class="form-group">
+      <label>Materials / Turn</label>
+      <input type="number" name="{{key}}.materialsPerTurn" value="{{materialsPerTurn}}" min="0" step="1"/>
+    </div>
+
+    {{#if isOutpost}}
+    <div class="form-group">
+      <label>Comms Range (hexes)</label>
+      <input type="number" name="{{key}}.commsRange" value="{{commsRange}}" min="0" step="1"/>
+    </div>
+    <div class="form-group">
+      <label>Supply Range (hexes)</label>
+      <input type="number" name="{{key}}.supplyRange" value="{{supplyRange}}" min="0" step="1"/>
+    </div>
+    <details class="supply-capacities">
+      <summary>Supply Capacities</summary>
+      <div class="form-group">
+        <label>Small Arms</label>
+        <input type="number" name="{{key}}.supply.smallArms" value="{{supplySmallArms}}" min="0"/>
+      </div>
+      <div class="form-group">
+        <label>Heavy Weapons</label>
+        <input type="number" name="{{key}}.supply.heavyWeapons" value="{{supplyHeavyWeapons}}" min="0"/>
+      </div>
+      <div class="form-group">
+        <label>Ordnance</label>
+        <input type="number" name="{{key}}.supply.ordnance" value="{{supplyOrdnance}}" min="0"/>
+      </div>
+      <div class="form-group">
+        <label>Fuel</label>
+        <input type="number" name="{{key}}.supply.fuel" value="{{supplyFuel}}" min="0"/>
+      </div>
+      <div class="form-group">
+        <label>Materials</label>
+        <input type="number" name="{{key}}.supply.materials" value="{{supplyMaterials}}" min="0"/>
+      </div>
+      <div class="form-group">
+        <label>Parts</label>
+        <input type="number" name="{{key}}.supply.parts" value="{{supplyParts}}" min="0"/>
+      </div>
+      <div class="form-group">
+        <label>Basic Supplies</label>
+        <input type="number" name="{{key}}.supply.basicSupplies" value="{{supplyBasicSupplies}}" min="0"/>
+      </div>
+    </details>
+    {{/if}}
+  </fieldset>
+  {{/each}}
+
+  <div class="form-group structure-settings-buttons">
+    <button type="button" class="save-settings">
+      <i class="fas fa-save"></i> Save
+    </button>
+    <button type="button" class="reset-defaults">
+      <i class="fas fa-undo"></i> Reset to Defaults
+    </button>
+  </div>
+</div>

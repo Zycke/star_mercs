@@ -26,6 +26,8 @@ import FiringBlipLayer from "./module/canvas/firing-blip-layer.mjs";
 import TacticalMarkerLayer from "./module/canvas/tactical-marker-layer.mjs";
 import TacticalMarkerPainter from "./module/apps/tactical-marker-painter.mjs";
 import TurnControlPanel from "./module/apps/turn-control.mjs";
+import StructureLayer from "./module/canvas/structure-layer.mjs";
+import StructureSettings from "./module/apps/structure-settings.mjs";
 
 /* ============================================ */
 /*  Foundry VTT Initialization                  */
@@ -202,6 +204,15 @@ Hooks.once("init", () => {
       syncAllOwnership();
     }
   });
+
+  game.settings.register("star-mercs", "structureOverrides", {
+    name: "Structure Type Overrides",
+    hint: "GM-customizable defaults for constructable structure types.",
+    scope: "world",
+    config: false,
+    type: Object,
+    default: {}
+  });
 });
 
 /* ============================================ */
@@ -251,6 +262,39 @@ Hooks.once("ready", () => {
             await scene.unsetFlag("star-mercs", "tacticalMarkers");
           } else {
             await scene.setFlag("star-mercs", "tacticalMarkers", updated);
+          }
+          break;
+        }
+      }
+    }
+
+    // Structure operations relayed from players
+    if (data.action === "structure") {
+      const scene = game.scenes.get(data.sceneId);
+      if (!scene) return;
+      const existing = scene.getFlag("star-mercs", "structures") ?? [];
+
+      switch (data.op) {
+        case "create": {
+          const structure = { id: foundry.utils.randomID(), ...data.data };
+          existing.push(structure);
+          await scene.setFlag("star-mercs", "structures", existing);
+          break;
+        }
+        case "update": {
+          const idx = existing.findIndex(s => s.id === data.structureId);
+          if (idx !== -1) {
+            Object.assign(existing[idx], data.changes);
+            await scene.setFlag("star-mercs", "structures", existing);
+          }
+          break;
+        }
+        case "remove": {
+          const updated = existing.filter(s => s.id !== data.structureId);
+          if (updated.length === 0) {
+            await scene.unsetFlag("star-mercs", "structures");
+          } else {
+            await scene.setFlag("star-mercs", "structures", updated);
           }
           break;
         }
@@ -392,6 +436,17 @@ Hooks.on("canvasReady", () => {
   canvas.interface.addChild(tacticalMarkerLayer);
   tacticalMarkerLayer.activateListeners();
   tacticalMarkerLayer.drawMarkers();
+
+  // Structure overlay
+  const previousStructureLayer = game.starmercs.structureLayer;
+  if (previousStructureLayer) {
+    previousStructureLayer.destroy({ children: true });
+  }
+  const structureLayer = new StructureLayer();
+  game.starmercs.structureLayer = structureLayer;
+  canvas.interface.addChild(structureLayer);
+  structureLayer.activateListeners();
+  structureLayer.drawStructures();
 });
 
 /** Redraw arrows when a token is visually refreshed (position change, etc.). */
@@ -412,6 +467,11 @@ Hooks.on("updateScene", (scene, changes) => {
   }
   if (smFlags.tacticalMarkers !== undefined || smFlags["-=tacticalMarkers"] !== undefined) {
     game.starmercs?.tacticalMarkerLayer?.drawMarkers();
+  }
+  if (smFlags.structures !== undefined || smFlags["-=structures"] !== undefined) {
+    game.starmercs?.structureLayer?.drawStructures();
+    // Also redraw terrain (bridges affect road network)
+    game.starmercs?.terrainLayer?.drawTerrain();
   }
 });
 
@@ -1143,6 +1203,17 @@ Hooks.on("getSceneControlButtons", (controls) => {
     }
   };
 
+  const structureSettingsTool = {
+    name: "structureSettings",
+    title: "Structure Settings",
+    icon: "fas fa-hard-hat",
+    visible: game.user.isGM,
+    toggle: false,
+    onChange: () => {
+      new StructureSettings().render(true);
+    }
+  };
+
   const turnControlTool = {
     name: "turnControl",
     title: "Turn Control",
@@ -1177,6 +1248,8 @@ Hooks.on("getSceneControlButtons", (controls) => {
     tokenControls.tools.teamSettings = teamSettingsTool;
     tacticalMarkerTool.order = Object.keys(tokenControls.tools).length;
     tokenControls.tools.tacticalMarkers = tacticalMarkerTool;
+    structureSettingsTool.order = Object.keys(tokenControls.tools).length;
+    tokenControls.tools.structureSettings = structureSettingsTool;
     turnControlTool.order = Object.keys(tokenControls.tools).length;
     tokenControls.tools.turnControl = turnControlTool;
   } else {
@@ -1187,6 +1260,7 @@ Hooks.on("getSceneControlButtons", (controls) => {
     tokenControls.tools.push(detectionTool);
     tokenControls.tools.push(teamSettingsTool);
     tokenControls.tools.push(tacticalMarkerTool);
+    tokenControls.tools.push(structureSettingsTool);
     tokenControls.tools.push(turnControlTool);
   }
 });

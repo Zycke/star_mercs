@@ -198,14 +198,15 @@ export function getTerrainCoverMod(targetToken) {
  * Uses active signature (base + terrain modifiers) for detection range.
  * @param {Token} observerToken
  * @param {Token} targetToken
+ * @param {number} [sensorBonus=0] - Additional sensor bonus (e.g. from outpost comms relay).
  * @returns {{ detected: boolean, distance: number, detectionRange: number, hasLOS: boolean }}
  */
-export function canDetect(observerToken, targetToken) {
+export function canDetect(observerToken, targetToken, sensorBonus = 0) {
   if (!observerToken?.actor || !targetToken?.actor) {
     return { detected: false, distance: Infinity, detectionRange: 0, hasLOS: false };
   }
 
-  const sensors = observerToken.actor.system.sensors ?? 0;
+  const sensors = (observerToken.actor.system.sensors ?? 0) + sensorBonus;
   const { active: signature } = getActiveSignature(targetToken);
 
   // Check hex-based LOS
@@ -230,10 +231,11 @@ export function canDetect(observerToken, targetToken) {
  * Get the detection level of a target from a single observer.
  * @param {Token} observerToken
  * @param {Token} targetToken
+ * @param {number} [sensorBonus=0] - Additional sensor bonus (e.g. from outpost comms relay).
  * @returns {"visible" | "blip" | "hidden"}
  */
-export function getDetectionLevel(observerToken, targetToken) {
-  const result = canDetect(observerToken, targetToken);
+export function getDetectionLevel(observerToken, targetToken, sensorBonus = 0) {
+  const result = canDetect(observerToken, targetToken, sensorBonus);
 
   // Adjacent units (distance ≤ 1) always fully detect each other
   if (result.distance <= 1) return "visible";
@@ -261,12 +263,31 @@ export function computeBestDetectionLevel(friendlyTeam, enemyToken) {
   const levels = { visible: 3, blip: 2, hidden: 1 };
   let bestLevel = "hidden";
 
+  // Outpost comms relay: find friendly outposts for sensor bonus
+  const structures = canvas.scene?.getFlag("star-mercs", "structures") ?? [];
+  const friendlyOutposts = structures.filter(s =>
+    s.type === "outpost" && s.team === friendlyTeam
+    && s.turnsBuilt >= s.turnsRequired && s.strength > 0
+  );
+
   for (const token of canvas.tokens.placeables) {
     if (!token.actor || token.actor.type !== "unit") continue;
     if (token.actor.system.strength.value <= 0) continue;
     if ((token.actor.system.team ?? "a") !== friendlyTeam) continue;
 
-    const level = getDetectionLevel(token, enemyToken);
+    // Check if observer is within any friendly outpost comms range → +2 sensors
+    let commsBonus = 0;
+    if (friendlyOutposts.length > 0) {
+      const obsCenter = snapToHexCenter(token.center);
+      for (const op of friendlyOutposts) {
+        const dx = obsCenter.x - op.x;
+        const dy = obsCenter.y - op.y;
+        const dist = Math.round(Math.sqrt(dx * dx + dy * dy) / (canvas.grid.size || 100));
+        if (dist <= (op.commsRange ?? 5)) { commsBonus = 2; break; }
+      }
+    }
+
+    const level = getDetectionLevel(token, enemyToken, commsBonus);
     if (levels[level] > levels[bestLevel]) {
       bestLevel = level;
       if (bestLevel === "visible") break; // Can't do better

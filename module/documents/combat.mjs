@@ -3,8 +3,9 @@ import { esc } from "../helpers.mjs";
 import { snapToHexCenter, hexKey, getAdjacentHexCenters, getTokensAtHex,
   areAdjacent, getAdjacentEnemies, isEngaged, computeHexPath,
   validatePath, findBestAdjacentHex, getLastSafeHex,
-  calculatePathCost, normalizeHexData } from "../hex-utils.mjs";
+  calculatePathCost, normalizeHexData, getStructureAtHex } from "../hex-utils.mjs";
 import { getDetectionLevel, checkLOS } from "../detection.mjs";
+import StructureLayer from "../canvas/structure-layer.mjs";
 
 /**
  * Extended Combat class for Star Mercs that implements phase-based rounds.
@@ -449,6 +450,248 @@ export default class StarMercsCombat extends Combat {
             sections.push(`<div class="consolidation-section entrench">
               <div class="consolidation-section-header"><i class="fas fa-shield-alt"></i> Gained Entrenched</div>
             </div>`);
+          }
+        }
+      }
+
+      // 2c. Structure Entrenched: grant Entrenched from completed structures
+      if (token) {
+        const tokenHex = snapToHexCenter(canvas.tokens.get(token.id)?.center ?? { x: 0, y: 0 });
+        const structureAtHex = getStructureAtHex(tokenHex);
+        if (structureAtHex && structureAtHex.turnsBuilt >= structureAtHex.turnsRequired
+            && structureAtHex.strength > 0) {
+          const sConfig = CONFIG.STARMERCS.structures[structureAtHex.type];
+          if (sConfig?.grantsEntrenched) {
+            const entrenchedTrait = actor.items.find(
+              i => i.type === "trait" && i.name.toLowerCase() === "entrenched"
+            );
+            if (entrenchedTrait && !entrenchedTrait.system.active) {
+              await entrenchedTrait.update({ "system.active": true });
+              sections.push(`<div class="consolidation-section entrench">
+                <div class="consolidation-section-header"><i class="fas fa-shield-alt"></i> Entrenched (${esc(sConfig.label)})</div>
+              </div>`);
+            }
+          }
+        }
+      }
+
+      // 2d. Construction progress (construct / fortify orders)
+      if (token && order && (order.key === "construct" || order.key === "fortify")) {
+        const movementUsed = token.getFlag("star-mercs", "movementUsed") ?? 0;
+        if (movementUsed === 0) {
+          const target = token.getFlag("star-mercs", "constructionTarget");
+          if (target) {
+            const merged = StructureLayer.getStructureConfig(target.type);
+            if (merged) {
+              const matCost = merged.materialsPerTurn ?? 1;
+              const currentMats = actor.system.supply?.materials?.current ?? 0;
+
+              if (currentMats < matCost) {
+                sections.push(`<div class="consolidation-section construction">
+                  <div class="consolidation-section-header"><i class="fas fa-exclamation-triangle"></i> Construction Paused</div>
+                  <div class="status-update">Insufficient materials (need ${matCost}, have ${currentMats}).</div>
+                </div>`);
+              } else {
+                // Deduct materials
+                await actor.update({ "system.supply.materials.current": currentMats - matCost });
+
+                // Find or create the structure
+                const structures = canvas.scene.getFlag("star-mercs", "structures") ?? [];
+                let structure = structures.find(
+                  s => s.hexKey === target.targetHexKey && s.builderId === token.id
+                );
+                if (!structure) {
+                  // Create new structure
+                  const [xStr, yStr] = target.targetHexKey.split(",");
+                  structure = {
+                    id: foundry.utils.randomID(),
+                    hexKey: target.targetHexKey,
+                    x: parseFloat(xStr),
+                    y: parseFloat(yStr),
+                    type: target.type,
+                    team: actor.system.team ?? "a",
+                    strength: merged.maxStrength,
+                    maxStrength: merged.maxStrength,
+                    turnsBuilt: 0,
+                    turnsRequired: merged.turnsRequired,
+                    revealed: false,
+                    builderId: token.id,
+                    subType: target.subType ?? null,
+                    supply: null,
+                    commsRange: null,
+                    supplyRange: null
+                  };
+                  // Outpost-specific fields
+                  if (target.type === "outpost") {
+                    structure.commsRange = merged.defaultCommsRange ?? 5;
+                    structure.supplyRange = merged.defaultSupplyRange ?? 3;
+                    const caps = merged.defaultSupplyCapacity ?? {};
+                    structure.supply = {};
+                    for (const cat of ["smallArms", "heavyWeapons", "ordnance", "fuel", "materials", "parts", "basicSupplies"]) {
+                      structure.supply[cat] = { current: 0, capacity: caps[cat] ?? 0 };
+                    }
+                  }
+                  structures.push(structure);
+                }
+
+                // Increment build progress
+                structure.turnsBuilt = (structure.turnsBuilt ?? 0) + 1;
+
+                if (structure.turnsBuilt >= structure.turnsRequired) {
+                  // Construction complete
+                  structure.builderId = null;
+                  await token.unsetFlag("star-mercs", "constructionTarget");
+                  const sLabel = CONFIG.STARMERCS.structures[target.type]?.label ?? target.type;
+                  sections.push(`<div class="consolidation-section construction">
+                    <div class="consolidation-section-header"><i class="fas fa-check-circle"></i> Construction Complete!</div>
+                    <div class="status-update">${esc(sLabel)} built at ${target.targetHexKey}.</div>
+                  </div>`);
+                } else {
+                  sections.push(`<div class="consolidation-section construction">
+                    <div class="consolidation-section-header"><i class="fas fa-hammer"></i> Construction Progress</div>
+                    <div class="status-update">${structure.turnsBuilt}/${structure.turnsRequired} turns complete.</div>
+                  </div>`);
+                }
+
+                await canvas.scene.setFlag("star-mercs", "structures", structures);
+              }
+            }
+          }
+        } else {
+          sections.push(`<div class="consolidation-section construction">
+            <div class="consolidation-section-header"><i class="fas fa-exclamation-triangle"></i> Construction Paused</div>
+            <div class="status-update">Unit moved this turn — no construction progress.</div>
+          </div>`);
+        }
+      }
+
+      // 2e. Demolish order execution
+      if (token && order && order.key === "demolish") {
+        const movementUsed = token.getFlag("star-mercs", "movementUsed") ?? 0;
+        if (movementUsed === 0) {
+          const demolishTarget = token.getFlag("star-mercs", "demolishTarget");
+          if (demolishTarget?.structureId) {
+            const structures = canvas.scene.getFlag("star-mercs", "structures") ?? [];
+            const idx = structures.findIndex(s => s.id === demolishTarget.structureId);
+            if (idx !== -1) {
+              const demolished = structures[idx];
+              const sConfig = CONFIG.STARMERCS.structures[demolished.type];
+              structures.splice(idx, 1);
+              if (structures.length === 0) {
+                await canvas.scene.unsetFlag("star-mercs", "structures");
+              } else {
+                await canvas.scene.setFlag("star-mercs", "structures", structures);
+              }
+              await token.unsetFlag("star-mercs", "demolishTarget");
+              sections.push(`<div class="consolidation-section demolish">
+                <div class="consolidation-section-header"><i class="fas fa-hammer"></i> Structure Demolished</div>
+                <div class="status-update">${esc(sConfig?.label ?? demolished.type)} destroyed.</div>
+              </div>`);
+            }
+          }
+        }
+      }
+
+      // 2f. Advanced Sensors — reveal hidden minefields within range
+      if (token) {
+        const advSensors = actor.items.find(
+          i => i.type === "trait" && /^Advanced Sensors/i.test(i.name)
+        );
+        if (advSensors) {
+          const match = advSensors.name.match(/\[(\d+)\]/);
+          const revealRange = match ? parseInt(match[1]) : 0;
+          if (revealRange > 0) {
+            const unitCenter = snapToHexCenter(canvas.tokens.get(token.id)?.center ?? { x: 0, y: 0 });
+            const sensorStructures = canvas.scene.getFlag("star-mercs", "structures") ?? [];
+            let revealedAny = false;
+            for (const s of sensorStructures) {
+              if (s.type !== "minefield" || s.revealed) continue;
+              if (s.turnsBuilt < s.turnsRequired) continue;
+              const dx = unitCenter.x - s.x;
+              const dy = unitCenter.y - s.y;
+              const pixelDist = Math.sqrt(dx * dx + dy * dy);
+              const hexDist = Math.round(pixelDist / (canvas.grid.size || 100));
+              if (hexDist <= revealRange) {
+                s.revealed = true;
+                revealedAny = true;
+              }
+            }
+            if (revealedAny) {
+              await canvas.scene.setFlag("star-mercs", "structures", sensorStructures);
+              sections.push(`<div class="consolidation-section sensors">
+                <div class="consolidation-section-header"><i class="fas fa-satellite-dish"></i> Minefield Detected!</div>
+                <div class="status-update">Advanced Sensors revealed nearby minefields.</div>
+              </div>`);
+            }
+          }
+        }
+      }
+
+      // 2g. Outpost capture — enemy unit on capturable structure with no defenders
+      if (token) {
+        const unitTeam = actor.system.team ?? "a";
+        const unitCenter = snapToHexCenter(canvas.tokens.get(token.id)?.center ?? { x: 0, y: 0 });
+        const captureStructures = canvas.scene.getFlag("star-mercs", "structures") ?? [];
+        const capturable = captureStructures.find(s => {
+          if (!s.hexKey || s.hexKey !== hexKey(unitCenter)) return false;
+          const cfg = CONFIG.STARMERCS.structures[s.type];
+          return cfg?.canCapture && s.turnsBuilt >= s.turnsRequired && s.team !== unitTeam;
+        });
+        if (capturable) {
+          const tokensHere = getTokensAtHex(unitCenter);
+          const defenders = tokensHere.filter(t =>
+            t.actor && t.actor.system.strength.value > 0
+            && (t.actor.system.team ?? "a") === capturable.team
+          );
+          if (defenders.length === 0) {
+            capturable.team = unitTeam;
+            await canvas.scene.setFlag("star-mercs", "structures", captureStructures);
+            const capConfig = CONFIG.STARMERCS.structures[capturable.type];
+            sections.push(`<div class="consolidation-section capture">
+              <div class="consolidation-section-header"><i class="fas fa-flag"></i> Structure Captured!</div>
+              <div class="status-update">${esc(capConfig?.label ?? capturable.type)} captured by Team ${unitTeam.toUpperCase()}.</div>
+            </div>`);
+          }
+        }
+      }
+
+      // 2h. Outpost supply distribution — outposts transfer supply to nearby friendlies
+      if (token) {
+        const supTeam = actor.system.team ?? "a";
+        const supCenter = snapToHexCenter(canvas.tokens.get(token.id)?.center ?? { x: 0, y: 0 });
+        const supStructures = canvas.scene?.getFlag("star-mercs", "structures") ?? [];
+
+        for (const s of supStructures) {
+          if (s.type !== "outpost" || s.team !== supTeam) continue;
+          if (s.turnsBuilt < s.turnsRequired || s.strength <= 0) continue;
+          if (!s.supply) continue;
+
+          const dx = supCenter.x - s.x;
+          const dy = supCenter.y - s.y;
+          const dist = Math.round(Math.sqrt(dx * dx + dy * dy) / (canvas.grid.size || 100));
+          if (dist > (s.supplyRange ?? 3)) continue;
+
+          const supplyUpdate = {};
+          let transferred = false;
+          for (const cat of ["smallArms", "heavyWeapons", "ordnance", "fuel", "materials", "parts", "basicSupplies"]) {
+            const unitCurrent = actor.system.supply?.[cat]?.current ?? 0;
+            const unitCapacity = actor.system.supply?.[cat]?.capacity ?? 0;
+            const outpostCurrent = s.supply[cat]?.current ?? 0;
+            const deficit = unitCapacity - unitCurrent;
+            if (deficit > 0 && outpostCurrent > 0) {
+              const xfer = Math.min(deficit, outpostCurrent);
+              supplyUpdate[`system.supply.${cat}.current`] = unitCurrent + xfer;
+              s.supply[cat].current -= xfer;
+              transferred = true;
+            }
+          }
+          if (transferred) {
+            await actor.update(supplyUpdate);
+            await canvas.scene.setFlag("star-mercs", "structures", supStructures);
+            sections.push(`<div class="consolidation-section supply">
+              <div class="consolidation-section-header"><i class="fas fa-box-open"></i> Resupplied from Outpost</div>
+            </div>`);
+            break; // One outpost per unit per round
           }
         }
       }
@@ -1730,11 +1973,56 @@ export default class StarMercsCombat extends Combat {
         continue;
       }
 
-      // Check each step for overwatch triggers
+      // Check each step for overwatch triggers and minefield triggers
       for (const step of path) {
         const overwatchTriggers = this._checkOverwatchTriggers(canvasToken, step);
         for (const owToken of overwatchTriggers) {
           await this._postOverwatchCard(owToken, canvasToken, step);
+        }
+
+        // Minefield trigger check at each step
+        const stepKey = hexKey(snapToHexCenter(step));
+        const allStructures = canvas.scene?.getFlag("star-mercs", "structures") ?? [];
+        const minefield = allStructures.find(s => s.type === "minefield" && s.hexKey === stepKey
+          && s.turnsBuilt >= s.turnsRequired && s.strength > 0);
+        if (minefield && minefield.team !== (canvasToken.actor?.system?.team ?? "a")) {
+          // Roll d6 damage, capped by remaining strength
+          const roll = await new Roll("1d6").evaluate();
+          const dmg = Math.min(roll.total, minefield.strength);
+          const subConfig = CONFIG.STARMERCS.structures.minefield?.subTypes?.[minefield.subType];
+          const damageType = subConfig?.damageType ?? "soft";
+
+          // Reveal the minefield
+          if (!minefield.revealed) minefield.revealed = true;
+
+          // Reduce minefield strength
+          minefield.strength -= dmg;
+          if (minefield.strength <= 0) {
+            const updatedStructures = allStructures.filter(s => s.id !== minefield.id);
+            if (updatedStructures.length === 0) {
+              await canvas.scene.unsetFlag("star-mercs", "structures");
+            } else {
+              await canvas.scene.setFlag("star-mercs", "structures", updatedStructures);
+            }
+          } else {
+            await canvas.scene.setFlag("star-mercs", "structures", allStructures);
+          }
+
+          // Apply pending damage to unit
+          await this.addPendingDamage(canvasToken.document, dmg, 0,
+            `Minefield (${damageType})`, minefield.subType ?? "minefield");
+
+          // Post chat card
+          const mfMaxStr = minefield.strength + dmg; // original before reduction
+          await ChatMessage.create({
+            content: `<div class="star-mercs chat-card minefield-trigger">
+              <div class="summary-header"><i class="fas fa-burst"></i> Minefield Triggered!</div>
+              <div class="status-update"><strong>${esc(canvasToken.name)}</strong> entered a minefield.
+                Rolled ${roll.total} → <strong>${dmg} ${damageType} damage</strong> applied.
+                ${minefield.strength <= 0 ? "Minefield depleted and removed." : `Minefield strength: ${minefield.strength}/${minefield.maxStrength ?? 10}`}</div>
+            </div>`,
+            speaker: { alias: "Star Mercs" }
+          });
         }
       }
 
