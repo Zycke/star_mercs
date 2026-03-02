@@ -1,4 +1,5 @@
 import StarMercsActor from "./actor.mjs";
+import { esc } from "../helpers.mjs";
 import { snapToHexCenter, hexKey, getAdjacentHexCenters, getTokensAtHex,
   areAdjacent, getAdjacentEnemies, isEngaged, computeHexPath,
   validatePath, findBestAdjacentHex, getLastSafeHex,
@@ -431,7 +432,7 @@ export default class StarMercsCombat extends Combat {
           await actor.update({ "system.readiness.value": newRdy });
           const label = cost > 0 ? `+${cost}` : `${cost}`;
           sections.push(`<div class="consolidation-section readiness">
-            <div class="consolidation-section-header"><i class="fas fa-battery-half"></i> Order Readiness: ${label} (${order.name})</div>
+            <div class="consolidation-section-header"><i class="fas fa-battery-half"></i> Order Readiness: ${label} (${esc(order.name)})</div>
           </div>`);
         }
       }
@@ -550,7 +551,7 @@ export default class StarMercsCombat extends Combat {
         const unitTeam = actor.system.team ?? "a";
         await ChatMessage.create({
           content: `<div class="star-mercs chat-card consolidation-combined" data-token-id="${token?.id ?? ""}">
-            <div class="summary-header unit-link" data-token-id="${token?.id ?? ""}"><i class="fas fa-cog"></i> <strong>${unitName}</strong> — Consolidation</div>
+            <div class="summary-header unit-link" data-token-id="${token?.id ?? ""}"><i class="fas fa-cog"></i> <strong>${esc(unitName)}</strong> — Consolidation</div>
             ${sections.join("\n")}
           </div>`,
           speaker: { alias: "Star Mercs" },
@@ -682,7 +683,7 @@ export default class StarMercsCombat extends Combat {
           await token.setFlag("star-mercs", "broken", false);
           await ChatMessage.create({
             content: `<div class="star-mercs chat-card morale-recovery">
-              <div class="summary-header unit-link" data-token-id="${token.id}"><i class="fas fa-shield-alt"></i> <strong>${token.name}</strong> — Morale Recovered</div>
+              <div class="summary-header unit-link" data-token-id="${token.id}"><i class="fas fa-shield-alt"></i> <strong>${esc(token.name)}</strong> — Morale Recovered</div>
               <div class="status-update">No damage taken — ${isBreaking ? "Breaking" : "Broken"} status removed.</div>
             </div>`,
             speaker: { alias: "Star Mercs" },
@@ -727,7 +728,7 @@ export default class StarMercsCombat extends Combat {
         const statusLabel = isBreaking ? "Breaking" : "Broken";
 
         let html = `<div class="star-mercs chat-card morale-check">`;
-        html += `<div class="summary-header"><i class="fas fa-brain"></i> <strong>${token.name}</strong> — Morale Check (${statusLabel})</div>`;
+        html += `<div class="summary-header"><i class="fas fa-brain"></i> <strong>${esc(token.name)}</strong> — Morale Check (${statusLabel})</div>`;
         html += `<div class="morale-details">RDY: ${currentReadiness} | Roll: ${roll.total}`;
         if (damageTaken > 0) html += ` +${damageTaken} dmg`;
         html += ` = ${result.total} vs RDY ${currentReadiness} — ${result.passed ? "Passed" : "Failed"}</div>`;
@@ -753,7 +754,7 @@ export default class StarMercsCombat extends Combat {
           await token.setFlag("star-mercs", "breaking", false);
           await token.setFlag("star-mercs", "broken", false);
           await token.unsetFlag("star-mercs", "breakingTurn");
-          html += `<div class="status-alert morale-failed"><i class="fas fa-flag"></i> SURRENDERED — ${token.name} is removed from the game!</div>`;
+          html += `<div class="status-alert morale-failed"><i class="fas fa-flag"></i> SURRENDERED — ${esc(token.name)} is removed from the game!</div>`;
         }
         html += `</div>`;
 
@@ -808,7 +809,7 @@ export default class StarMercsCombat extends Combat {
       }
 
       let html = `<div class="star-mercs chat-card morale-check">`;
-      html += `<div class="summary-header"><i class="fas fa-brain"></i> <strong>${token.name}</strong> — Morale Check</div>`;
+      html += `<div class="summary-header"><i class="fas fa-brain"></i> <strong>${esc(token.name)}</strong> — Morale Check</div>`;
       html += `<div class="morale-details">RDY: ${currentReadiness} | Roll: ${roll.total}`;
       if (damageTaken > 0) html += ` +${damageTaken} dmg`;
       html += ` = ${result.total} vs RDY ${currentReadiness} — ${result.passed ? "Passed" : "Failed"}</div>`;
@@ -836,7 +837,7 @@ export default class StarMercsCombat extends Combat {
 
         if (alreadyBreaking && breakingTurn !== this.round) {
           // Second Breaking on a different turn → ROUTED (destroyed)
-          html += `<div class="status-alert morale-failed"><i class="fas fa-flag"></i> ROUTED — ${token.name} was already Breaking and failed morale again! Removed from game.</div>`;
+          html += `<div class="status-alert morale-failed"><i class="fas fa-flag"></i> ROUTED — ${esc(token.name)} was already Breaking and failed morale again! Removed from game.</div>`;
         } else {
           html += `<div class="status-alert morale-failed"><i class="fas fa-heartbeat"></i> BREAKING — unit can only Hold or Withdraw!</div>`;
         }
@@ -941,7 +942,7 @@ export default class StarMercsCombat extends Combat {
           await actor.addLogEntry(`Assault movement: -${hexesMoved} readiness (${hexesMoved} hex${hexesMoved > 1 ? "es" : ""} to target)`, "damage");
           await ChatMessage.create({
             content: `<div class="star-mercs chat-card consolidation-readiness">
-              <div class="summary-header unit-link" data-token-id="${token.id}"><i class="fas fa-fist-raised"></i> <strong>${token.name}</strong> — Assault Movement: -${hexesMoved} readiness (${distanceToTarget} hex${distanceToTarget > 1 ? "es" : ""} to target)</div>
+              <div class="summary-header unit-link" data-token-id="${token.id}"><i class="fas fa-fist-raised"></i> <strong>${esc(token.name)}</strong> — Assault Movement: -${hexesMoved} readiness (${distanceToTarget} hex${distanceToTarget > 1 ? "es" : ""} to target)</div>
             </div>`,
             speaker: { alias: "Star Mercs" },
             whisper: StarMercsCombat.getTeamWhisperIds(actor.system.team ?? "a")
@@ -1023,33 +1024,33 @@ export default class StarMercsCombat extends Combat {
       // Build chat message
       const headerLabel = isMutual ? "Mutual Assault" : "Assault Resolution";
       let html = `<div class="star-mercs chat-card assault-morale">`;
-      html += `<div class="summary-header"><i class="fas fa-fist-raised"></i> ${headerLabel}: <strong>${token.name}</strong> vs <strong>${targetCanvasToken.name}</strong></div>`;
+      html += `<div class="summary-header"><i class="fas fa-fist-raised"></i> ${headerLabel}: <strong>${esc(token.name)}</strong> vs <strong>${esc(targetCanvasToken.name)}</strong></div>`;
 
       // Attacker roll details
-      html += `<div class="morale-details">${token.name}: Roll ${assaultRoll.total}`;
+      html += `<div class="morale-details">${esc(token.name)}: Roll ${assaultRoll.total}`;
       if (attackerDmg > 0) html += ` +${attackerDmg} dmg`;
       html += ` = ${aResult.total} vs RDY ${attackerReadiness} — ${aResult.passed ? "Passed" : "Failed"}</div>`;
       if (aRerollType === "isolation") {
-        html += `<div class="morale-reroll isolation">${token.name} Isolation re-roll: ${aRerollObj.total}`;
+        html += `<div class="morale-reroll isolation">${esc(token.name)} Isolation re-roll: ${aRerollObj.total}`;
         if (attackerDmg > 0) html += ` +${attackerDmg}`;
         html += ` = ${aRerollEval.total} — ${aRerollEval.passed ? "Passed" : "Failed"}</div>`;
       } else if (aRerollType === "command") {
-        html += `<div class="morale-reroll command">${token.name} Command re-roll: ${aRerollObj.total}`;
+        html += `<div class="morale-reroll command">${esc(token.name)} Command re-roll: ${aRerollObj.total}`;
         if (attackerDmg > 0) html += ` +${attackerDmg}`;
         html += ` = ${aRerollEval.total} — ${aRerollEval.passed ? "Passed" : "Failed"}</div>`;
       }
 
       // Defender roll details
-      html += `<div class="morale-details">${targetCanvasToken.name}: Roll ${defenderRoll.total}`;
+      html += `<div class="morale-details">${esc(targetCanvasToken.name)}: Roll ${defenderRoll.total}`;
       if (defenderDmg > 0) html += ` +${defenderDmg} dmg`;
       if (shockPenalty > 0) html += ` +${shockPenalty} Shock`;
       html += ` = ${dResult.total} vs RDY ${defenderReadiness} — ${dResult.passed ? "Passed" : "Failed"}</div>`;
       if (dRerollType === "isolation") {
-        html += `<div class="morale-reroll isolation">${targetCanvasToken.name} Isolation re-roll: ${dRerollObj.total}`;
+        html += `<div class="morale-reroll isolation">${esc(targetCanvasToken.name)} Isolation re-roll: ${dRerollObj.total}`;
         if (defenderDmg > 0) html += ` +${defenderDmg}`;
         html += ` = ${dRerollEval.total} — ${dRerollEval.passed ? "Passed" : "Failed"}</div>`;
       } else if (dRerollType === "command") {
-        html += `<div class="morale-reroll command">${targetCanvasToken.name} Command re-roll: ${dRerollObj.total}`;
+        html += `<div class="morale-reroll command">${esc(targetCanvasToken.name)} Command re-roll: ${dRerollObj.total}`;
         if (defenderDmg > 0) html += ` +${defenderDmg}`;
         html += ` = ${dRerollEval.total} — ${dRerollEval.passed ? "Passed" : "Failed"}</div>`;
       }
@@ -1083,7 +1084,7 @@ export default class StarMercsCombat extends Combat {
         if (routedHtml) {
           html += routedHtml;
         } else {
-          html += `<div class="status-alert morale-failed"><i class="fas fa-shield-alt"></i> Assault repelled! ${token.name} is Breaking, loses 2 readiness.</div>`;
+          html += `<div class="status-alert morale-failed"><i class="fas fa-shield-alt"></i> Assault repelled! ${esc(token.name)} is Breaking, loses 2 readiness.</div>`;
         }
       } else if (aFinalPassed && !dFinalPassed) {
         // Attacker passes, defender fails → Routing → must move 1 hex or surrender
@@ -1099,10 +1100,10 @@ export default class StarMercsCombat extends Combat {
           const canRetreat = this._canRetreatFromAssault(targetCanvasToken, token.id);
           if (canRetreat) {
             if (defenderToken) await defenderToken.setFlag("star-mercs", "broken", true);
-            html += `<div class="status-alert morale-failed"><i class="fas fa-running"></i> ${isMutual ? "Loser routs!" : "Defender routs!"} ${targetCanvasToken.name} must fall back 1 hex — BROKEN. Loses 2 readiness.</div>`;
+            html += `<div class="status-alert morale-failed"><i class="fas fa-running"></i> ${isMutual ? "Loser routs!" : "Defender routs!"} ${esc(targetCanvasToken.name)} must fall back 1 hex — BROKEN. Loses 2 readiness.</div>`;
           } else {
             await targetActor.update({ "system.strength.value": 0 });
-            html += `<div class="status-alert morale-failed"><i class="fas fa-flag"></i> ${targetCanvasToken.name} cannot retreat — SURRENDERED! Removed from game.</div>`;
+            html += `<div class="status-alert morale-failed"><i class="fas fa-flag"></i> ${esc(targetCanvasToken.name)} cannot retreat — SURRENDERED! Removed from game.</div>`;
           }
         }
       } else {
@@ -1233,7 +1234,7 @@ export default class StarMercsCombat extends Combat {
       }
 
       let html = `<div class="star-mercs chat-card morale-check withdraw-morale">`;
-      html += `<div class="summary-header"><i class="fas fa-running"></i> <strong>${token.name}</strong> — Withdraw Morale Test</div>`;
+      html += `<div class="summary-header"><i class="fas fa-running"></i> <strong>${esc(token.name)}</strong> — Withdraw Morale Test</div>`;
       html += `<div class="morale-details">RDY: ${currentReadiness} | Roll: ${roll.total}`;
       html += ` = ${result.total} vs RDY ${currentReadiness} — ${result.passed ? "Passed" : "Failed"}</div>`;
 
@@ -1535,7 +1536,7 @@ export default class StarMercsCombat extends Combat {
       if (!adjacentHex) {
         await ChatMessage.create({
           content: `<div class="star-mercs chat-card tactical-step">
-            <div class="status-alert"><i class="fas fa-exclamation-triangle"></i> <strong>${token.name}</strong> cannot reach assault target — all adjacent hexes blocked.</div>
+            <div class="status-alert"><i class="fas fa-exclamation-triangle"></i> <strong>${esc(token.name)}</strong> cannot reach assault target — all adjacent hexes blocked.</div>
           </div>`,
           speaker: { alias: "Star Mercs" },
           whisper: StarMercsCombat.getTeamWhisperIds(actor.system.team ?? "a")
@@ -1561,7 +1562,7 @@ export default class StarMercsCombat extends Combat {
 
         await ChatMessage.create({
           content: `<div class="star-mercs chat-card tactical-step">
-            <div class="summary-header unit-link" data-token-id="${token.id}"><i class="fas fa-fist-raised"></i> <strong>${token.name}</strong> — Assault Movement</div>
+            <div class="summary-header unit-link" data-token-id="${token.id}"><i class="fas fa-fist-raised"></i> <strong>${esc(token.name)}</strong> — Assault Movement</div>
             <div class="status-update">Moved ${hexesMoved} hex${hexesMoved > 1 ? "es" : ""} to assault target. -${hexesMoved} readiness.</div>
           </div>`,
           speaker: { alias: "Star Mercs" },
@@ -1821,8 +1822,8 @@ export default class StarMercsCombat extends Combat {
   async _postOverwatchCard(overwatchToken, movingToken, triggerPosition) {
     const html = `<div class="star-mercs chat-card overwatch-trigger">
       <div class="summary-header"><i class="fas fa-eye"></i> Overwatch Triggered!</div>
-      <div class="status-update"><strong>${overwatchToken.name}</strong> spots
-        <strong>${movingToken.name}</strong> entering weapon range.</div>
+      <div class="status-update"><strong>${esc(overwatchToken.name)}</strong> spots
+        <strong>${esc(movingToken.name)}</strong> entering weapon range.</div>
       <div class="overwatch-actions">
         <button class="overwatch-fire-btn"
           data-attacker-id="${overwatchToken.document.id}"
@@ -1873,7 +1874,7 @@ export default class StarMercsCombat extends Combat {
       const margin1 = rdy1 - roll1.total;
       const margin2 = rdy2 - roll2.total;
 
-      roundDetails.push(`Round ${rounds}: ${token1.name} (RDY ${rdy1} - ${roll1.total} = ${margin1}) vs ${token2.name} (RDY ${rdy2} - ${roll2.total} = ${margin2})`);
+      roundDetails.push(`Round ${rounds}: ${esc(token1.name)} (RDY ${rdy1} - ${roll1.total} = ${margin1}) vs ${esc(token2.name)} (RDY ${rdy2} - ${roll2.total} = ${margin2})`);
 
       if (margin1 > margin2) { winner = token1; loser = token2; }
       else if (margin2 > margin1) { winner = token2; loser = token1; }
@@ -1889,11 +1890,11 @@ export default class StarMercsCombat extends Combat {
     // Post chat result
     let html = `<div class="star-mercs chat-card hex-contest">`;
     html += `<div class="summary-header"><i class="fas fa-flag"></i> Hex Contest!</div>`;
-    html += `<div class="status-update"><strong>${token1.name}</strong> vs <strong>${token2.name}</strong> both target the same hex.</div>`;
+    html += `<div class="status-update"><strong>${esc(token1.name)}</strong> vs <strong>${esc(token2.name)}</strong> both target the same hex.</div>`;
     for (const detail of roundDetails) {
       html += `<div class="morale-details">${detail}</div>`;
     }
-    html += `<div class="status-alert"><strong>${winner.name}</strong> wins the hex! <strong>${loser.name}</strong> stops short.</div>`;
+    html += `<div class="status-alert"><strong>${esc(winner.name)}</strong> wins the hex! <strong>${esc(loser.name)}</strong> stops short.</div>`;
     html += `</div>`;
 
     await ChatMessage.create({
@@ -1954,11 +1955,11 @@ export default class StarMercsCombat extends Combat {
       if (weapons.length === 0) continue;
 
       // Post a chat card with a fire button for this unit
-      const weaponList = weapons.map(w => `${w.name} (D${w.system.damage}/R${w.system.range})`).join(", ");
+      const weaponList = weapons.map(w => `${esc(w.name)} (D${w.system.damage}/R${w.system.range})`).join(", ");
 
       await ChatMessage.create({
         content: `<div class="star-mercs chat-card maneuver-fire-card">
-          <div class="summary-header unit-link" data-token-id="${token.id}"><i class="fas fa-running"></i> <strong>${token.name}</strong> — Maneuver Fire</div>
+          <div class="summary-header unit-link" data-token-id="${token.id}"><i class="fas fa-running"></i> <strong>${esc(token.name)}</strong> — Maneuver Fire</div>
           <div class="status-update">Weapons: ${weaponList}</div>
           <div class="status-update">Fires weapons with assigned targets. Accuracy penalty: +1 (Maneuver order)</div>
           <button class="maneuver-fire-btn"

@@ -302,4 +302,13 @@ export default class TacticalMarkerLayer extends PIXI.Container {
       default: "save"
     }).render(true);
   }
+
+  /**
+   * Clean up document-level event listeners before destroying the layer.
+   * @param {object} [options] - PIXI destroy options.
+   */
+  destroy(options) {
+    document.removeEventListener("contextmenu", this._contextMenuHandler, true);
+    super.destroy(options);
+  }
 }

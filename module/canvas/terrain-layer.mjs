@@ -806,7 +806,6 @@ export default class TerrainLayer extends PIXI.Container {
       }
     }
 
-    if (tMin > tMax) return null;
     return {
       x1: x1 + dx * tMin,
       y1: y1 + dy * tMin,

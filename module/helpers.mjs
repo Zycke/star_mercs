@@ -1,4 +1,14 @@
 /**
+ * Escape a string for safe insertion into HTML.
+ * Prevents XSS when interpolating user-controlled values (names, etc.) into template literals.
+ * @param {*} str - The value to escape (non-strings are converted).
+ * @returns {string}
+ */
+export function esc(str) {
+  return String(str ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" })[c]);
+}
+
+/**
  * Register custom Handlebars helpers for Star Mercs templates.
  */
 export function registerHandlebarsHelpers() {
