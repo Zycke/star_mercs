@@ -454,21 +454,21 @@ export default class StarMercsCombat extends Combat {
         }
       }
 
-      // 2c. Structure Entrenched: grant Entrenched from completed structures
+      // 2c. Structure Fortified: grant Fortified from completed structures
       if (token) {
         const tokenHex = snapToHexCenter(canvas.tokens.get(token.id)?.center ?? { x: 0, y: 0 });
         const structureAtHex = getStructureAtHex(tokenHex);
         if (structureAtHex && structureAtHex.turnsBuilt >= structureAtHex.turnsRequired
             && structureAtHex.strength > 0) {
           const sConfig = CONFIG.STARMERCS.structures[structureAtHex.type];
-          if (sConfig?.grantsEntrenched) {
-            const entrenchedTrait = actor.items.find(
-              i => i.type === "trait" && i.name.toLowerCase() === "entrenched"
+          if (sConfig?.grantsFortified) {
+            const fortifiedTrait = actor.items.find(
+              i => i.type === "trait" && i.name.toLowerCase() === "fortified"
             );
-            if (entrenchedTrait && !entrenchedTrait.system.active) {
-              await entrenchedTrait.update({ "system.active": true });
+            if (fortifiedTrait && !fortifiedTrait.system.active) {
+              await fortifiedTrait.update({ "system.active": true });
               sections.push(`<div class="consolidation-section entrench">
-                <div class="consolidation-section-header"><i class="fas fa-shield-alt"></i> Entrenched (${esc(sConfig.label)})</div>
+                <div class="consolidation-section-header"><i class="fas fa-shield-alt"></i> Fortified (${esc(sConfig.label)})</div>
               </div>`);
             }
           }
@@ -509,6 +509,7 @@ export default class StarMercsCombat extends Combat {
                     x: parseFloat(xStr),
                     y: parseFloat(yStr),
                     type: target.type,
+                    name: null,
                     team: actor.system.team ?? "a",
                     strength: merged.maxStrength,
                     maxStrength: merged.maxStrength,
@@ -519,7 +520,8 @@ export default class StarMercsCombat extends Combat {
                     subType: target.subType ?? null,
                     supply: null,
                     commsRange: null,
-                    supplyRange: null
+                    supplyRange: null,
+                    autoSupply: true
                   };
                   // Outpost-specific fields
                   if (target.type === "outpost") {
@@ -541,7 +543,7 @@ export default class StarMercsCombat extends Combat {
                   // Construction complete
                   structure.builderId = null;
                   await token.unsetFlag("star-mercs", "constructionTarget");
-                  const sLabel = CONFIG.STARMERCS.structures[target.type]?.label ?? target.type;
+                  const sLabel = structure.name ?? CONFIG.STARMERCS.structures[target.type]?.label ?? target.type;
                   sections.push(`<div class="consolidation-section construction">
                     <div class="consolidation-section-header"><i class="fas fa-check-circle"></i> Construction Complete!</div>
                     <div class="status-update">${esc(sLabel)} built at ${target.targetHexKey}.</div>
@@ -665,6 +667,7 @@ export default class StarMercsCombat extends Combat {
           if (s.type !== "outpost" || s.team !== supTeam) continue;
           if (s.turnsBuilt < s.turnsRequired || s.strength <= 0) continue;
           if (!s.supply) continue;
+          if (s.autoSupply === false) continue;
 
           const dx = supCenter.x - s.x;
           const dy = supCenter.y - s.y;

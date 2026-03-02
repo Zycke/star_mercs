@@ -625,9 +625,11 @@ export default class StarMercsUnitSheet extends ActorSheet {
     // Redraw arrows to remove stale movement arrows
     game.starmercs?.targetingArrowLayer?.drawArrows();
 
-    // Clear construction/demolish flags
+    // Clear construction/demolish flags (preserve constructionTarget for construct/fortify)
     if (token?.document) {
-      await token.document.unsetFlag("star-mercs", "constructionTarget");
+      if (selectedOrderKey !== "construct" && selectedOrderKey !== "fortify") {
+        await token.document.unsetFlag("star-mercs", "constructionTarget");
+      }
       await token.document.unsetFlag("star-mercs", "demolishTarget");
     }
 
@@ -745,10 +747,29 @@ export default class StarMercsUnitSheet extends ActorSheet {
    * Open the ConstructionPicker dialog when the Construct order is selected.
    * @private
    */
-  _promptConstructionTarget() {
+  async _promptConstructionTarget() {
     const myToken = this.actor.getActiveTokens()?.[0];
     if (!myToken) {
       ui.notifications.warn("Place this unit's token on the canvas first.");
+      return;
+    }
+
+    // Check for an in-progress structure built by this token
+    const structures = canvas.scene?.getFlag("star-mercs", "structures") ?? [];
+    const inProgress = structures.find(
+      s => s.builderId === myToken.id && s.turnsBuilt < s.turnsRequired
+    );
+    if (inProgress) {
+      // Auto-resume: set the flag and skip the picker
+      const config = CONFIG.STARMERCS.structures[inProgress.type];
+      await myToken.document.setFlag("star-mercs", "constructionTarget", {
+        type: inProgress.type,
+        targetHexKey: inProgress.hexKey,
+        subType: inProgress.subType ?? null
+      });
+      ui.notifications.info(
+        `Resuming construction: ${config?.label ?? inProgress.type} (${inProgress.turnsBuilt}/${inProgress.turnsRequired} turns)`
+      );
       return;
     }
 
@@ -781,6 +802,24 @@ export default class StarMercsUnitSheet extends ActorSheet {
       return;
     }
 
+    // Check for an in-progress fortification built by this token
+    const structures = canvas.scene?.getFlag("star-mercs", "structures") ?? [];
+    const inProgress = structures.find(
+      s => s.builderId === myToken.id && s.type === "fortification"
+         && s.turnsBuilt < s.turnsRequired
+    );
+    if (inProgress) {
+      await myToken.document.setFlag("star-mercs", "constructionTarget", {
+        type: "fortification",
+        targetHexKey: inProgress.hexKey,
+        subType: null
+      });
+      ui.notifications.info(
+        `Resuming fortification (${inProgress.turnsBuilt}/${inProgress.turnsRequired} turns)`
+      );
+      return;
+    }
+
     const unitHex = snapToHexCenter(myToken.center);
     const hexData = getHexData(unitHex);
     const terrainConfig = hexData ? CONFIG.STARMERCS.terrain[hexData.type] ?? null : null;
@@ -806,11 +845,11 @@ export default class StarMercsUnitSheet extends ActorSheet {
     }
 
     await myToken.document.setFlag("star-mercs", "constructionTarget", {
-      type: "entrenchment",
+      type: "fortification",
       targetHexKey: hexKey(unitHex),
       subType: null
     });
-    ui.notifications.info("Fortify target set: Entrenchment at current hex.");
+    ui.notifications.info("Fortify target set: Fortification at current hex.");
   }
 
   /**

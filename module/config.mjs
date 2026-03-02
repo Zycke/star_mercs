@@ -449,7 +449,7 @@ STARMERCS.structures = {
     turnsRequired: 3,
     materialsPerTurn: 3,
     canCapture: true,
-    grantsEntrenched: true,
+    grantsFortified: true,
     defaultCommsRange: 5,
     defaultSupplyRange: 3,
     defaultSupplyCapacity: {
@@ -458,16 +458,16 @@ STARMERCS.structures = {
     },
     description: "Fortified position providing cover, supplies, and comms relay."
   },
-  entrenchment: {
-    label: "Entrenchment",
+  fortification: {
+    label: "Fortification",
     icon: "fas fa-shield-alt",
     color: 0x88AA44,
     maxStrength: 2,
     turnsRequired: 1,
     materialsPerTurn: 1,
     canCapture: false,
-    grantsEntrenched: true,
-    description: "Field fortifications granting Entrenched trait to any occupying unit."
+    grantsFortified: true,
+    description: "Field fortifications granting Fortified trait to any occupying unit."
   }
 };
 
@@ -526,5 +526,6 @@ STARMERCS.tacticalMarkerTypes = {
   "spotted-unknown":    { label: "Unknown Unit",   icon: "?",    color: 0xFFAA00, category: "spotted" },
   "spotted-outpost":    { label: "Outpost",        icon: "OP",   color: 0xFFAA00, category: "spotted" },
   "spotted-base":       { label: "Base",           icon: "BS",   color: 0xFFAA00, category: "spotted" },
-  "spotted-bridge":     { label: "Bridge",         icon: "BR",   color: 0xFFAA00, category: "spotted" }
+  "spotted-bridge":     { label: "Bridge",         icon: "BR",   color: 0xFFAA00, category: "spotted" },
+  "spotted-minefield":  { label: "Minefield",      icon: "\u26A0",  color: 0xFF6600, category: "spotted" }
 };
