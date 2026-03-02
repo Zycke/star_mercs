@@ -13,6 +13,19 @@ export function snapToHexCenter(point) {
 }
 
 /**
+ * Convert a hex center coordinate to the top-left position expected by token.update().
+ * @param {{x: number, y: number}} center - Hex center pixel coordinates.
+ * @param {Token|TokenDocument} token - The token (for width/height).
+ * @returns {{x: number, y: number}}
+ */
+export function hexCenterToTokenPosition(center, token) {
+  const gridSize = canvas.grid.size || 100;
+  const tokenW = token.w ?? (token.document?.width ?? 1) * gridSize;
+  const tokenH = token.h ?? (token.document?.height ?? 1) * gridSize;
+  return { x: center.x - tokenW / 2, y: center.y - tokenH / 2 };
+}
+
+/**
  * Get a string key for a hex center point (for use in Maps/Sets).
  * @param {{x: number, y: number}} center
  * @returns {string}
@@ -409,8 +422,13 @@ export function getMovementCost(hexCenter, actor = null) {
     return { cost, passable: true, reason: null };
   }
 
-  // Bridge structure: completed bridge makes water passable + acts as road (1 MP)
+  // Bridge (terrain flag or structure): makes water passable at 1 MP
   if (config.waterTerrain) {
+    // Check terrain bridge flag first
+    if (data.bridge) {
+      return { cost: 1, passable: true, reason: null };
+    }
+    // Check completed bridge structures
     const structures = canvas.scene?.getFlag("star-mercs", "structures") ?? [];
     const bKey = hexKey(snapToHexCenter(hexCenter));
     const bridge = structures.find(s => s.type === "bridge" && s.hexKey === bKey

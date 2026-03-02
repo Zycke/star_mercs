@@ -1,4 +1,5 @@
-import { snapToHexCenter, hexKey, getAdjacentHexCenters } from "../hex-utils.mjs";
+import { snapToHexCenter, hexKey, getAdjacentHexCenters, normalizeHexData } from "../hex-utils.mjs";
+import StructureLayer from "../canvas/structure-layer.mjs";
 
 /**
  * Terrain Painter — a floating panel that lets the GM paint terrain types onto hex cells.
@@ -52,6 +53,11 @@ export default class TerrainPainter extends FormApplication {
 
     // Hover deduplication
     this._lastPreviewKey = null;
+
+    // Structure painting state
+    this._selectedStructure = "";       // "" = terrain mode
+    this._structureTeam = "a";
+    this._mineSubType = "antiPersonnel";
   }
 
   /** @override */
@@ -63,6 +69,8 @@ export default class TerrainPainter extends FormApplication {
     // Add special brushes
     terrainChoices["road"] = "Road Only";
     terrainChoices["removeRoad"] = "Remove Road";
+    terrainChoices["bridge"] = "Bridge (Water Only)";
+    terrainChoices["removeBridge"] = "Remove Bridge";
     terrainChoices["removeObjective"] = "Remove Objective";
 
     return {
@@ -73,7 +81,13 @@ export default class TerrainPainter extends FormApplication {
       selectedObjective: this._selectedObjective,
       brushSize: this._brushSize,
       maxElevation: CONFIG.STARMERCS.maxElevation ?? 5,
-      isActive: this._active
+      isActive: this._active,
+      selectedStructure: this._selectedStructure,
+      structureTeam: this._structureTeam,
+      mineSubType: this._mineSubType,
+      isStructureMode: !!this._selectedStructure,
+      isMinefieldMode: this._selectedStructure === "minefield",
+      isRemoveStructureMode: this._selectedStructure === "removeStructure"
     };
   }
 
@@ -91,6 +105,15 @@ export default class TerrainPainter extends FormApplication {
     }
     if (formData.brushSize != null) {
       this._brushSize = Math.max(1, Math.min(5, Number(formData.brushSize) || 1));
+    }
+    if (formData.selectedStructure != null) {
+      this._selectedStructure = formData.selectedStructure;
+    }
+    if (formData.structureTeam != null) {
+      this._structureTeam = formData.structureTeam;
+    }
+    if (formData.mineSubType != null) {
+      this._mineSubType = formData.mineSubType;
     }
   }
 
@@ -176,6 +199,13 @@ export default class TerrainPainter extends FormApplication {
     this._onPointerDown = (event) => {
       const button = event.button ?? event.data?.button ?? 0;
       if (!this._active || button !== 0) return;
+
+      // Structure mode: single click, no drag
+      if (this._selectedStructure) {
+        this._handleStructureClick(event);
+        return;
+      }
+
       this._beginDrag(event, false);
     };
 
@@ -200,7 +230,7 @@ export default class TerrainPainter extends FormApplication {
         if (key === this._lastPreviewKey) return;
         this._lastPreviewKey = key;
 
-        const radius = this._brushSize - 1;
+        const radius = this._selectedStructure ? 0 : this._brushSize - 1;
         const hexes = this._getHexesInRadius(center, radius);
         game.starmercs?.terrainLayer?.drawBrushPreview(hexes);
       }
@@ -303,6 +333,28 @@ export default class TerrainPainter extends FormApplication {
             : { ...existing, road: false };
           this._pendingTerrainMap[key] = normalized;
         }
+      } else if (this._selectedTerrain === "bridge") {
+        // Bridge brush: add bridge flag to existing water terrain
+        const existing = this._pendingTerrainMap[key];
+        if (existing) {
+          const normalized = (typeof existing === "string")
+            ? { type: existing, elevation: 0, bridge: true }
+            : { ...existing, bridge: true };
+          // Only apply to water terrain
+          const tConfig = CONFIG.STARMERCS?.terrain?.[normalized.type];
+          if (tConfig?.waterTerrain) {
+            this._pendingTerrainMap[key] = normalized;
+          }
+        }
+      } else if (this._selectedTerrain === "removeBridge") {
+        // Remove Bridge brush: clear bridge flag, keep everything else
+        const existing = this._pendingTerrainMap[key];
+        if (existing) {
+          const normalized = (typeof existing === "string")
+            ? { type: existing, elevation: 0, bridge: false }
+            : { ...existing, bridge: false };
+          this._pendingTerrainMap[key] = normalized;
+        }
       } else if (this._selectedTerrain === "removeObjective") {
         // Remove Objective brush: clear objective, keep everything else
         const existing = this._pendingTerrainMap[key];
@@ -331,6 +383,136 @@ export default class TerrainPainter extends FormApplication {
     if (anyNew) {
       game.starmercs?.terrainLayer?.drawPaintOverlay(this._changedKeys, this._pendingTerrainMap);
     }
+  }
+
+  /* ---------------------------------------- */
+  /*  Structure Painting                      */
+  /* ---------------------------------------- */
+
+  /**
+   * Handle a single click in structure mode (place or remove structure).
+   * @param {PIXI.InteractionEvent} event
+   * @private
+   */
+  async _handleStructureClick(event) {
+    const pos = this._getEventPos?.(event);
+    if (!pos) return;
+    const center = snapToHexCenter(pos);
+    const key = hexKey(center);
+
+    if (this._selectedStructure === "removeStructure") {
+      await this._removeStructureAtHex(key);
+    } else {
+      await this._placeStructureAtHex(center, key);
+    }
+  }
+
+  /**
+   * Place a fully-built structure at a hex.
+   * @param {{x: number, y: number}} center - Hex center coordinates.
+   * @param {string} key - Hex key string.
+   * @private
+   */
+  async _placeStructureAtHex(center, key) {
+    // Check for existing structure at this hex
+    const structures = canvas.scene?.getFlag("star-mercs", "structures") ?? [];
+    const existing = structures.find(s => s.hexKey === key);
+    if (existing) {
+      ui.notifications.warn("This hex already has a structure. Remove it first.");
+      return;
+    }
+
+    // Check terrain validity
+    const terrainMap = canvas.scene?.getFlag("star-mercs", "terrainMap") ?? {};
+    const rawEntry = terrainMap[key];
+    const hexData = rawEntry ? normalizeHexData(rawEntry) : null;
+    const terrainConfig = hexData ? (CONFIG.STARMERCS?.terrain?.[hexData.type] ?? null) : null;
+
+    // Cannot place on water terrain
+    if (terrainConfig?.waterTerrain) {
+      ui.notifications.warn("Cannot place structures on water terrain.");
+      return;
+    }
+
+    // Cannot place fortification/outpost on noFortification terrain
+    if (terrainConfig?.noFortification &&
+        (this._selectedStructure === "outpost" || this._selectedStructure === "fortification")) {
+      ui.notifications.warn("Cannot place fortifications on this terrain type.");
+      return;
+    }
+
+    const type = this._selectedStructure;
+    const config = StructureLayer.getStructureConfig(type);
+    if (!config) return;
+
+    // Build fully-constructed structure data
+    const structureData = {
+      hexKey: key,
+      x: center.x,
+      y: center.y,
+      type,
+      name: null,
+      team: this._structureTeam,
+      strength: config.maxStrength,
+      maxStrength: config.maxStrength,
+      turnsBuilt: config.turnsRequired,
+      turnsRequired: config.turnsRequired,
+      revealed: false,
+      builderId: null,
+      subType: type === "minefield" ? this._mineSubType : null,
+      supply: null,
+      commsRange: null,
+      supplyRange: null,
+      autoSupply: true
+    };
+
+    // Outpost-specific fields (empty supply)
+    if (type === "outpost") {
+      structureData.commsRange = config.defaultCommsRange ?? 5;
+      structureData.supplyRange = config.defaultSupplyRange ?? 3;
+      const caps = config.defaultSupplyCapacity ?? {};
+      structureData.supply = {};
+      for (const cat of ["smallArms", "heavyWeapons", "ordnance", "fuel", "materials", "parts", "basicSupplies"]) {
+        structureData.supply[cat] = { current: 0, capacity: caps[cat] ?? 0 };
+      }
+    }
+
+    await StructureLayer.createStructure(structureData);
+    game.starmercs?.structureLayer?.drawStructures();
+    ui.notifications.info(`${config.label} placed at ${key}.`);
+  }
+
+  /**
+   * Remove a structure from a hex.
+   * @param {string} key - Hex key string.
+   * @private
+   */
+  async _removeStructureAtHex(key) {
+    const structures = canvas.scene?.getFlag("star-mercs", "structures") ?? [];
+    const target = structures.find(s => s.hexKey === key);
+    if (!target) {
+      ui.notifications.warn("No structure at this hex.");
+      return;
+    }
+
+    const config = CONFIG.STARMERCS.structures[target.type];
+    await StructureLayer.removeStructure(target.id);
+
+    // Clear bridge terrain flag if removing a bridge
+    if (target.type === "bridge" && target.hexKey) {
+      const terrainMap = canvas.scene.getFlag("star-mercs", "terrainMap") ?? {};
+      if (terrainMap[target.hexKey]) {
+        const hexData = typeof terrainMap[target.hexKey] === "string"
+          ? { type: terrainMap[target.hexKey], elevation: 0 }
+          : { ...terrainMap[target.hexKey] };
+        delete hexData.bridge;
+        terrainMap[target.hexKey] = hexData;
+        await canvas.scene.setFlag("star-mercs", "terrainMap", terrainMap);
+      }
+    }
+
+    game.starmercs?.structureLayer?.drawStructures();
+    ui.notifications.info(`${config?.label ?? target.type} removed from ${key}.`);
   }
 
   /**

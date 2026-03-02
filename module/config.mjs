@@ -417,12 +417,12 @@ STARMERCS.structures = {
     icon: "fas fa-archway",
     color: 0xA0522D,
     maxStrength: 3,
-    turnsRequired: 2,
-    materialsPerTurn: 2,
+    turnsRequired: 3,
+    materialsPerTurn: 4,
     canCapture: false,
     requiresWater: true,
     adjacentBuild: true,
-    grantsEntrenched: false,
+    grantsFortified: false,
     description: "Allows non-aquatic units to cross water terrain."
   },
   minefield: {
