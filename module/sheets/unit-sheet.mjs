@@ -1,6 +1,8 @@
 import StarMercsActor from "../documents/actor.mjs";
-import { snapToHexCenter, hexKey, computeHexPath, calculatePathCost } from "../hex-utils.mjs";
+import { snapToHexCenter, hexKey, computeHexPath, calculatePathCost,
+  getHexData, getAdjacentHexCenters, getStructureAtHex, normalizeHexData } from "../hex-utils.mjs";
 import { checkLOS, getActiveSignature } from "../detection.mjs";
+import ConstructionPicker from "../apps/construction-picker.mjs";
 
 /**
  * Sheet class for Star Mercs Unit actors.
@@ -623,9 +625,30 @@ export default class StarMercsUnitSheet extends ActorSheet {
     // Redraw arrows to remove stale movement arrows
     game.starmercs?.targetingArrowLayer?.drawArrows();
 
+    // Clear construction/demolish flags
+    if (token?.document) {
+      await token.document.unsetFlag("star-mercs", "constructionTarget");
+      await token.document.unsetFlag("star-mercs", "demolishTarget");
+    }
+
     // If assault order selected, prompt for target selection
     if (selectedOrderKey === "assault") {
       this._promptAssaultTarget();
+    }
+
+    // If construct order selected, open ConstructionPicker
+    if (selectedOrderKey === "construct") {
+      this._promptConstructionTarget();
+    }
+
+    // If fortify order selected, auto-set entrenchment construction target
+    if (selectedOrderKey === "fortify") {
+      this._autoSetFortifyTarget();
+    }
+
+    // If demolish order selected, prompt for demolish target
+    if (selectedOrderKey === "demolish") {
+      this._promptDemolishTarget();
     }
   }
 
@@ -712,6 +735,162 @@ export default class StarMercsUnitSheet extends ActorSheet {
         cancel: {
           icon: '<i class="fas fa-times"></i>',
           label: "Cancel"
+        }
+      },
+      default: "confirm"
+    }).render(true);
+  }
+
+  /**
+   * Open the ConstructionPicker dialog when the Construct order is selected.
+   * @private
+   */
+  _promptConstructionTarget() {
+    const myToken = this.actor.getActiveTokens()?.[0];
+    if (!myToken) {
+      ui.notifications.warn("Place this unit's token on the canvas first.");
+      return;
+    }
+
+    const actor = this.actor;
+    new ConstructionPicker(
+      actor,
+      myToken,
+      async (selection) => {
+        // selection = { type, targetHexKey, subType }
+        await myToken.document.setFlag("star-mercs", "constructionTarget", selection);
+        const config = CONFIG.STARMERCS.structures[selection.type];
+        ui.notifications.info(`Construction target set: ${config?.label ?? selection.type}`);
+      },
+      async () => {
+        // Cancelled — revert order
+        await actor.update({ "system.currentOrder": "" });
+        ui.notifications.info("Construction order cancelled.");
+      }
+    ).render(true);
+  }
+
+  /**
+   * Auto-set entrenchment as the construction target for the Fortify order.
+   * @private
+   */
+  async _autoSetFortifyTarget() {
+    const myToken = this.actor.getActiveTokens()?.[0];
+    if (!myToken) {
+      ui.notifications.warn("Place this unit's token on the canvas first.");
+      return;
+    }
+
+    const unitHex = snapToHexCenter(myToken.center);
+    const hexData = getHexData(unitHex);
+    const terrainConfig = hexData ? CONFIG.STARMERCS.terrain[hexData.type] ?? null : null;
+
+    // Check terrain restrictions
+    if (terrainConfig?.waterTerrain) {
+      ui.notifications.warn("Cannot fortify on water terrain.");
+      await this.actor.update({ "system.currentOrder": "" });
+      return;
+    }
+    if (terrainConfig?.noFortification) {
+      ui.notifications.warn("Cannot fortify on this terrain.");
+      await this.actor.update({ "system.currentOrder": "" });
+      return;
+    }
+
+    // Check for existing structure
+    const existing = getStructureAtHex(unitHex);
+    if (existing) {
+      ui.notifications.warn("This hex already has a structure.");
+      await this.actor.update({ "system.currentOrder": "" });
+      return;
+    }
+
+    await myToken.document.setFlag("star-mercs", "constructionTarget", {
+      type: "entrenchment",
+      targetHexKey: hexKey(unitHex),
+      subType: null
+    });
+    ui.notifications.info("Fortify target set: Entrenchment at current hex.");
+  }
+
+  /**
+   * Prompt the user to select a demolish target from available structures.
+   * @private
+   */
+  _promptDemolishTarget() {
+    const myToken = this.actor.getActiveTokens()?.[0];
+    if (!myToken) {
+      ui.notifications.warn("Place this unit's token on the canvas first.");
+      return;
+    }
+
+    const structures = canvas.scene?.getFlag("star-mercs", "structures") ?? [];
+    const unitHex = snapToHexCenter(myToken.center);
+    const unitHK = hexKey(unitHex);
+    const validTargets = [];
+
+    for (const s of structures) {
+      if (s.hexKey === unitHK) {
+        // Structure on same hex — always valid
+        const config = CONFIG.STARMERCS.structures[s.type];
+        validTargets.push({ id: s.id, label: `${config?.label ?? s.type} (current hex)` });
+        continue;
+      }
+
+      // Check adjacent hexes with no units
+      const adjacents = getAdjacentHexCenters(unitHex);
+      for (const adj of adjacents) {
+        if (hexKey(adj) === s.hexKey) {
+          // Check no units on that hex
+          const tokensAtHex = canvas.tokens.placeables.filter(t => {
+            const tc = snapToHexCenter(t.center);
+            return hexKey(tc) === s.hexKey;
+          });
+          if (tokensAtHex.length === 0) {
+            const config = CONFIG.STARMERCS.structures[s.type];
+            validTargets.push({ id: s.id, label: `${config?.label ?? s.type} (adjacent hex)` });
+          }
+          break;
+        }
+      }
+    }
+
+    if (validTargets.length === 0) {
+      ui.notifications.warn("No valid structures to demolish nearby.");
+      this.actor.update({ "system.currentOrder": "" });
+      return;
+    }
+
+    const optionsHtml = validTargets.map(t =>
+      `<option value="${t.id}">${t.label}</option>`
+    ).join("");
+
+    const actor = this.actor;
+    new Dialog({
+      title: "Select Demolish Target",
+      content: `<form><div class="form-group">
+        <label>Select structure to demolish</label>
+        <select id="demolish-target">${optionsHtml}</select>
+      </div></form>`,
+      buttons: {
+        confirm: {
+          icon: '<i class="fas fa-hammer"></i>',
+          label: "Confirm",
+          callback: async (html) => {
+            const structureId = html.find("#demolish-target").val();
+            const token = actor.getActiveTokens()?.[0];
+            if (token?.document && structureId) {
+              await token.document.setFlag("star-mercs", "demolishTarget", { structureId });
+              ui.notifications.info("Demolish target set.");
+            }
+          }
+        },
+        cancel: {
+          icon: '<i class="fas fa-times"></i>',
+          label: "Cancel",
+          callback: async () => {
+            await actor.update({ "system.currentOrder": "" });
+          }
         }
       },
       default: "confirm"

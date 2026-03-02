@@ -364,6 +364,19 @@ export function getHexRoad(hexCenter) {
 }
 
 /**
+ * Get a completed structure at a hex (if any).
+ * Returns the first structure found, or null.
+ * @param {{x: number, y: number}} hexCenter - The hex center to check.
+ * @returns {object|null} The structure data object, or null.
+ */
+export function getStructureAtHex(hexCenter) {
+  const snapped = snapToHexCenter(hexCenter);
+  const key = hexKey(snapped);
+  const structures = canvas.scene?.getFlag("star-mercs", "structures") ?? [];
+  return structures.find(s => s.hexKey === key) ?? null;
+}
+
+/**
  * Calculate the movement point cost to enter a hex.
  * Flying and Hover units always pay 1 MP regardless of terrain.
  * Water terrain is impassable unless the unit has Flying, Hover, or Amphibious.
@@ -394,6 +407,17 @@ export function getMovementCost(hexCenter, actor = null) {
     let cost = Math.max(1, terrainCost - 1);
     if (hasRoad) cost = Math.max(1, cost - 1);
     return { cost, passable: true, reason: null };
+  }
+
+  // Bridge structure: completed bridge makes water passable + acts as road (1 MP)
+  if (config.waterTerrain) {
+    const structures = canvas.scene?.getFlag("star-mercs", "structures") ?? [];
+    const bKey = hexKey(snapToHexCenter(hexCenter));
+    const bridge = structures.find(s => s.type === "bridge" && s.hexKey === bKey
+      && s.turnsBuilt >= s.turnsRequired && s.strength > 0);
+    if (bridge) {
+      return { cost: 1, passable: true, reason: null };
+    }
   }
 
   // Water terrain check
