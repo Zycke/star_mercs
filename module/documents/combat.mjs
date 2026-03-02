@@ -1,7 +1,7 @@
 import StarMercsActor from "./actor.mjs";
 import { esc } from "../helpers.mjs";
-import { snapToHexCenter, hexKey, getAdjacentHexCenters, getTokensAtHex,
-  areAdjacent, getAdjacentEnemies, isEngaged, computeHexPath,
+import { snapToHexCenter, hexKey, hexCenterToTokenPosition, getAdjacentHexCenters,
+  getTokensAtHex, areAdjacent, getAdjacentEnemies, isEngaged, computeHexPath,
   validatePath, findBestAdjacentHex, getLastSafeHex,
   calculatePathCost, normalizeHexData, getStructureAtHex } from "../hex-utils.mjs";
 import { getDetectionLevel, checkLOS } from "../detection.mjs";
@@ -548,6 +548,18 @@ export default class StarMercsCombat extends Combat {
                     <div class="consolidation-section-header"><i class="fas fa-check-circle"></i> Construction Complete!</div>
                     <div class="status-update">${esc(sLabel)} built at ${target.targetHexKey}.</div>
                   </div>`);
+
+                  // Bridge completion: set bridge flag on terrain hex data
+                  if (target.type === "bridge") {
+                    const terrainMap = canvas.scene.getFlag("star-mercs", "terrainMap") ?? {};
+                    const tKey = target.targetHexKey;
+                    if (terrainMap[tKey]) {
+                      terrainMap[tKey] = typeof terrainMap[tKey] === "string"
+                        ? { type: terrainMap[tKey], elevation: 0, bridge: true }
+                        : { ...terrainMap[tKey], bridge: true };
+                      await canvas.scene.setFlag("star-mercs", "terrainMap", terrainMap);
+                    }
+                  }
                 } else {
                   sections.push(`<div class="consolidation-section construction">
                     <div class="consolidation-section-header"><i class="fas fa-hammer"></i> Construction Progress</div>
@@ -583,6 +595,18 @@ export default class StarMercsCombat extends Combat {
                 await canvas.scene.unsetFlag("star-mercs", "structures");
               } else {
                 await canvas.scene.setFlag("star-mercs", "structures", structures);
+              }
+              // Clear bridge terrain flag when bridge is demolished
+              if (demolished.type === "bridge" && demolished.hexKey) {
+                const terrainMap = canvas.scene.getFlag("star-mercs", "terrainMap") ?? {};
+                if (terrainMap[demolished.hexKey]) {
+                  const hexData = typeof terrainMap[demolished.hexKey] === "string"
+                    ? { type: terrainMap[demolished.hexKey], elevation: 0 }
+                    : { ...terrainMap[demolished.hexKey] };
+                  delete hexData.bridge;
+                  terrainMap[demolished.hexKey] = hexData;
+                  await canvas.scene.setFlag("star-mercs", "terrainMap", terrainMap);
+                }
               }
               await token.unsetFlag("star-mercs", "demolishTarget");
               sections.push(`<div class="consolidation-section demolish">
@@ -1794,9 +1818,10 @@ export default class StarMercsCombat extends Combat {
       const distance = StarMercsActor.getHexDistance(attackerToken, targetToken);
       const hexesMoved = Math.max(0, distance - 1);
 
-      // Snap to hex center for proper token positioning
+      // Snap to hex center and offset to token top-left for proper positioning
       const snapped = snapToHexCenter(adjacentHex);
-      await token.update({ x: snapped.x, y: snapped.y }, { _starMercsAutoMove: true });
+      const pos = hexCenterToTokenPosition(snapped, canvas.tokens.get(token.id) ?? token);
+      await token.update({ x: pos.x, y: pos.y }, { _starMercsAutoMove: true });
 
       // Track movement for fuel consumption
       await token.setFlag("star-mercs", "movementUsed", hexesMoved);
@@ -1968,7 +1993,8 @@ export default class StarMercsCombat extends Combat {
         if (safePath.length > 0) {
           const safeHex = safePath[safePath.length - 1];
           const snapped = snapToHexCenter(safeHex);
-          await mover.token.update({ x: snapped.x, y: snapped.y }, { _starMercsAutoMove: true });
+          const safePos = hexCenterToTokenPosition(snapped, mover.token);
+          await mover.token.update({ x: safePos.x, y: safePos.y }, { _starMercsAutoMove: true });
           const { totalCost: safeCost } = calculatePathCost(canvasToken.center, safePath, mover.actor);
           await mover.token.setFlag("star-mercs", "movementUsed", safeCost);
         }
@@ -2035,14 +2061,16 @@ export default class StarMercsCombat extends Combat {
         // Animate through each waypoint with brief pauses
         for (const wp of moveWaypoints) {
           const wpSnapped = snapToHexCenter(wp);
-          await mover.token.update({ x: wpSnapped.x, y: wpSnapped.y }, { _starMercsAutoMove: true });
+          const wpPos = hexCenterToTokenPosition(wpSnapped, mover.token);
+          await mover.token.update({ x: wpPos.x, y: wpPos.y }, { _starMercsAutoMove: true });
           await new Promise(r => setTimeout(r, 200));
         }
       } else {
         // Single destination — move directly
         const finalHex = path[path.length - 1];
         const snapped = snapToHexCenter(finalHex);
-        await mover.token.update({ x: snapped.x, y: snapped.y }, { _starMercsAutoMove: true });
+        const finalPos = hexCenterToTokenPosition(snapped, mover.token);
+        await mover.token.update({ x: finalPos.x, y: finalPos.y }, { _starMercsAutoMove: true });
       }
       await mover.token.setFlag("star-mercs", "movementUsed", totalCost);
       movedCount++;

@@ -1,4 +1,5 @@
 <form class="star-mercs terrain-painter-form">
+  {{#unless isStructureMode}}
   <div class="form-group">
     <label>Terrain Type</label>
     <select name="selectedTerrain">
@@ -32,6 +33,44 @@
     <label>Brush Size: {{brushSize}}</label>
     <input type="range" name="brushSize" value="{{brushSize}}" min="1" max="5" step="1"/>
   </div>
+  {{/unless}}
+
+  <hr/>
+  <h4>Structure Placement</h4>
+
+  <div class="form-group">
+    <label>Structure Brush</label>
+    <select name="selectedStructure">
+      <option value="" {{#unless selectedStructure}}selected{{/unless}}>-- Terrain Mode --</option>
+      <option value="minefield" {{#if (eq selectedStructure "minefield")}}selected{{/if}}>Minefield</option>
+      <option value="outpost" {{#if (eq selectedStructure "outpost")}}selected{{/if}}>Outpost</option>
+      <option value="fortification" {{#if (eq selectedStructure "fortification")}}selected{{/if}}>Fortification</option>
+      <option value="removeStructure" {{#if (eq selectedStructure "removeStructure")}}selected{{/if}}>Remove Structure</option>
+    </select>
+  </div>
+
+  {{#if isStructureMode}}
+    {{#unless isRemoveStructureMode}}
+    <div class="form-group">
+      <label>Team</label>
+      <select name="structureTeam">
+        <option value="none" {{#if (eq structureTeam "none")}}selected{{/if}}>None (Neutral)</option>
+        <option value="a" {{#if (eq structureTeam "a")}}selected{{/if}}>Team A (Blue)</option>
+        <option value="b" {{#if (eq structureTeam "b")}}selected{{/if}}>Team B (Red)</option>
+      </select>
+    </div>
+    {{/unless}}
+
+    {{#if isMinefieldMode}}
+    <div class="form-group">
+      <label>Minefield Type</label>
+      <select name="mineSubType">
+        <option value="antiPersonnel" {{#if (eq mineSubType "antiPersonnel")}}selected{{/if}}>Anti-Personnel</option>
+        <option value="antiArmor" {{#if (eq mineSubType "antiArmor")}}selected{{/if}}>Anti-Armor</option>
+      </select>
+    </div>
+    {{/if}}
+  {{/if}}
 
   <div class="form-group terrain-painter-buttons">
     <button type="button" class="toggle-painting {{#if isActive}}active{{/if}}">
@@ -47,7 +86,12 @@
   </div>
 
   <p class="notes">
+    {{#if isStructureMode}}
+    <strong>Left-click</strong> to place/remove structures.<br/>
+    <strong>Right-click/drag</strong> to erase terrain.
+    {{else}}
     <strong>Left-click/drag</strong> to paint terrain.<br/>
     <strong>Right-click/drag</strong> to erase terrain.
+    {{/if}}
   </p>
 </form>

@@ -52,6 +52,9 @@ export default class TerrainLayer extends PIXI.Container {
   static ROAD_LINE_WIDTH = 2;
   static ROAD_LINE_ALPHA = 0.7;
   static ROAD_DOT_RADIUS = 3;
+  static BRIDGE_COLOR = 0x8B4513;
+  static BRIDGE_LINE_WIDTH = 3;
+  static BRIDGE_LINE_ALPHA = 0.8;
   static ERASE_MASK_ALPHA = 0.6;
   static LABEL_FONT_SIZE = 10;
   static STAR_PRIMARY_RADIUS = 14;
@@ -146,22 +149,24 @@ export default class TerrainLayer extends PIXI.Container {
     const terrainConfig = CONFIG.STARMERCS?.terrain ?? {};
     const objectiveConfig = CONFIG.STARMERCS?.objectives ?? {};
 
-    // Pre-build lookup maps for terrain group borders, contour lines, and road network
+    // Pre-build lookup maps for terrain group borders, contour lines, and road/bridge networks
     const typeByKey = new Map();
     const elevByKey = new Map();
     const roadByKey = new Set();
+    const bridgeByKey = new Set();
     for (const [key, rawEntry] of Object.entries(terrainMap)) {
       const hexData = normalizeHexData(rawEntry);
       typeByKey.set(key, hexData.type);
       elevByKey.set(key, hexData.elevation ?? 0);
       if (hexData.road || terrainConfig[hexData.type]?.hasRoad) roadByKey.add(key);
+      if (hexData.bridge) bridgeByKey.add(key);
     }
 
-    // Add completed bridge structures to road network
+    // Add completed bridge structures to bridge network
     const structures = canvas.scene?.getFlag("star-mercs", "structures") ?? [];
     for (const s of structures) {
       if (s.type === "bridge" && s.turnsBuilt >= s.turnsRequired && s.strength > 0) {
-        roadByKey.add(s.hexKey);
+        bridgeByKey.add(s.hexKey);
       }
     }
 
@@ -204,6 +209,11 @@ export default class TerrainLayer extends PIXI.Container {
 
     // Draw road network lines (second pass — renders on top of all terrain fills/patterns)
     this._drawRoadNetwork(this.terrainGraphics, roadByKey, shape, centerX, centerY, edgeOutwardDirs);
+
+    // Draw bridge network lines (connects to adjacent bridges and roads)
+    if (bridgeByKey.size > 0) {
+      this._drawBridgeNetwork(this.terrainGraphics, bridgeByKey, roadByKey, shape, centerX, centerY, edgeOutwardDirs);
+    }
   }
 
   /**
@@ -435,6 +445,70 @@ export default class TerrainLayer extends PIXI.Container {
       const [xStr, yStr] = key.split(",");
       const center = { x: parseFloat(xStr), y: parseFloat(yStr) };
       this._drawRoadLinesForHex(g, center, shape, centerX, centerY, edgeOutwardDirs, (nKey) => roadByKey.has(nKey));
+    }
+  }
+
+  /**
+   * Draw the bridge network — lines from each bridge hex center to adjacent bridge/road hexes.
+   * Uses a distinct brown color and thicker lines than roads.
+   * @param {PIXI.Graphics} g - Target graphics object.
+   * @param {Set<string>} bridgeByKey - Set of hex keys that have bridges.
+   * @param {Set<string>} roadByKey - Set of hex keys that have roads.
+   * @param {Array<{x: number, y: number}>} shape - Hex vertex offsets.
+   * @param {number} centerX - Shape centroid X offset.
+   * @param {number} centerY - Shape centroid Y offset.
+   * @param {Array<{x: number, y: number}>} edgeOutwardDirs - Precomputed outward unit vectors per edge.
+   * @private
+   */
+  _drawBridgeNetwork(g, bridgeByKey, roadByKey, shape, centerX, centerY, edgeOutwardDirs) {
+    for (const key of bridgeByKey) {
+      const [xStr, yStr] = key.split(",");
+      const center = { x: parseFloat(xStr), y: parseFloat(yStr) };
+      const topLeft = { x: center.x - centerX, y: center.y - centerY };
+      const neighbors = getAdjacentHexCenters(center);
+
+      // Match each neighbor to an edge via dot product
+      let connectedEdges = 0;
+      const edgeMidpoints = [];
+      for (let edgeIdx = 0; edgeIdx < shape.length; edgeIdx++) {
+        const dir = edgeOutwardDirs[edgeIdx];
+        let bestKey = null;
+        let bestDot = -Infinity;
+        for (const n of neighbors) {
+          const dx = n.x - center.x;
+          const dy = n.y - center.y;
+          const len = Math.sqrt(dx * dx + dy * dy);
+          if (len === 0) continue;
+          const dot = (dx / len) * dir.x + (dy / len) * dir.y;
+          if (dot > bestDot) {
+            bestDot = dot;
+            bestKey = hexKey(n);
+          }
+        }
+        // Connect to adjacent bridge OR road hexes
+        if (bestKey && (bridgeByKey.has(bestKey) || roadByKey.has(bestKey))) {
+          const next = (edgeIdx + 1) % shape.length;
+          const midX = topLeft.x + (shape[edgeIdx].x + shape[next].x) / 2;
+          const midY = topLeft.y + (shape[edgeIdx].y + shape[next].y) / 2;
+          edgeMidpoints.push({ x: midX, y: midY });
+          connectedEdges++;
+        }
+      }
+
+      g.lineStyle(TerrainLayer.BRIDGE_LINE_WIDTH, TerrainLayer.BRIDGE_COLOR, TerrainLayer.BRIDGE_LINE_ALPHA);
+
+      if (connectedEdges === 0) {
+        // Isolated bridge hex — draw a small circle
+        g.lineStyle(0);
+        g.beginFill(TerrainLayer.BRIDGE_COLOR, TerrainLayer.BRIDGE_LINE_ALPHA);
+        g.drawCircle(center.x, center.y, TerrainLayer.ROAD_DOT_RADIUS + 1);
+        g.endFill();
+      } else {
+        for (const mid of edgeMidpoints) {
+          g.moveTo(center.x, center.y);
+          g.lineTo(mid.x, mid.y);
+        }
+      }
     }
   }
 
@@ -839,9 +913,12 @@ export default class TerrainLayer extends PIXI.Container {
     if (elevation > 0) parts.push(`E:${elevation}`);
     if (objective === "primary") parts.push("P");
     else if (objective === "secondary") parts.push("S");
-    const subtitle = parts.join(" ");
 
-    const displayText = subtitle ? `${label}\n${subtitle}` : label;
+    // Only render if there's something to show (no terrain name)
+    if (parts.length === 0) return;
+
+    const displayText = parts.join(" ");
+    const hexRadius = (canvas.grid.size || 100) * 0.5;
 
     const text = new PIXI.Text(displayText, {
       fontFamily: "Signika",
@@ -852,7 +929,7 @@ export default class TerrainLayer extends PIXI.Container {
       align: "center"
     });
     text.anchor.set(0.5, 0.5);
-    text.position.set(center.x, center.y);
+    text.position.set(center.x, center.y + hexRadius * 0.35);
     text.alpha = 0.7;
     this.labelContainer.addChild(text);
   }

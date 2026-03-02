@@ -49,12 +49,12 @@ export default class StructureLayer extends PIXI.Container {
   static HEALTH_BAR_HEIGHT = 3;
   static HEALTH_BAR_OFFSET_Y = 26;
   static HIT_RADIUS = 20;
-  static VERTICAL_OFFSET_RATIO = 0.28;
 
   /** Team color map */
   static TEAM_COLORS = {
     a: 0x3399FF,
-    b: 0xFF3333
+    b: 0xFF3333,
+    none: 0x999999
   };
 
   /* ---------------------------------------- */
@@ -188,8 +188,7 @@ export default class StructureLayer extends PIXI.Container {
     if (!config) return;
 
     const group = new PIXI.Container();
-    const yOffset = (canvas.grid.size || 100) * StructureLayer.VERTICAL_OFFSET_RATIO;
-    group.position.set(structure.x, structure.y - yOffset);
+    group.position.set(structure.x, structure.y);
 
     const isComplete = structure.turnsBuilt >= structure.turnsRequired;
     const teamColor = StructureLayer.TEAM_COLORS[structure.team] ?? 0xCCCCCC;
@@ -252,20 +251,19 @@ export default class StructureLayer extends PIXI.Container {
       }
     }
 
-    // Team indicator for GM
-    if (isGM) {
-      const teamLabel = new PIXI.Text(`T:${structure.team.toUpperCase()}`, {
-        fontFamily: "Roboto, Segoe UI, sans-serif",
-        fontSize: 8,
-        fill: teamColor,
-        stroke: 0x000000,
-        strokeThickness: 2,
-        align: "center"
-      });
-      teamLabel.anchor.set(0.5, 1);
-      teamLabel.position.set(0, -StructureLayer.ICON_RADIUS - 2);
-      group.addChild(teamLabel);
-    }
+    // Team indicator — visible to all users
+    const teamStr = structure.team === "none" ? "Neutral" : `Team ${(structure.team ?? "none").toUpperCase()}`;
+    const teamLabel = new PIXI.Text(teamStr, {
+      fontFamily: "Roboto, Segoe UI, sans-serif",
+      fontSize: 8,
+      fill: teamColor,
+      stroke: 0x000000,
+      strokeThickness: 2,
+      align: "center"
+    });
+    teamLabel.anchor.set(0.5, 1);
+    teamLabel.position.set(0, -StructureLayer.ICON_RADIUS - 2);
+    group.addChild(teamLabel);
 
     this.structureContainer.addChild(group);
   }
@@ -342,9 +340,8 @@ export default class StructureLayer extends PIXI.Container {
         if (!isGM && structure.team !== myTeam) continue;
       }
 
-      const yOff = (canvas.grid.size || 100) * StructureLayer.VERTICAL_OFFSET_RATIO;
       const dx = pos.x - structure.x;
-      const dy = pos.y - (structure.y - yOff);
+      const dy = pos.y - structure.y;
       if (dx * dx + dy * dy <= hitRadius * hitRadius) {
         this._suppressContextMenu = true;
         this._showStructureContextMenu(structure, pos);
@@ -380,7 +377,7 @@ export default class StructureLayer extends PIXI.Container {
 
     const content = `<div class="star-mercs structure-inspect">
       <h3>${esc(displayName)}</h3>
-      <p><strong>Team:</strong> ${structure.team.toUpperCase()}</p>
+      <p><strong>Team:</strong> ${structure.team === "none" ? "Neutral" : "Team " + (structure.team ?? "none").toUpperCase()}</p>
       <p><strong>Status:</strong> ${statusText}</p>
       <p><strong>${healthText}</strong></p>
       <p><em>${esc(config.description)}</em></p>
@@ -471,7 +468,8 @@ export default class StructureLayer extends PIXI.Container {
           icon: '<i class="fas fa-check"></i>',
           label: "Save",
           callback: (html) => {
-            const name = html.querySelector('[name="name"]').value.trim() || null;
+            const el = html instanceof HTMLElement ? html : html[0] ?? html;
+            const name = el.querySelector('[name="name"]').value.trim() || null;
             StructureLayer.updateStructure(structure.id, { name });
           }
         },
@@ -545,15 +543,16 @@ export default class StructureLayer extends PIXI.Container {
           icon: '<i class="fas fa-check"></i>',
           label: "Save",
           callback: (html) => {
+            const el = html instanceof HTMLElement ? html : html[0] ?? html;
             const changes = {};
-            const nameVal = html.querySelector('[name="name"]').value.trim();
+            const nameVal = el.querySelector('[name="name"]').value.trim();
             changes.name = nameVal || null;
             changes.strength = Math.clamped(
-              parseInt(html.querySelector('[name="strength"]').value) || 0,
+              parseInt(el.querySelector('[name="strength"]').value) || 0,
               0, structure.maxStrength
             );
             const newTurns = Math.clamped(
-              parseInt(html.querySelector('[name="turnsBuilt"]').value) || 0,
+              parseInt(el.querySelector('[name="turnsBuilt"]').value) || 0,
               0, structure.turnsRequired
             );
             changes.turnsBuilt = newTurns;
@@ -567,7 +566,7 @@ export default class StructureLayer extends PIXI.Container {
               for (const cat of supplyCats) {
                 const cap = supply[cat]?.capacity ?? 0;
                 supply[cat].current = Math.clamped(
-                  parseInt(html.querySelector(`[name="supply-${cat}"]`).value) || 0,
+                  parseInt(el.querySelector(`[name="supply-${cat}"]`).value) || 0,
                   0, cap
                 );
               }
@@ -657,8 +656,9 @@ export default class StructureLayer extends PIXI.Container {
           icon: '<i class="fas fa-truck"></i>',
           label: "Transfer",
           callback: async (html) => {
-            const dir = html.querySelector('[name="direction"]').value;
-            const tokenId = html.querySelector('[name="unit"]').value;
+            const el = html instanceof HTMLElement ? html : html[0] ?? html;
+            const dir = el.querySelector('[name="direction"]').value;
+            const tokenId = el.querySelector('[name="unit"]').value;
             const targetToken = canvas.tokens.get(tokenId);
             if (!targetToken?.actor) return;
 
@@ -670,7 +670,7 @@ export default class StructureLayer extends PIXI.Container {
             const actorUpdates = {};
 
             for (const cat of supplyCats) {
-              const inputVal = parseInt(html.querySelector(`[data-category="${cat}"]`).value) || 0;
+              const inputVal = parseInt(el.querySelector(`[data-category="${cat}"]`).value) || 0;
               if (inputVal <= 0) continue;
 
               const outpostCur = s.supply[cat]?.current ?? 0;
@@ -847,6 +847,18 @@ export default class StructureLayer extends PIXI.Container {
     const destroyed = target.strength <= 0;
 
     if (destroyed) {
+      // Clear bridge terrain flag when bridge is destroyed by attack
+      if (structure.type === "bridge" && structure.hexKey) {
+        const terrainMap = canvas.scene.getFlag("star-mercs", "terrainMap") ?? {};
+        if (terrainMap[structure.hexKey]) {
+          const hexData = typeof terrainMap[structure.hexKey] === "string"
+            ? { type: terrainMap[structure.hexKey], elevation: 0 }
+            : { ...terrainMap[structure.hexKey] };
+          delete hexData.bridge;
+          terrainMap[structure.hexKey] = hexData;
+          await canvas.scene.setFlag("star-mercs", "terrainMap", terrainMap);
+        }
+      }
       const updated = structures.filter(s => s.id !== structure.id);
       if (updated.length === 0) {
         await canvas.scene.unsetFlag("star-mercs", "structures");
