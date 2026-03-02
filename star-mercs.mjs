@@ -218,6 +218,44 @@ Hooks.once("ready", () => {
       const combat = game.combat;
       if (combat?.started) await combat.nextTurn();
     }
+
+    // Tactical marker operations relayed from players
+    if (data.action === "tacticalMarker") {
+      const scene = game.scenes.get(data.sceneId);
+      if (!scene) return;
+      const existing = scene.getFlag("star-mercs", "tacticalMarkers") ?? [];
+
+      switch (data.op) {
+        case "create": {
+          const marker = { id: foundry.utils.randomID(), ...data.data };
+          existing.push(marker);
+          await scene.setFlag("star-mercs", "tacticalMarkers", existing);
+          break;
+        }
+        case "remove": {
+          const updated = existing.filter(m => m.id !== data.markerId);
+          await scene.setFlag("star-mercs", "tacticalMarkers", updated);
+          break;
+        }
+        case "update": {
+          const idx = existing.findIndex(m => m.id === data.markerId);
+          if (idx !== -1) {
+            Object.assign(existing[idx], data.changes);
+            await scene.setFlag("star-mercs", "tacticalMarkers", existing);
+          }
+          break;
+        }
+        case "clearTeam": {
+          const updated = existing.filter(m => m.team !== data.team);
+          if (updated.length === 0) {
+            await scene.unsetFlag("star-mercs", "tacticalMarkers");
+          } else {
+            await scene.setFlag("star-mercs", "tacticalMarkers", updated);
+          }
+          break;
+        }
+      }
+    }
   });
 });
 
@@ -341,6 +379,7 @@ Hooks.on("canvasReady", () => {
   const firingBlipLayer = new FiringBlipLayer();
   game.starmercs.firingBlipLayer = firingBlipLayer;
   canvas.interface.addChild(firingBlipLayer);
+  firingBlipLayer.activateListeners();
   firingBlipLayer.drawFiringBlips();
 
   // Tactical marker overlay
@@ -351,6 +390,7 @@ Hooks.on("canvasReady", () => {
   const tacticalMarkerLayer = new TacticalMarkerLayer();
   game.starmercs.tacticalMarkerLayer = tacticalMarkerLayer;
   canvas.interface.addChild(tacticalMarkerLayer);
+  tacticalMarkerLayer.activateListeners();
   tacticalMarkerLayer.drawMarkers();
 });
 
@@ -1031,9 +1071,6 @@ Hooks.on("getSceneControlButtons", (controls) => {
     active: game.settings.get("star-mercs", "showTargetingArrows"),
     onChange: (event, active) => {
       game.settings.set("star-mercs", "showTargetingArrows", active);
-    },
-    onClick: (toggled) => {
-      game.settings.set("star-mercs", "showTargetingArrows", toggled);
     }
   };
 
@@ -1046,9 +1083,6 @@ Hooks.on("getSceneControlButtons", (controls) => {
     active: game.settings.get("star-mercs", "showCommsLinks"),
     onChange: (event, active) => {
       game.settings.set("star-mercs", "showCommsLinks", active);
-    },
-    onClick: (toggled) => {
-      game.settings.set("star-mercs", "showCommsLinks", toggled);
     }
   };
 
@@ -1061,9 +1095,6 @@ Hooks.on("getSceneControlButtons", (controls) => {
     active: game.settings.get("star-mercs", "showTerrainOverlay"),
     onChange: (event, active) => {
       game.settings.set("star-mercs", "showTerrainOverlay", active);
-    },
-    onClick: (toggled) => {
-      game.settings.set("star-mercs", "showTerrainOverlay", toggled);
     }
   };
 
@@ -1073,7 +1104,7 @@ Hooks.on("getSceneControlButtons", (controls) => {
     icon: "fas fa-paint-brush",
     visible: game.user.isGM,
     toggle: false,
-    onClick: () => {
+    onChange: () => {
       new TerrainPainter().render(true);
     }
   };
@@ -1087,9 +1118,6 @@ Hooks.on("getSceneControlButtons", (controls) => {
     active: game.settings.get("star-mercs", "showDetectionOverlay"),
     onChange: (event, active) => {
       game.settings.set("star-mercs", "showDetectionOverlay", active);
-    },
-    onClick: (toggled) => {
-      game.settings.set("star-mercs", "showDetectionOverlay", toggled);
     }
   };
 
@@ -1099,7 +1127,7 @@ Hooks.on("getSceneControlButtons", (controls) => {
     icon: "fas fa-users-cog",
     visible: game.user.isGM,
     toggle: false,
-    onClick: () => {
+    onChange: () => {
       new TeamSettingsForm().render(true);
     }
   };
@@ -1110,7 +1138,7 @@ Hooks.on("getSceneControlButtons", (controls) => {
     icon: "fas fa-map-marker-alt",
     visible: true,
     toggle: false,
-    onClick: () => {
+    onChange: () => {
       new TacticalMarkerPainter().render(true);
     }
   };
@@ -1124,16 +1152,6 @@ Hooks.on("getSceneControlButtons", (controls) => {
     active: game.starmercs?.turnControlPanel?.rendered ?? false,
     onChange: (event, active) => {
       if (active) {
-        if (!game.starmercs.turnControlPanel) {
-          game.starmercs.turnControlPanel = new TurnControlPanel();
-        }
-        game.starmercs.turnControlPanel.render(true);
-      } else {
-        game.starmercs.turnControlPanel?.close();
-      }
-    },
-    onClick: (toggled) => {
-      if (toggled) {
         if (!game.starmercs.turnControlPanel) {
           game.starmercs.turnControlPanel = new TurnControlPanel();
         }
