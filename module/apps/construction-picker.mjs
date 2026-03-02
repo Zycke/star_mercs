@@ -120,7 +120,7 @@ export default class ConstructionPicker extends HandlebarsApplicationMixin(Appli
           choice.available = false;
           choice.reason = "Cannot build on water terrain";
         }
-        if (terrainConfig?.noFortification && (typeKey === "outpost" || typeKey === "entrenchment")) {
+        if (terrainConfig?.noFortification && (typeKey === "outpost" || typeKey === "fortification")) {
           choice.available = false;
           choice.reason = "Cannot fortify on this terrain";
         }

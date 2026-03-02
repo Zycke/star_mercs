@@ -43,12 +43,13 @@ export default class StructureLayer extends PIXI.Container {
   static BG_ALPHA = 0.7;
   static BORDER_WIDTH = 2;
   static ICON_FONT_SIZE = 14;
-  static LABEL_FONT_SIZE = 9;
+  static LABEL_FONT_SIZE = 8;
   static LABEL_OFFSET_Y = 18;
   static HEALTH_BAR_WIDTH = 24;
   static HEALTH_BAR_HEIGHT = 3;
   static HEALTH_BAR_OFFSET_Y = 26;
   static HIT_RADIUS = 20;
+  static VERTICAL_OFFSET_RATIO = 0.28;
 
   /** Team color map */
   static TEAM_COLORS = {
@@ -128,8 +129,12 @@ export default class StructureLayer extends PIXI.Container {
         await canvas.scene.setFlag("star-mercs", "structures", existing);
       }
     } else {
+      // Include requesting team for server-side validation
+      const existing = canvas.scene.getFlag("star-mercs", "structures") ?? [];
+      const structure = existing.find(s => s.id === structureId);
+      const team = structure?.team ?? null;
       game.socket.emit("system.star-mercs", {
-        action: "structure", op: "update", structureId, changes, sceneId: canvas.scene.id
+        action: "structure", op: "update", structureId, changes, team, sceneId: canvas.scene.id
       });
     }
   }
@@ -183,7 +188,8 @@ export default class StructureLayer extends PIXI.Container {
     if (!config) return;
 
     const group = new PIXI.Container();
-    group.position.set(structure.x, structure.y);
+    const yOffset = (canvas.grid.size || 100) * StructureLayer.VERTICAL_OFFSET_RATIO;
+    group.position.set(structure.x, structure.y - yOffset);
 
     const isComplete = structure.turnsBuilt >= structure.turnsRequired;
     const teamColor = StructureLayer.TEAM_COLORS[structure.team] ?? 0xCCCCCC;
@@ -214,15 +220,17 @@ export default class StructureLayer extends PIXI.Container {
     group.addChild(iconText);
 
     // Label below icon
-    let labelStr = config.label;
+    let labelStr = structure.name ?? config.label;
     if (!isComplete) {
       labelStr += ` (${structure.turnsBuilt}/${structure.turnsRequired})`;
     }
-    if (structure.type === "minefield" && structure.subType) {
+    if (structure.type === "minefield" && structure.subType && !structure.name) {
       const subConfig = config.subTypes?.[structure.subType];
       labelStr = subConfig?.label ?? labelStr;
       if (!isComplete) labelStr += ` (${structure.turnsBuilt}/${structure.turnsRequired})`;
     }
+    // Truncate to prevent overflow into adjacent hexes
+    if (labelStr.length > 14) labelStr = labelStr.slice(0, 13) + "\u2026";
 
     const label = new PIXI.Text(labelStr, {
       fontFamily: "Roboto, Segoe UI, sans-serif",
@@ -301,7 +309,7 @@ export default class StructureLayer extends PIXI.Container {
       case "bridge": return "\u2229";          // ∩ (arch shape)
       case "minefield": return "\u2739";       // ✹ (starburst)
       case "outpost": return "\u2302";         // ⌂ (house)
-      case "entrenchment": return "\u2591";    // ░ (shield-like)
+      case "fortification": return "\u2591";    // ░ (shield-like)
       default: return "?";
     }
   }
@@ -334,8 +342,9 @@ export default class StructureLayer extends PIXI.Container {
         if (!isGM && structure.team !== myTeam) continue;
       }
 
+      const yOff = (canvas.grid.size || 100) * StructureLayer.VERTICAL_OFFSET_RATIO;
       const dx = pos.x - structure.x;
-      const dy = pos.y - structure.y;
+      const dy = pos.y - (structure.y - yOff);
       if (dx * dx + dy * dy <= hitRadius * hitRadius) {
         this._suppressContextMenu = true;
         this._showStructureContextMenu(structure, pos);
@@ -354,10 +363,12 @@ export default class StructureLayer extends PIXI.Container {
     const config = CONFIG.STARMERCS.structures[structure.type];
     if (!config) return;
 
+    const displayName = structure.name ?? config.label;
     const isComplete = structure.turnsBuilt >= structure.turnsRequired;
     const isGM = game.user.isGM;
     const myTeam = this._getViewerTeam();
     const isEnemy = structure.team !== myTeam;
+    const isFriendly = !isEnemy && myTeam;
 
     // Build info HTML
     let statusText = isComplete ? "Complete" : `Under Construction (${structure.turnsBuilt}/${structure.turnsRequired})`;
@@ -368,7 +379,7 @@ export default class StructureLayer extends PIXI.Container {
     }
 
     const content = `<div class="star-mercs structure-inspect">
-      <h3>${esc(config.label)}</h3>
+      <h3>${esc(displayName)}</h3>
       <p><strong>Team:</strong> ${structure.team.toUpperCase()}</p>
       <p><strong>Status:</strong> ${statusText}</p>
       <p><strong>${healthText}</strong></p>
@@ -392,11 +403,310 @@ export default class StructureLayer extends PIXI.Container {
       }
     }
 
+    // Rename button — GM or owning-team player
+    if (isGM || isFriendly) {
+      buttons.rename = {
+        icon: '<i class="fas fa-pen"></i>',
+        label: "Rename",
+        callback: () => this._openRenameDialog(structure)
+      };
+    }
+
+    // Edit Properties button — GM only
+    if (isGM) {
+      buttons.edit = {
+        icon: '<i class="fas fa-edit"></i>',
+        label: "Edit Properties",
+        callback: () => this._openStructureEditDialog(structure)
+      };
+    }
+
+    // Outpost supply buttons — completed friendly outposts
+    if (structure.type === "outpost" && isComplete && (isGM || isFriendly)) {
+      const autoLabel = structure.autoSupply === false ? "Enable Auto-Supply" : "Disable Auto-Supply";
+      buttons.toggleSupply = {
+        icon: '<i class="fas fa-toggle-on"></i>',
+        label: autoLabel,
+        callback: () => {
+          const newVal = structure.autoSupply === false ? true : false;
+          StructureLayer.updateStructure(structure.id, { autoSupply: newVal });
+          ui.notifications.info(`Auto-supply ${newVal ? "enabled" : "disabled"}.`);
+        }
+      };
+      // Manual transfer — only during Preparation phase
+      const phase = game.combat?.getFlag?.("star-mercs", "phase") ?? null;
+      if (phase === "preparation" || !game.combat?.started) {
+        buttons.transfer = {
+          icon: '<i class="fas fa-exchange-alt"></i>',
+          label: "Transfer Supply",
+          callback: () => this._openOutpostSupplyTransfer(structure)
+        };
+      }
+    }
+
     new Dialog({
-      title: `${config.label} — Inspect`,
+      title: `${displayName} — Inspect`,
       content,
       buttons,
       default: "close"
+    }).render(true);
+  }
+
+  /**
+   * Open a rename dialog for a structure.
+   * @param {object} structure - The structure to rename.
+   * @private
+   */
+  _openRenameDialog(structure) {
+    const config = CONFIG.STARMERCS.structures[structure.type];
+    const currentName = structure.name ?? "";
+    new Dialog({
+      title: "Rename Structure",
+      content: `<form><div class="form-group">
+        <label>Name</label>
+        <input type="text" name="name" value="${esc(currentName)}" placeholder="${esc(config?.label ?? "")}" maxlength="24" autofocus />
+      </div></form>`,
+      buttons: {
+        save: {
+          icon: '<i class="fas fa-check"></i>',
+          label: "Save",
+          callback: (html) => {
+            const name = html.querySelector('[name="name"]').value.trim() || null;
+            StructureLayer.updateStructure(structure.id, { name });
+          }
+        },
+        cancel: { icon: '<i class="fas fa-times"></i>', label: "Cancel" }
+      },
+      default: "save"
+    }).render(true);
+  }
+
+  /**
+   * Open the GM edit-properties dialog for a structure.
+   * @param {object} structure - The structure to edit.
+   * @private
+   */
+  _openStructureEditDialog(structure) {
+    const config = CONFIG.STARMERCS.structures[structure.type];
+    if (!config) return;
+    const merged = StructureLayer.getStructureConfig(structure.type);
+    const isOutpost = structure.type === "outpost";
+    const supplyCats = ["smallArms", "heavyWeapons", "ordnance", "fuel", "materials", "parts", "basicSupplies"];
+
+    let supplyHtml = "";
+    if (isOutpost && structure.supply) {
+      supplyHtml = `<hr><h4>Supply</h4>`;
+      for (const cat of supplyCats) {
+        const cur = structure.supply[cat]?.current ?? 0;
+        const cap = structure.supply[cat]?.capacity ?? 0;
+        supplyHtml += `<div class="form-group">
+          <label>${cat}</label>
+          <input type="number" name="supply-${cat}" value="${cur}" min="0" max="${cap}" />
+          <span class="hint">/ ${cap}</span>
+        </div>`;
+      }
+    }
+
+    const content = `<form>
+      <div class="form-group">
+        <label>Name</label>
+        <input type="text" name="name" value="${esc(structure.name ?? "")}" placeholder="${esc(config.label)}" maxlength="24" />
+      </div>
+      <div class="form-group">
+        <label>Strength</label>
+        <input type="number" name="strength" value="${structure.strength}" min="0" max="${structure.maxStrength}" />
+        <span class="hint">/ ${structure.maxStrength}</span>
+      </div>
+      <div class="form-group">
+        <label>Turns Built</label>
+        <input type="number" name="turnsBuilt" value="${structure.turnsBuilt}" min="0" max="${structure.turnsRequired}" />
+        <span class="hint">/ ${structure.turnsRequired}</span>
+      </div>
+      ${supplyHtml}
+    </form>`;
+
+    new Dialog({
+      title: `Edit — ${structure.name ?? config.label}`,
+      content,
+      buttons: {
+        autocomplete: {
+          icon: '<i class="fas fa-fast-forward"></i>',
+          label: "Auto-Complete",
+          callback: () => {
+            const changes = {
+              turnsBuilt: structure.turnsRequired,
+              builderId: null
+            };
+            StructureLayer.updateStructure(structure.id, changes);
+            ui.notifications.info("Structure auto-completed.");
+          }
+        },
+        save: {
+          icon: '<i class="fas fa-check"></i>',
+          label: "Save",
+          callback: (html) => {
+            const changes = {};
+            const nameVal = html.querySelector('[name="name"]').value.trim();
+            changes.name = nameVal || null;
+            changes.strength = Math.clamped(
+              parseInt(html.querySelector('[name="strength"]').value) || 0,
+              0, structure.maxStrength
+            );
+            const newTurns = Math.clamped(
+              parseInt(html.querySelector('[name="turnsBuilt"]').value) || 0,
+              0, structure.turnsRequired
+            );
+            changes.turnsBuilt = newTurns;
+            // If now complete, clear builderId
+            if (newTurns >= structure.turnsRequired) {
+              changes.builderId = null;
+            }
+
+            if (isOutpost && structure.supply) {
+              const supply = foundry.utils.deepClone(structure.supply);
+              for (const cat of supplyCats) {
+                const cap = supply[cat]?.capacity ?? 0;
+                supply[cat].current = Math.clamped(
+                  parseInt(html.querySelector(`[name="supply-${cat}"]`).value) || 0,
+                  0, cap
+                );
+              }
+              changes.supply = supply;
+            }
+
+            StructureLayer.updateStructure(structure.id, changes);
+            ui.notifications.info("Structure properties updated.");
+          }
+        },
+        cancel: { icon: '<i class="fas fa-times"></i>', label: "Cancel" }
+      },
+      default: "save"
+    }).render(true);
+  }
+
+  /**
+   * Open a bi-directional supply transfer dialog for an outpost.
+   * @param {object} structure - The outpost structure.
+   * @private
+   */
+  _openOutpostSupplyTransfer(structure) {
+    if (structure.type !== "outpost" || !structure.supply) return;
+
+    const supplyCats = ["smallArms", "heavyWeapons", "ordnance", "fuel", "materials", "parts", "basicSupplies"];
+    const supplyLabels = {
+      smallArms: "Small Arms", heavyWeapons: "Heavy Weapons", ordnance: "Ordnance",
+      fuel: "Fuel", materials: "Materials", parts: "Parts", basicSupplies: "Basic Supplies"
+    };
+    const gridSize = canvas.grid.size || 100;
+    const range = structure.supplyRange ?? 3;
+
+    // Find friendly units within outpost supply range
+    const myTeam = structure.team;
+    const nearbyUnits = [];
+    for (const token of canvas.tokens.placeables) {
+      if (!token.actor || token.actor.type !== "unit") continue;
+      if ((token.actor.system.team ?? "a") !== myTeam) continue;
+      const tc = snapToHexCenter(token.center);
+      const dx = tc.x - structure.x;
+      const dy = tc.y - structure.y;
+      const dist = Math.round(Math.sqrt(dx * dx + dy * dy) / gridSize);
+      if (dist <= range) {
+        nearbyUnits.push({ tokenId: token.id, name: token.name, actor: token.actor, distance: dist });
+      }
+    }
+
+    if (nearbyUnits.length === 0) {
+      ui.notifications.warn("No friendly units within outpost supply range.");
+      return;
+    }
+
+    const unitOptions = nearbyUnits.map(u =>
+      `<option value="${u.tokenId}">${esc(u.name)} (${u.distance} hex${u.distance > 1 ? "es" : ""})</option>`
+    ).join("");
+
+    const catInputs = supplyCats.map(cat => {
+      const outpostHas = structure.supply[cat]?.current ?? 0;
+      return `<div class="form-group">
+        <label>${supplyLabels[cat]} (outpost: ${outpostHas})</label>
+        <input type="number" data-category="${cat}" value="0" min="0" />
+      </div>`;
+    }).join("");
+
+    const content = `<form>
+      <div class="form-group">
+        <label>Direction</label>
+        <select name="direction">
+          <option value="toUnit">Outpost \u2192 Unit</option>
+          <option value="toOutpost">Unit \u2192 Outpost</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Unit</label>
+        <select name="unit">${unitOptions}</select>
+      </div>
+      <hr/><h4>Amounts</h4>
+      ${catInputs}
+    </form>`;
+
+    const displayName = structure.name ?? "Outpost";
+    new Dialog({
+      title: `Transfer Supply — ${esc(displayName)}`,
+      content,
+      buttons: {
+        transfer: {
+          icon: '<i class="fas fa-truck"></i>',
+          label: "Transfer",
+          callback: async (html) => {
+            const dir = html.querySelector('[name="direction"]').value;
+            const tokenId = html.querySelector('[name="unit"]').value;
+            const targetToken = canvas.tokens.get(tokenId);
+            if (!targetToken?.actor) return;
+
+            const structures = canvas.scene.getFlag("star-mercs", "structures") ?? [];
+            const s = structures.find(st => st.id === structure.id);
+            if (!s || !s.supply) return;
+
+            let anyTransferred = false;
+            const actorUpdates = {};
+
+            for (const cat of supplyCats) {
+              const inputVal = parseInt(html.querySelector(`[data-category="${cat}"]`).value) || 0;
+              if (inputVal <= 0) continue;
+
+              const outpostCur = s.supply[cat]?.current ?? 0;
+              const outpostCap = s.supply[cat]?.capacity ?? 0;
+              const unitCur = targetToken.actor.system.supply?.[cat]?.current ?? 0;
+              const unitCap = targetToken.actor.system.supply?.[cat]?.capacity ?? 0;
+
+              if (dir === "toUnit") {
+                // Outpost → Unit: clamp by outpost availability and unit remaining capacity
+                const actual = Math.min(inputVal, outpostCur, unitCap - unitCur);
+                if (actual <= 0) continue;
+                s.supply[cat].current -= actual;
+                actorUpdates[`system.supply.${cat}.current`] = unitCur + actual;
+              } else {
+                // Unit → Outpost: clamp by unit availability and outpost remaining capacity
+                const actual = Math.min(inputVal, unitCur, outpostCap - outpostCur);
+                if (actual <= 0) continue;
+                s.supply[cat].current += actual;
+                actorUpdates[`system.supply.${cat}.current`] = unitCur - actual;
+              }
+              anyTransferred = true;
+            }
+
+            if (!anyTransferred) {
+              ui.notifications.warn("Nothing to transfer.");
+              return;
+            }
+
+            await targetToken.actor.update(actorUpdates);
+            await canvas.scene.setFlag("star-mercs", "structures", structures);
+            ui.notifications.info("Supply transferred.");
+          }
+        },
+        cancel: { icon: '<i class="fas fa-times"></i>', label: "Cancel" }
+      },
+      default: "transfer"
     }).render(true);
   }
 

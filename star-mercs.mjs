@@ -56,7 +56,8 @@ Hooks.once("init", () => {
     { id: "fired",      name: "Fired",      img: "icons/svg/explosion.svg" },
     { id: "breaking",   name: "Breaking",   img: "icons/svg/skull.svg" },
     { id: "engaged",    name: "Engaged",    img: "icons/svg/sword.svg" },
-    { id: "entrenched", name: "Entrenched", img: "icons/svg/shield.svg" }
+    { id: "entrenched", name: "Entrenched", img: "icons/svg/shield.svg" },
+    { id: "fortified",  name: "Fortified",  img: "icons/svg/castle.svg" }
   );
 
   // --- Register Document Classes ---
@@ -219,7 +220,7 @@ Hooks.once("init", () => {
 /*  Ready Hook                                  */
 /* ============================================ */
 
-Hooks.once("ready", () => {
+Hooks.once("ready", async () => {
   console.log("Star Mercs | System Ready");
 
   // Socket listener: GM executes phase advances requested by non-GM players
@@ -284,6 +285,11 @@ Hooks.once("ready", () => {
         case "update": {
           const idx = existing.findIndex(s => s.id === data.structureId);
           if (idx !== -1) {
+            // Validate team ownership: players can only modify their own team's structures
+            if (data.team && existing[idx].team !== data.team) {
+              console.warn("Star Mercs | Blocked structure update: team mismatch");
+              break;
+            }
             Object.assign(existing[idx], data.changes);
             await scene.setFlag("star-mercs", "structures", existing);
           }
@@ -301,6 +307,24 @@ Hooks.once("ready", () => {
       }
     }
   });
+
+  // Data migration: rename entrenchment → fortification in existing scene structures
+  if (game.user.isGM) {
+    for (const scene of game.scenes) {
+      const structures = scene.getFlag("star-mercs", "structures") ?? [];
+      let changed = false;
+      for (const s of structures) {
+        if (s.type === "entrenchment") {
+          s.type = "fortification";
+          changed = true;
+        }
+      }
+      if (changed) {
+        await scene.setFlag("star-mercs", "structures", structures);
+        console.log(`Star Mercs | Migrated entrenchment→fortification in scene "${scene.name}"`);
+      }
+    }
+  }
 });
 
 /**
@@ -601,7 +625,7 @@ Hooks.on("updateToken", (tokenDoc, changes, options) => {
     }
   }
 
-  // Deactivate Entrenched trait when a unit moves
+  // Deactivate Entrenched and Fortified traits when a unit moves
   if ("x" in changes || "y" in changes) {
     const actor = tokenDoc.actor;
     if (actor?.type === "unit") {
@@ -610,6 +634,28 @@ Hooks.on("updateToken", (tokenDoc, changes, options) => {
       );
       if (entrenchedTrait) {
         entrenchedTrait.update({ "system.active": false });
+      }
+      const fortifiedTrait = actor.items.find(
+        i => i.type === "trait" && i.name.toLowerCase() === "fortified" && i.system.active
+      );
+      if (fortifiedTrait) {
+        fortifiedTrait.update({ "system.active": false });
+      }
+
+      // Grant Fortified when moving INTO a hex with a completed structure that grantsFortified
+      const newCenter = hexUtils.snapToHexCenter({ x: tokenDoc.x, y: tokenDoc.y });
+      const structureAtHex = hexUtils.getStructureAtHex(newCenter);
+      if (structureAtHex && structureAtHex.turnsBuilt >= structureAtHex.turnsRequired
+          && structureAtHex.strength > 0) {
+        const sConfig = CONFIG.STARMERCS.structures[structureAtHex.type];
+        if (sConfig?.grantsFortified) {
+          const ft = actor.items.find(
+            i => i.type === "trait" && i.name.toLowerCase() === "fortified"
+          );
+          if (ft && !ft.system.active) {
+            ft.update({ "system.active": true });
+          }
+        }
       }
     }
   }
@@ -674,6 +720,23 @@ Hooks.on("updateItem", (item, changes) => {
             actor.toggleStatusEffect("entrenched", { active: true });
           } else if (!isActive && hasEffect) {
             actor.toggleStatusEffect("entrenched", { active: false });
+          }
+        }
+      }
+    }
+
+    // Sync "Fortified" status effect icon with the trait's active state
+    if (item.name.toLowerCase() === "fortified") {
+      const isActive = changes.system.active;
+      const actor = item.parent;
+      if (actor?.type === "unit") {
+        const token = actor.getActiveTokens()?.[0]?.document;
+        if (token) {
+          const hasEffect = token.hasStatusEffect("fortified");
+          if (isActive && !hasEffect) {
+            actor.toggleStatusEffect("fortified", { active: true });
+          } else if (!isActive && hasEffect) {
+            actor.toggleStatusEffect("fortified", { active: false });
           }
         }
       }
