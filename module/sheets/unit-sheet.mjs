@@ -183,7 +183,11 @@ export default class StarMercsUnitSheet extends ActorSheet {
 
     // Supply transfer: only during preparation phase
     context.isPreparationPhase = combat?.phase === "preparation";
-    context.canTransferSupply = !combat?.started || combat?.phase === "preparation";
+    // Supply transfer: preparation phase only; airborne flying units need the Supply trait
+    const isAirborneNoSupply = this.actor.hasTrait("Flying")
+      && !this.actor.getFlag("star-mercs", "landed")
+      && !this.actor.hasTrait("Supply");
+    context.canTransferSupply = (!combat?.started || combat?.phase === "preparation") && !isAirborneNoSupply;
     context.supplyTransferRange = this.actor.getSupplyTransferRange();
 
     // Active Signature (base + terrain modifiers)
@@ -1419,6 +1423,12 @@ export default class StarMercsUnitSheet extends ActorSheet {
     const combat = game.combat;
     if (combat?.started && combat.phase !== "preparation") {
       ui.notifications.warn("Supply transfers are only allowed during the Preparation phase.");
+      return;
+    }
+
+    // Airborne flying units without Supply trait cannot transfer supplies
+    if (this.actor.hasTrait("Flying") && !this.actor.getFlag("star-mercs", "landed") && !this.actor.hasTrait("Supply")) {
+      ui.notifications.warn("Airborne units must land to transfer supplies (unless they have the Supply trait).");
       return;
     }
 
