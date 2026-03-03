@@ -522,9 +522,9 @@ export default class StructureLayer extends PIXI.Container {
     if (!config) return;
     const merged = StructureLayer.getStructureConfig(structure.type);
     const isOutpost = structure.type === "outpost";
-    const supplyCats = ["smallArms", "heavyWeapons", "ordnance", "fuel", "materials", "parts", "basicSupplies"];
+    const supplyCats = ["projectile", "ordnance", "energy", "fuel", "materials", "parts", "basicSupplies"];
     const supplyLabels = {
-      smallArms: "S.Arms", heavyWeapons: "H.Wpns", ordnance: "Ord",
+      projectile: "Proj", ordnance: "Ord", energy: "Energy",
       fuel: "Fuel", materials: "Mats", parts: "Parts", basicSupplies: "Basic"
     };
 
@@ -636,9 +636,9 @@ export default class StructureLayer extends PIXI.Container {
   _openOutpostSupplyTransfer(structure) {
     if (structure.type !== "outpost" || !structure.supply) return;
 
-    const supplyCats = ["smallArms", "heavyWeapons", "ordnance", "fuel", "materials", "parts", "basicSupplies"];
+    const supplyCats = ["projectile", "ordnance", "energy", "fuel", "materials", "parts", "basicSupplies"];
     const supplyLabels = {
-      smallArms: "Small Arms", heavyWeapons: "Heavy Weapons", ordnance: "Ordnance",
+      projectile: "Projectile", ordnance: "Ordnance", energy: "Energy",
       fuel: "Fuel", materials: "Materials", parts: "Parts", basicSupplies: "Basic Supplies"
     };
     const gridSize = canvas.grid.size || 100;

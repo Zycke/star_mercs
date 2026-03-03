@@ -67,16 +67,35 @@ export default class StarMercsActor extends Actor {
   }
 
   /**
-   * Determine which supply category a weapon consumes.
+   * Determine which supply category a weapon consumes based on its ammoType.
    * @param {Item} weapon - A weapon item.
-   * @returns {"smallArms"|"heavyWeapons"|"ordnance"}
+   * @returns {"projectile"|"ordnance"|"energy"}
    */
   _getWeaponSupplyType(weapon) {
-    if (weapon.system.attackType === "antiAir" || weapon.system.artillery || weapon.system.aircraft) {
-      return "ordnance";
-    }
-    if (weapon.system.attackType === "hard") return "heavyWeapons";
-    return "smallArms";
+    return weapon.system.ammoType || "projectile";
+  }
+
+  /**
+   * Check if a specific weapon has ammo to fire.
+   * @param {Item} weapon - A weapon item.
+   * @returns {boolean}
+   */
+  _hasAmmoForWeapon(weapon) {
+    const ammoType = this._getWeaponSupplyType(weapon);
+    return (this.system.supply?.[ammoType]?.current ?? 0) > 0;
+  }
+
+  /**
+   * Consume 1 ammo of the weapon's ammo type. Returns true if successful.
+   * @param {Item} weapon - A weapon item.
+   * @returns {Promise<boolean>}
+   */
+  async _consumeAmmo(weapon) {
+    const ammoType = this._getWeaponSupplyType(weapon);
+    const supply = this.system.supply?.[ammoType];
+    if (!supply || supply.current <= 0) return false;
+    await this.update({ [`system.supply.${ammoType}.current`]: supply.current - 1 });
+    return true;
   }
 
   /* ---------------------------------------- */
@@ -91,7 +110,7 @@ export default class StarMercsActor extends Actor {
     // Zero ammo supply: cannot attack if all ammo categories are empty
     if (this.type === "unit") {
       const sup = this.system.supply ?? {};
-      const totalAmmo = (sup.smallArms?.current ?? 0) + (sup.heavyWeapons?.current ?? 0) + (sup.ordnance?.current ?? 0);
+      const totalAmmo = (sup.projectile?.current ?? 0) + (sup.ordnance?.current ?? 0) + (sup.energy?.current ?? 0);
       if (totalAmmo <= 0) {
         return {
           allowed: false,
@@ -193,6 +212,13 @@ export default class StarMercsActor extends Actor {
       }
     }
 
+    // Per-weapon ammo check
+    if (!this._hasAmmoForWeapon(weapon)) {
+      const ammoLabel = CONFIG.STARMERCS.ammoTypes?.[weapon.system.ammoType] ?? weapon.system.ammoType;
+      ui.notifications.warn(`${weapon.name} cannot fire — no ${ammoLabel} ammo remaining.`);
+      return null;
+    }
+
     // Range check: find both tokens and measure hex distance
     const targetToken = canvas?.tokens?.placeables.find(t => t.actor === target);
     if (attackerToken && targetToken && weapon.system.range > 0) {
@@ -206,7 +232,7 @@ export default class StarMercsActor extends Actor {
     }
 
     const result = await resolveAttack(weapon, this, target);
-    const attackTypeLabels = { soft: "Soft", hard: "Hard", antiAir: "Anti-Air" };
+    const attackTypeLabels = { soft: "Soft", hard: "Hard", antiAir: "Anti-Air", aps: "APS", zps: "ZPS" };
 
     // Compute whisper IDs for both attacker and target teams
     const atkTeam = this.system.team ?? "a";
@@ -320,14 +346,11 @@ export default class StarMercsActor extends Actor {
       templateData
     );
 
-    // Track weapons fired by supply category and per-weapon fired list
-    if (game.combat?.started && attackerToken) {
-      const supplyType = this._getWeaponSupplyType(weapon);
-      const flagKey = `weaponsFired_${supplyType}`;
-      const fired = attackerToken.document.getFlag("star-mercs", flagKey) ?? 0;
-      await attackerToken.document.setFlag("star-mercs", flagKey, fired + 1);
+    // Consume 1 ammo immediately when weapon fires
+    await this._consumeAmmo(weapon);
 
-      // Track this specific weapon as fired
+    // Track per-weapon fired list (for preventing double-fire in same phase)
+    if (game.combat?.started && attackerToken) {
       const firedWeapons = attackerToken.document.getFlag("star-mercs", "firedWeapons") ?? [];
       if (!firedWeapons.includes(weapon.id)) {
         firedWeapons.push(weapon.id);
@@ -397,7 +420,7 @@ export default class StarMercsActor extends Actor {
    * @private
    */
   async _rollStandaloneAttack(weapon) {
-    const attackTypeLabels = { soft: "Soft", hard: "Hard", antiAir: "Anti-Air" };
+    const attackTypeLabels = { soft: "Soft", hard: "Hard", antiAir: "Anti-Air", aps: "APS", zps: "ZPS" };
     const accuracy = calculateAccuracy(weapon, this);
     const roll = new Roll("1d10");
     await roll.evaluate();
@@ -508,12 +531,25 @@ export default class StarMercsActor extends Actor {
     const firedWeapons = (game.combat?.started && attackerToken?.document)
       ? (attackerToken.document.getFlag("star-mercs", "firedWeapons") ?? [])
       : [];
+    // Track ammo availability per type for sequential consumption
+    const ammoAvailable = {
+      projectile: this.system.supply?.projectile?.current ?? 0,
+      ordnance: this.system.supply?.ordnance?.current ?? 0,
+      energy: this.system.supply?.energy?.current ?? 0
+    };
     const targetedWeapons = [];
     for (const item of this.items) {
       if (item.type === "weapon" && item.system.targetId) {
         // Skip weapons that have already fired this tactical phase
         if (firedWeapons.includes(item.id)) {
           ui.notifications.warn(`${item.name} has already fired this tactical phase.`);
+          continue;
+        }
+        // Per-weapon ammo check
+        const ammoType = item.system.ammoType || "projectile";
+        if ((ammoAvailable[ammoType] ?? 0) <= 0) {
+          const ammoLabel = CONFIG.STARMERCS.ammoTypes?.[ammoType] ?? ammoType;
+          ui.notifications.warn(`${item.name} cannot fire — no ${ammoLabel} ammo remaining.`);
           continue;
         }
         const targetToken = canvas?.tokens?.get(item.system.targetId);
@@ -530,6 +566,8 @@ export default class StarMercsActor extends Actor {
             }
           }
           targetedWeapons.push({ weapon: item, target: targetToken.actor, targetToken });
+          // Pre-deduct ammo so subsequent weapons of the same type are checked correctly
+          ammoAvailable[ammoType]--;
         }
       }
     }
@@ -628,7 +666,7 @@ export default class StarMercsActor extends Actor {
     }
 
     // Phase 3: Post individual attack results to chat
-    const attackTypeLabels = { soft: "Soft", hard: "Hard", antiAir: "Anti-Air" };
+    const attackTypeLabels = { soft: "Soft", hard: "Hard", antiAir: "Anti-Air", aps: "APS", zps: "ZPS" };
     const myTeam = this.system.team ?? "a";
 
     for (const result of results) {
@@ -751,35 +789,40 @@ export default class StarMercsActor extends Actor {
       });
     }
 
-    // Track weapons fired by supply category and per-weapon fired list
+    // Consume ammo immediately for all valid attacks and track fired weapons
     const validResults = results.filter(r => r.valid);
-    if (game.combat?.started && attackerToken && validResults.length > 0) {
-      // Count per supply type
-      const counts = { smallArms: 0, heavyWeapons: 0, ordnance: 0 };
+    if (validResults.length > 0) {
+      // Consume 1 ammo per weapon fired (batch by ammo type for efficiency)
+      const ammoCounts = { projectile: 0, ordnance: 0, energy: 0 };
       for (const r of validResults) {
-        const supplyType = this._getWeaponSupplyType(r.weapon);
-        counts[supplyType]++;
+        const ammoType = this._getWeaponSupplyType(r.weapon);
+        ammoCounts[ammoType]++;
       }
-      for (const [type, count] of Object.entries(counts)) {
+      const supplyUpdate = {};
+      for (const [type, count] of Object.entries(ammoCounts)) {
         if (count > 0) {
-          const flagKey = `weaponsFired_${type}`;
-          const prev = attackerToken.document.getFlag("star-mercs", flagKey) ?? 0;
-          await attackerToken.document.setFlag("star-mercs", flagKey, prev + count);
+          const current = this.system.supply?.[type]?.current ?? 0;
+          supplyUpdate[`system.supply.${type}.current`] = Math.max(0, current - count);
         }
       }
-
-      // Track each weapon as fired this phase
-      const updatedFiredWeapons = attackerToken.document.getFlag("star-mercs", "firedWeapons") ?? [];
-      for (const r of validResults) {
-        if (!updatedFiredWeapons.includes(r.weapon.id)) {
-          updatedFiredWeapons.push(r.weapon.id);
-        }
+      if (Object.keys(supplyUpdate).length > 0) {
+        await this.update(supplyUpdate);
       }
-      await attackerToken.document.setFlag("star-mercs", "firedWeapons", updatedFiredWeapons);
 
-      // Toggle "Fired" visual status effect on the token
-      if (attackerToken.actor && !attackerToken.document.hasStatusEffect("fired")) {
-        await attackerToken.actor.toggleStatusEffect("fired", { active: true });
+      // Track each weapon as fired this phase (for preventing double-fire)
+      if (game.combat?.started && attackerToken) {
+        const updatedFiredWeapons = attackerToken.document.getFlag("star-mercs", "firedWeapons") ?? [];
+        for (const r of validResults) {
+          if (!updatedFiredWeapons.includes(r.weapon.id)) {
+            updatedFiredWeapons.push(r.weapon.id);
+          }
+        }
+        await attackerToken.document.setFlag("star-mercs", "firedWeapons", updatedFiredWeapons);
+
+        // Toggle "Fired" visual status effect on the token
+        if (attackerToken.actor && !attackerToken.document.hasStatusEffect("fired")) {
+          await attackerToken.actor.toggleStatusEffect("fired", { active: true });
+        }
       }
     }
 
@@ -885,15 +928,15 @@ export default class StarMercsActor extends Actor {
   /**
    * Supply category keys for iteration.
    */
-  static SUPPLY_CATEGORIES = ["smallArms", "heavyWeapons", "ordnance", "fuel", "materials", "parts", "basicSupplies"];
+  static SUPPLY_CATEGORIES = ["projectile", "ordnance", "energy", "fuel", "materials", "parts", "basicSupplies"];
 
   /**
    * Supply category display labels.
    */
   static SUPPLY_LABELS = {
-    smallArms: "Small Arms",
-    heavyWeapons: "Heavy Weapons",
+    projectile: "Projectile",
     ordnance: "Ordnance",
+    energy: "Energy",
     fuel: "Fuel",
     materials: "Materials",
     parts: "Parts",
@@ -903,7 +946,7 @@ export default class StarMercsActor extends Actor {
   /**
    * Transfer supply to another unit, per category.
    * @param {StarMercsActor} targetActor - The target unit to receive supply.
-   * @param {Object} transfers - Amounts per category, e.g. { smallArms: 5, fuel: 3 }.
+   * @param {Object} transfers - Amounts per category, e.g. { projectile: 5, fuel: 3 }.
    * @returns {Promise<boolean>} True if any transfer succeeded.
    */
   async transferSupply(targetActor, transfers) {

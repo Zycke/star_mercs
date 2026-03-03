@@ -85,9 +85,9 @@ export default class StarMercsUnitSheet extends ActorSheet {
     const allOrders = CONFIG.STARMERCS.orders ?? {};
     // Check if all ammo supply categories are empty
     const sup = this.actor.system.supply ?? {};
-    const hasNoSupply = (sup.smallArms?.current ?? 0) <= 0
-      && (sup.heavyWeapons?.current ?? 0) <= 0
-      && (sup.ordnance?.current ?? 0) <= 0;
+    const hasNoSupply = (sup.projectile?.current ?? 0) <= 0
+      && (sup.ordnance?.current ?? 0) <= 0
+      && (sup.energy?.current ?? 0) <= 0;
     const zeroSupplyOrders = ["hold", "move", "withdraw", "entrench", "stand_down", "forced_march"];
 
     // Check Breaking/Broken status from token flags

@@ -6,28 +6,14 @@
     <div class="supply-category">
       <div class="supply-category-header">
         <i class="fas fa-crosshairs"></i>
-        <span>Small Arms</span>
+        <span>Projectile Ammo</span>
       </div>
       <div class="resource-bar">
-        <input type="number" name="system.supply.smallArms.current"
-               value="{{system.supply.smallArms.current}}" min="0" max="{{system.supply.smallArms.capacity}}"/>
+        <input type="number" name="system.supply.projectile.current"
+               value="{{system.supply.projectile.current}}" min="0" max="{{system.supply.projectile.capacity}}"/>
         <span class="sep">/</span>
-        <input type="number" name="system.supply.smallArms.capacity"
-               value="{{system.supply.smallArms.capacity}}" min="0"/>
-      </div>
-    </div>
-
-    <div class="supply-category">
-      <div class="supply-category-header">
-        <i class="fas fa-bomb"></i>
-        <span>Heavy Weapons</span>
-      </div>
-      <div class="resource-bar">
-        <input type="number" name="system.supply.heavyWeapons.current"
-               value="{{system.supply.heavyWeapons.current}}" min="0" max="{{system.supply.heavyWeapons.capacity}}"/>
-        <span class="sep">/</span>
-        <input type="number" name="system.supply.heavyWeapons.capacity"
-               value="{{system.supply.heavyWeapons.capacity}}" min="0"/>
+        <input type="number" name="system.supply.projectile.capacity"
+               value="{{system.supply.projectile.capacity}}" min="0"/>
       </div>
     </div>
 
@@ -42,6 +28,26 @@
         <span class="sep">/</span>
         <input type="number" name="system.supply.ordnance.capacity"
                value="{{system.supply.ordnance.capacity}}" min="0"/>
+      </div>
+    </div>
+
+    <div class="supply-category">
+      <div class="supply-category-header">
+        <i class="fas fa-bolt"></i>
+        <span>Energy</span>
+      </div>
+      <div class="resource-bar">
+        <input type="number" name="system.supply.energy.current"
+               value="{{system.supply.energy.current}}" min="0" max="{{system.supply.energy.capacity}}"/>
+        <span class="sep">/</span>
+        <input type="number" name="system.supply.energy.capacity"
+               value="{{system.supply.energy.capacity}}" min="0"/>
+      </div>
+      <div class="fuel-per-hex">
+        <label>Recharge:</label>
+        <input type="number" name="system.supply.energy.rechargeRate"
+               value="{{system.supply.energy.rechargeRate}}" min="0"/>
+        <span class="suffix">/turn</span>
       </div>
     </div>
   </div>

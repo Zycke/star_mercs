@@ -472,7 +472,7 @@ export default class TerrainPainter extends FormApplication {
       structureData.supplyRange = config.defaultSupplyRange ?? 3;
       const caps = config.defaultSupplyCapacity ?? {};
       structureData.supply = {};
-      for (const cat of ["smallArms", "heavyWeapons", "ordnance", "fuel", "materials", "parts", "basicSupplies"]) {
+      for (const cat of ["projectile", "ordnance", "energy", "fuel", "materials", "parts", "basicSupplies"]) {
         structureData.supply[cat] = { current: 0, capacity: caps[cat] ?? 0 };
       }
     }

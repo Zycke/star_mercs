@@ -2,23 +2,37 @@ const { BooleanField, NumberField, StringField } = foundry.data.fields;
 
 /**
  * Data model for weapon items.
- * Weapons have an attack type (soft/hard/anti-air), damage, range, and optional traits.
+ * Weapons have an attack type (soft/hard/anti-air/aps/zps), damage, range, ammo type, and optional traits.
  * Attack roll is based on the firing unit's Rating, not the weapon itself.
  */
 export default class WeaponData extends foundry.abstract.TypeDataModel {
 
   static defineSchema() {
     return {
-      // Attack type determines targeting rules
+      // Attack type determines targeting rules and weapon category
       attackType: new StringField({
         required: true,
         initial: "soft",
         choices: {
           soft: "STARMERCS.AttackType.Soft",
           hard: "STARMERCS.AttackType.Hard",
-          antiAir: "STARMERCS.AttackType.AntiAir"
+          antiAir: "STARMERCS.AttackType.AntiAir",
+          aps: "STARMERCS.AttackType.APS",
+          zps: "STARMERCS.AttackType.ZPS"
         },
         label: "STARMERCS.AttackType"
+      }),
+
+      // Ammo type consumed when this weapon fires
+      ammoType: new StringField({
+        required: true,
+        initial: "projectile",
+        choices: {
+          projectile: "STARMERCS.AmmoType.Projectile",
+          ordnance: "STARMERCS.AmmoType.Ordnance",
+          energy: "STARMERCS.AmmoType.Energy"
+        },
+        label: "STARMERCS.AmmoType"
       }),
 
       // Base damage dealt on a hit
