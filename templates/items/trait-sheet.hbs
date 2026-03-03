@@ -7,6 +7,9 @@
     </h1>
     {{#if system.traitValue}}
       <span class="trait-bracket">[{{system.traitValue}}]</span>
+      {{#if system.traitValue2}}
+        <span class="trait-bracket">[{{system.traitValue2}}]</span>
+      {{/if}}
     {{/if}}
   </header>
 
@@ -21,6 +24,17 @@
         </div>
       </div>
 
+      <div class="form-group">
+        <label>Value 2 [Y]</label>
+        <div class="input-with-suffix">
+          <input type="number" name="system.traitValue2" value="{{system.traitValue2}}"
+                 min="0"/>
+          <span class="suffix">[Y]</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-row">
       <div class="form-group">
         <label>Mode</label>
         <select name="system.passive">

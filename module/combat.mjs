@@ -10,6 +10,9 @@
  * Entrenched: Reduces incoming damage by 1.
  * Fortified: Reduces incoming damage by 2.
  * Heavy: Soft attacks only hit on natural 10.
+ * Ordnance: Weapon consumes ordnance supply; triggers APS/ZPS defense.
+ * APS[X]: Active Protection System — rolls d6+X to reduce ordnance damage.
+ * ZPS[X][Y]: Zone Protection System — provides APS-like coverage to friendlies within Y hexes.
  */
 
 import { getHexElevation, snapToHexCenter } from "./hex-utils.mjs";
@@ -293,6 +296,123 @@ export function calculateDamage(weapon, attacker, target, hitType) {
 }
 
 /**
+ * Check whether a weapon is classified as ordnance (triggers APS/ZPS defense).
+ * A weapon is ordnance if it has the ordnance trait, is artillery/aircraft, or is anti-air.
+ *
+ * @param {Item} weapon - The weapon to check.
+ * @returns {boolean}
+ */
+export function isOrdnanceWeapon(weapon) {
+  return !!(weapon.system.ordnance || weapon.system.artillery || weapon.system.aircraft
+    || weapon.system.attackType === "antiAir");
+}
+
+/**
+ * Measure hex distance between two tokens (avoids circular import with actor.mjs).
+ * @param {Token} token1
+ * @param {Token} token2
+ * @returns {number} Distance in hexes.
+ */
+function _hexDistance(token1, token2) {
+  const result = canvas.grid.measurePath([token1.center, token2.center]);
+  const gridDistance = canvas.scene?.grid?.distance || 1;
+  return Math.round(result.distance / gridDistance);
+}
+
+/**
+ * Apply Active Protection Systems (APS) and Zone Protection Systems (ZPS)
+ * against an incoming ordnance attack. Both fire independently and their
+ * damage reductions stack.
+ *
+ * APS: Defender rolls d6 + X − cumulative penalty. Tracked on defender's token.
+ * ZPS: Best nearby friendly ZPS unit rolls d6 + X − cumulative penalty.
+ *      Tracked on the ZPS owner's token.
+ *
+ * @param {Item} weapon - The ordnance weapon being fired.
+ * @param {StarMercsActor} attacker - The attacking unit.
+ * @param {StarMercsActor} target - The target unit.
+ * @param {{final: number, base: number, modifiers: Array}} damage - The calculated damage object.
+ * @returns {Promise<{systems: Array, totalReduction: number}|null>}
+ */
+async function applyProtectionSystems(weapon, attacker, target, damage) {
+  const systems = [];
+  let totalReduction = 0;
+
+  // 1. Check if target has APS trait
+  const apsValue = target.getTraitValue("APS");
+  if (apsValue > 0) {
+    const targetToken = canvas?.tokens?.placeables.find(t => t.actor === target);
+    const fireCount = targetToken?.document?.getFlag("star-mercs", "apsFireCount") ?? 0;
+    const penalty = fireCount;
+
+    const roll = new Roll("1d6");
+    await roll.evaluate();
+    const reduction = Math.max(0, roll.total + apsValue - penalty);
+    totalReduction += reduction;
+
+    if (targetToken?.document) {
+      await targetToken.document.setFlag("star-mercs", "apsFireCount", fireCount + 1);
+    }
+
+    systems.push({
+      type: "APS", unitName: target.name,
+      roll: roll.total, bonus: apsValue, penalty, reduction
+    });
+  }
+
+  // 2. Check for nearby friendly ZPS units (fires even if APS also fired)
+  const targetToken = canvas?.tokens?.placeables.find(t => t.actor === target);
+  if (targetToken) {
+    const targetTeam = target.system.team ?? "a";
+
+    // Find the best ZPS unit in range (highest effective bonus)
+    let bestZPS = null;
+    for (const tok of canvas.tokens.placeables) {
+      if (!tok.actor) continue;
+      if ((tok.actor.system.team ?? "a") !== targetTeam) continue;
+      if (tok.actor.system.strength?.value <= 0) continue;
+
+      const zpsItem = tok.actor.getTraitItem?.("ZPS");
+      if (!zpsItem) continue;
+
+      const zpsBonus = zpsItem.system.traitValue;   // X
+      const zpsRange = zpsItem.system.traitValue2;  // Y
+      if (zpsBonus <= 0 || zpsRange <= 0) continue;
+
+      const distance = _hexDistance(tok, targetToken);
+      if (distance > zpsRange) continue;
+
+      const fireCount = tok.document?.getFlag("star-mercs", "zpsFireCount") ?? 0;
+      const effectiveBonus = zpsBonus - fireCount;
+
+      if (!bestZPS || effectiveBonus > bestZPS.effectiveBonus) {
+        bestZPS = {
+          token: tok, actor: tok.actor, item: zpsItem,
+          bonus: zpsBonus, range: zpsRange, fireCount, effectiveBonus
+        };
+      }
+    }
+
+    if (bestZPS) {
+      const roll = new Roll("1d6");
+      await roll.evaluate();
+      const reduction = Math.max(0, roll.total + bestZPS.bonus - bestZPS.fireCount);
+      totalReduction += reduction;
+
+      await bestZPS.token.document.setFlag("star-mercs", "zpsFireCount", bestZPS.fireCount + 1);
+
+      systems.push({
+        type: "ZPS", unitName: bestZPS.actor.name,
+        roll: roll.total, bonus: bestZPS.bonus, penalty: bestZPS.fireCount, reduction
+      });
+    }
+  }
+
+  if (systems.length === 0) return null;
+  return { systems, totalReduction };
+}
+
+/**
  * Resolve a full attack: validate, roll, calculate, and package results.
  * Does NOT apply damage — that is the caller's responsibility.
  *
@@ -357,6 +477,22 @@ export async function resolveAttack(weapon, attacker, target) {
     }
   }
 
+  // Step 6: Apply APS/ZPS protection (only if hit and weapon is ordnance)
+  let protectionResult = null;
+  if (damage && isOrdnanceWeapon(weapon)) {
+    protectionResult = await applyProtectionSystems(weapon, attacker, target, damage);
+    if (protectionResult && protectionResult.totalReduction > 0) {
+      damage.final = Math.max(0, damage.final - protectionResult.totalReduction);
+      // Add each system as a separate damage modifier
+      for (const sys of protectionResult.systems) {
+        damage.modifiers.push({
+          label: `${sys.type}[${sys.bonus}] (d6:${sys.roll}${sys.penalty > 0 ? ` -${sys.penalty} penalty` : ""})`,
+          value: -sys.reduction
+        });
+      }
+    }
+  }
+
   return {
     valid: true,
     reason: null,
@@ -364,6 +500,7 @@ export async function resolveAttack(weapon, attacker, target) {
     accuracy,
     hitResult,
     damage,
+    protectionResult,
     softVsHeavy,
     weapon,
     attacker,
