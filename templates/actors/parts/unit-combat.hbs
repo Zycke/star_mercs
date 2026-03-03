@@ -107,6 +107,57 @@
     {{/if}}
   </div>
 
+  {{!-- Flight Status (Flying units only) --}}
+  {{#if isFlying}}
+    <div class="status-block flight-status-block">
+      <label><i class="fas fa-helicopter"></i> Flight Status</label>
+      {{#if isLanded}}
+        <div class="flight-status-row">
+          <span class="flight-badge landed">LANDED</span>
+          <span class="flight-warning">Cannot fire weapons while landed</span>
+        </div>
+        {{#if isPreparationPhase}}
+          {{#if isOwner}}
+            <button type="button" class="flight-takeoff-btn">
+              <i class="fas fa-arrow-up"></i> Take Off
+            </button>
+          {{/if}}
+        {{/if}}
+      {{else}}
+        <div class="flight-status-row">
+          <span class="flight-badge airborne">AIRBORNE</span>
+          <span class="altitude-display">ALT {{currentAltitude}}</span>
+          <span class="altitude-range">({{minAltitude}}–{{maxAltitude}})</span>
+        </div>
+        {{#if isTacticalPhase}}
+          {{#if isOwner}}
+            <div class="altitude-controls">
+              <button type="button" class="altitude-down-btn" {{#unless canDescend}}disabled{{/unless}}>
+                <i class="fas fa-chevron-down"></i>
+              </button>
+              <span class="altitude-value">ALT {{currentAltitude}}</span>
+              <button type="button" class="altitude-up-btn" {{#unless canClimb}}disabled{{/unless}}>
+                <i class="fas fa-chevron-up"></i>
+              </button>
+              <span class="altitude-cost">(1 MP each)</span>
+            </div>
+          {{/if}}
+        {{/if}}
+        {{#if isPreparationPhase}}
+          {{#if isOwner}}
+            {{#if canLandHere}}
+              <button type="button" class="flight-land-btn">
+                <i class="fas fa-arrow-down"></i> Land
+              </button>
+            {{else}}
+              <span class="flight-note">Must descend to hex elevation ({{minAltitude}}) to land</span>
+            {{/if}}
+          {{/if}}
+        {{/if}}
+      {{/if}}
+    </div>
+  {{/if}}
+
   {{!-- Advanced Recon Equipment targeting (Orders phase) --}}
   {{#if hasAdvancedRecon}}
     <div class="status-block recon-block">

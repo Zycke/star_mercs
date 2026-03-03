@@ -188,6 +188,12 @@ export function validatePath(token, path) {
   const isHover = actor.hasTrait?.("Hover") ?? false;
   const isJumpCapable = actor.hasTrait?.("Jump Capable") ?? false;
   const maxElevChange = isJumpCapable ? 2 : 1;
+  const isUnitAirborne = isFlying && !(actor.getFlag?.("star-mercs", "landed") ?? false);
+
+  // Landed flying units cannot move at all
+  if (isFlying && !isUnitAirborne) {
+    return { valid: false, blockedAt: path[0] ?? null, reason: "Landed flying units cannot move — take off first." };
+  }
 
   let prevCenter = snapToHexCenter(token.center);
 
@@ -200,8 +206,8 @@ export function validatePath(token, path) {
       return { valid: false, blockedAt: hexCenter, reason: terrainReason };
     }
 
-    // Elevation restriction (skip for Flying only; Hover must obey)
-    if (!isFlying) {
+    // Elevation restriction (skip for airborne Flying; Hover and landed must obey)
+    if (!isUnitAirborne) {
       const prevElev = getHexElevation(prevCenter);
       const nextElev = getHexElevation(hexCenter);
       if (Math.abs(nextElev - prevElev) > maxElevChange) {
@@ -227,8 +233,11 @@ export function validatePath(token, path) {
           reason: "Cannot end movement in a hex occupied by another unit."
         };
       }
+    } else if (isUnitAirborne) {
+      // Airborne flying units can fly over any occupied hex (intermediate only)
+      // No blocking check — they fly over both allies and enemies
     } else {
-      // Intermediate hex: no enemy units allowed
+      // Ground units: intermediate hex cannot contain enemy units
       const enemyHere = tokensHere.some(t =>
         t !== token && (t.actor.system.team ?? "a") !== myTeam
       );
@@ -362,6 +371,35 @@ export function getHexElevation(hexCenter) {
 }
 
 /**
+ * Get the effective elevation for a token, accounting for flying unit altitude.
+ * - Non-flying units: returns hex terrain elevation
+ * - Landed flying units: returns hex terrain elevation
+ * - Airborne flying units: returns their altitude (clamped to [hexElev, 5])
+ *
+ * @param {Token} token - The token to check.
+ * @returns {number} Effective elevation (0–5).
+ */
+export function getEffectiveElevation(token) {
+  const actor = token?.actor;
+  const hexElev = getHexElevation(snapToHexCenter(token.center));
+  if (!actor?.hasTrait?.("Flying")) return hexElev;
+  if (actor.getFlag("star-mercs", "landed")) return hexElev;
+  const altitude = actor.getFlag("star-mercs", "altitude") ?? hexElev;
+  return Math.max(hexElev, Math.min(altitude, 5));
+}
+
+/**
+ * Check if a token represents an airborne flying unit (Flying trait, not landed).
+ * @param {Token} token
+ * @returns {boolean}
+ */
+export function isAirborne(token) {
+  const actor = token?.actor;
+  if (!actor?.hasTrait?.("Flying")) return false;
+  return !actor.getFlag("star-mercs", "landed");
+}
+
+/**
  * Check if a hex has a road.
  * A hex has a road if it has the road flag set, OR if its terrain type
  * has hasRoad: true (e.g., urban terrain).
@@ -410,8 +448,12 @@ export function getMovementCost(hexCenter, actor = null) {
   const isHover = actor?.hasTrait?.("Hover") ?? false;
   const isAmphibious = actor?.hasTrait?.("Amphibious") ?? false;
 
-  // Flying units always cost 1 MP regardless of terrain
-  if (isFlying) return { cost: 1, passable: true, reason: null };
+  // Flying units: airborne always cost 1 MP; landed cannot move
+  if (isFlying) {
+    const landed = actor?.getFlag?.("star-mercs", "landed") ?? false;
+    if (landed) return { cost: Infinity, passable: false, reason: "Landed flying units cannot move — take off first." };
+    return { cost: 1, passable: true, reason: null };
+  }
 
   // Hover units can cross any terrain including water at terrain cost - 1 (min 1)
   if (isHover) {
@@ -492,6 +534,12 @@ export function calculatePathCost(fromCenter, path, actor = null) {
   const isHover = actor?.hasTrait?.("Hover") ?? false;
   const isJumpCapable = actor?.hasTrait?.("Jump Capable") ?? false;
   const maxElevChange = isJumpCapable ? 2 : 1;
+  const isUnitAirborne = isFlying && !(actor?.getFlag?.("star-mercs", "landed") ?? false);
+
+  // Landed flying units cannot move
+  if (isFlying && !isUnitAirborne) {
+    return { totalCost: Infinity, costs: [], passable: false, blockedIndex: 0, reason: "Landed flying units cannot move — take off first." };
+  }
 
   let totalCost = 0;
   const costs = [];
@@ -500,8 +548,8 @@ export function calculatePathCost(fromCenter, path, actor = null) {
   for (let i = 0; i < path.length; i++) {
     const hexCenter = path[i];
 
-    // Elevation restriction (Flying exempt; Jump Capable allows ±2)
-    if (!isFlying) {
+    // Elevation restriction (airborne Flying exempt; Jump Capable allows ±2)
+    if (!isUnitAirborne) {
       const prevElev = getHexElevation(prevCenter);
       const nextElev = getHexElevation(hexCenter);
       if (Math.abs(nextElev - prevElev) > maxElevChange) {
