@@ -2685,6 +2685,180 @@ select:focus,
   color: #fff !important;
 }
 
+.star-mercs.structure-settings .supply-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 12px;
+}
+
+.star-mercs.structure-settings .supply-grid .form-group {
+  margin-bottom: 0;
+}
+
+/* ============================================ */
+/*  Structure Dialogs (sm-dialog dark theme)    */
+/* ============================================ */
+
+.star-mercs.sm-dialog {
+  background: transparent;
+  color: var(--sm-text);
+}
+
+.star-mercs.sm-dialog h3 {
+  color: var(--sm-accent);
+  font-size: 14px;
+  margin: 0 0 8px 0;
+  border-bottom: 1px solid var(--sm-border);
+  padding-bottom: 4px;
+}
+
+.star-mercs.sm-dialog h4 {
+  color: var(--sm-accent);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 4px 0 6px 0;
+  font-weight: 700;
+}
+
+.star-mercs.sm-dialog p {
+  font-size: 12px;
+  margin: 4px 0;
+  color: var(--sm-text);
+}
+
+.star-mercs.sm-dialog .form-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.star-mercs.sm-dialog .form-group > label {
+  flex: 0 0 auto;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--sm-text-muted);
+  font-weight: 600;
+  white-space: nowrap;
+  margin-bottom: 0;
+}
+
+.star-mercs.sm-dialog input[type="number"] {
+  width: 52px;
+  text-align: center;
+  background: var(--sm-bg-input);
+  color: var(--sm-text);
+  border: 1px solid var(--sm-border);
+  border-radius: var(--sm-radius);
+  padding: 4px;
+  font-size: 12px;
+}
+
+.star-mercs.sm-dialog input[type="text"] {
+  flex: 1;
+  min-width: 0;
+  background: var(--sm-bg-input);
+  color: var(--sm-text);
+  border: 1px solid var(--sm-border);
+  border-radius: var(--sm-radius);
+  padding: 4px 6px;
+  font-size: 12px;
+}
+
+.star-mercs.sm-dialog select {
+  flex: 1;
+  min-width: 0;
+  background: var(--sm-bg-input);
+  color: var(--sm-text);
+  border: 1px solid var(--sm-border);
+  border-radius: var(--sm-radius);
+  padding: 4px 6px;
+  font-size: 12px;
+}
+
+.star-mercs.sm-dialog input:focus,
+.star-mercs.sm-dialog select:focus {
+  border-color: var(--sm-accent);
+  outline: none;
+  box-shadow: 0 0 3px rgba(201, 162, 39, 0.3);
+}
+
+.star-mercs.sm-dialog .hint {
+  font-size: 11px;
+  color: var(--sm-text-dim);
+  white-space: nowrap;
+}
+
+.star-mercs.sm-dialog hr {
+  border: none;
+  border-top: 1px solid var(--sm-border);
+  margin: 8px 0;
+}
+
+/* Stats row — side-by-side groups */
+.star-mercs.sm-dialog .sm-stats-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.star-mercs.sm-dialog .sm-stats-row .form-group {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+/* Supply grid — 2-column layout for edit dialog */
+.star-mercs.sm-dialog .sm-supply-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 12px;
+}
+
+.star-mercs.sm-dialog .sm-supply-grid .form-group {
+  margin-bottom: 0;
+}
+
+.star-mercs.sm-dialog .sm-supply-grid input[type="number"] {
+  width: 42px;
+}
+
+/* Parent dialog window theming when containing sm-dialog */
+.dialog:has(.sm-dialog) .dialog-content {
+  background: var(--sm-bg-dark);
+  color: var(--sm-text);
+}
+
+.dialog:has(.sm-dialog) .dialog-buttons {
+  background: var(--sm-bg-dark);
+  border-top: 1px solid var(--sm-border);
+  padding: 6px 8px;
+}
+
+.dialog:has(.sm-dialog) .dialog-buttons button {
+  background: var(--sm-primary);
+  border: 1px solid var(--sm-primary-light);
+  color: #fff;
+  font-weight: 600;
+  font-size: 12px;
+  border-radius: var(--sm-radius);
+  padding: 5px 10px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.dialog:has(.sm-dialog) .dialog-buttons button:hover {
+  background: var(--sm-primary-light);
+}
+
+/* Style the window header for sm-dialog containers */
+.dialog:has(.sm-dialog) .window-header {
+  background: linear-gradient(135deg, var(--sm-bg-medium), var(--sm-bg-dark));
+  border-bottom: 2px solid var(--sm-primary);
+  color: var(--sm-text);
+}
+
 /* ============================================ */
 /*  Construction Picker                         */
 /* ============================================ */

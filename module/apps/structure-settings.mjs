@@ -17,7 +17,7 @@ export default class StructureSettings extends HandlebarsApplicationMixin(Applic
     },
     classes: ["star-mercs", "structure-settings"],
     position: {
-      width: 420,
+      width: 380,
       height: "auto"
     }
   };
