@@ -418,6 +418,39 @@ export default class StructureLayer extends PIXI.Container {
       };
     }
 
+    // Delete button — GM only
+    if (isGM) {
+      buttons.delete = {
+        icon: '<i class="fas fa-trash"></i>',
+        label: "Delete",
+        callback: async () => {
+          const confirmed = await Dialog.confirm({
+            title: "Delete Structure",
+            content: `<p>Delete <strong>${esc(displayName)}</strong>?</p>`,
+            defaultYes: false
+          });
+          if (!confirmed) return;
+
+          // Clean up bridge terrain flag if deleting a bridge
+          if (structure.type === "bridge" && structure.hexKey) {
+            const terrainMap = canvas.scene.getFlag("star-mercs", "terrainMap") ?? {};
+            if (terrainMap[structure.hexKey]) {
+              const hexData = typeof terrainMap[structure.hexKey] === "string"
+                ? { type: terrainMap[structure.hexKey], elevation: 0 }
+                : { ...terrainMap[structure.hexKey] };
+              delete hexData.bridge;
+              terrainMap[structure.hexKey] = hexData;
+              await canvas.scene.setFlag("star-mercs", "terrainMap", terrainMap);
+            }
+          }
+
+          await StructureLayer.removeStructure(structure.id);
+          game.starmercs?.structureLayer?.drawStructures();
+          ui.notifications.info(`${displayName} deleted.`);
+        }
+      };
+    }
+
     // Outpost supply buttons — completed friendly outposts
     if (structure.type === "outpost" && isComplete && (isGM || isFriendly)) {
       const autoLabel = structure.autoSupply === false ? "Enable Auto-Supply" : "Disable Auto-Supply";

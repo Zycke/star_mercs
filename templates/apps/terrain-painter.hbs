@@ -7,31 +7,33 @@
     </select>
   </div>
 
-  <div class="form-group">
-    <label>Elevation (0–{{maxElevation}})</label>
-    <input type="number" name="selectedElevation" value="{{selectedElevation}}"
-           min="0" max="{{maxElevation}}" step="1"/>
+  <div class="terrain-elev-road-row">
+    <div class="form-group">
+      <label>Elevation</label>
+      <input type="number" name="selectedElevation" value="{{selectedElevation}}"
+             min="0" max="{{maxElevation}}" step="1"/>
+    </div>
+    <div class="form-group">
+      <label class="checkbox">
+        <input type="checkbox" name="selectedRoad" {{#if selectedRoad}}checked{{/if}}/>
+        Road
+      </label>
+    </div>
   </div>
 
-  <div class="form-group">
-    <label class="checkbox">
-      <input type="checkbox" name="selectedRoad" {{#if selectedRoad}}checked{{/if}}/>
-      Road
-    </label>
-  </div>
-
-  <div class="form-group">
-    <label>Objective</label>
-    <select name="selectedObjective">
-      <option value="none" {{#if (eq selectedObjective "none")}}selected{{/if}}>None</option>
-      <option value="primary" {{#if (eq selectedObjective "primary")}}selected{{/if}}>Primary (3 pts)</option>
-      <option value="secondary" {{#if (eq selectedObjective "secondary")}}selected{{/if}}>Secondary (1 pt)</option>
-    </select>
-  </div>
-
-  <div class="form-group">
-    <label>Brush Size: {{brushSize}}</label>
-    <input type="range" name="brushSize" value="{{brushSize}}" min="1" max="5" step="1"/>
+  <div class="terrain-obj-brush-row">
+    <div class="form-group">
+      <label>Objective</label>
+      <select name="selectedObjective">
+        <option value="none" {{#if (eq selectedObjective "none")}}selected{{/if}}>None</option>
+        <option value="primary" {{#if (eq selectedObjective "primary")}}selected{{/if}}>Primary</option>
+        <option value="secondary" {{#if (eq selectedObjective "secondary")}}selected{{/if}}>Secondary</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Brush: {{brushSize}}</label>
+      <input type="range" name="brushSize" value="{{brushSize}}" min="1" max="5" step="1"/>
+    </div>
   </div>
   {{/unless}}
 
@@ -39,7 +41,7 @@
   <h4>Structure Placement</h4>
 
   <div class="form-group">
-    <label>Structure Brush</label>
+    <label>Structure</label>
     <select name="selectedStructure">
       <option value="" {{#unless selectedStructure}}selected{{/unless}}>-- Terrain Mode --</option>
       <option value="minefield" {{#if (eq selectedStructure "minefield")}}selected{{/if}}>Minefield</option>
@@ -63,7 +65,7 @@
 
     {{#if isMinefieldMode}}
     <div class="form-group">
-      <label>Minefield Type</label>
+      <label>Mine Type</label>
       <select name="mineSubType">
         <option value="antiPersonnel" {{#if (eq mineSubType "antiPersonnel")}}selected{{/if}}>Anti-Personnel</option>
         <option value="antiArmor" {{#if (eq mineSubType "antiArmor")}}selected{{/if}}>Anti-Armor</option>

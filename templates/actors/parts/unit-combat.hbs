@@ -9,87 +9,101 @@
     </div>
   {{/if}}
 
-  {{!-- Order Assignment --}}
-  <div class="status-block order-block">
-    <label>Current Order</label>
-    {{#if isOrdersPhase}}
-      {{#if isOwner}}
-      {{!-- Interactive dropdown during Orders phase --}}
-      <select class="order-select">
-        <option value="">-- Select Order --</option>
-        {{#each availableOrders as |order|}}
-          <option value="{{order.key}}"
-            {{#if (eq order.key ../currentOrderKey)}}selected{{/if}}>
-            {{order.label}}
-            {{#if order.readinessCost}}
-              ({{order.readinessCost}} RDY)
-            {{/if}}
-            {{#if (eq order.category "special")}} [Special]{{/if}}
-          </option>
-        {{/each}}
-      </select>
-      {{#if currentOrderData}}
-        {{#if currentOrderData.allowsMovement}}
-          <button type="button" class="set-move-destination">
-            <i class="fas fa-map-marker-alt"></i> Set Move Destination
-          </button>
-        {{/if}}
-      {{/if}}
-      {{#if orderDetails}}
-        <div class="order-details-box">
-          <div class="order-detail-row">
-            <span class="order-detail-label">Attack</span>
-            <span class="order-detail-value {{#if orderDetails.allowsAttack}}detail-allowed{{else}}detail-not-allowed{{/if}}">
-              {{#if orderDetails.allowsAttack}}Allowed{{else}}Not Allowed{{/if}}
-            </span>
-          </div>
-          <div class="order-detail-row">
-            <span class="order-detail-label">Movement</span>
-            <span class="order-detail-value {{#if orderDetails.allowsMovement}}detail-allowed{{else}}detail-not-allowed{{/if}}">
-              {{#if orderDetails.allowsMovement}}Up to {{orderDetails.movement}} MP{{else}}No Movement{{/if}}
-            </span>
-          </div>
-          <div class="order-detail-row">
-            <span class="order-detail-label">Readiness</span>
-            <span class="order-detail-value">{{orderDetails.readinessCost}} RDY</span>
-          </div>
-          <div class="order-detail-row">
-            <span class="order-detail-label">Supply</span>
-            <span class="order-detail-value">{{orderDetails.supplyModifier}}</span>
-          </div>
-        </div>
-      {{/if}}
-      {{else}}
-      {{!-- Non-owner sees read-only order during Orders phase --}}
-      <span class="status-value">
-        {{#if currentOrderKey}}{{currentOrderData.labelText}}{{else}}Awaiting orders...{{/if}}
-      </span>
-      {{/if}}
-    {{else}}
-      {{!-- Read-only display outside Orders phase --}}
-      <span class="status-value">
-        {{#if currentOrderKey}}
-          {{#if currentOrderData}}
-            {{currentOrderData.labelText}}
-            <span class="order-flags">
-              {{#if currentOrderData.allowsMovement}}
-                <i class="fas fa-running" title="Movement Allowed"></i>
-              {{else}}
-                <i class="fas fa-ban" title="No Movement"></i>
+  {{!-- Order + Movement Row --}}
+  <div class="order-mp-row">
+    {{!-- Order Assignment --}}
+    <div class="status-block order-block">
+      <label>Current Order</label>
+      {{#if isOrdersPhase}}
+        {{#if isOwner}}
+        {{!-- Interactive dropdown during Orders phase --}}
+        <select class="order-select">
+          <option value="">-- Select Order --</option>
+          {{#each availableOrders as |order|}}
+            <option value="{{order.key}}"
+              {{#if (eq order.key ../currentOrderKey)}}selected{{/if}}>
+              {{order.label}}
+              {{#if order.readinessCost}}
+                ({{order.readinessCost}} RDY)
               {{/if}}
-              {{#if currentOrderData.allowsAttack}}
-                <i class="fas fa-crosshairs" title="Attack Allowed"></i>
-              {{else}}
-                <i class="fas fa-shield-alt" title="No Attack"></i>
-              {{/if}}
-            </span>
-          {{else}}
-            {{currentOrderKey}}
+              {{#if (eq order.category "special")}} [Special]{{/if}}
+            </option>
+          {{/each}}
+        </select>
+        {{#if currentOrderData}}
+          {{#if currentOrderData.allowsMovement}}
+            <button type="button" class="set-move-destination">
+              <i class="fas fa-map-marker-alt"></i> Set Move Destination
+            </button>
           {{/if}}
-        {{else}}
-          None
         {{/if}}
-      </span>
+        {{#if orderDetails}}
+          <div class="order-details-box">
+            <div class="order-detail-row">
+              <span class="order-detail-label">Attack</span>
+              <span class="order-detail-value {{#if orderDetails.allowsAttack}}detail-allowed{{else}}detail-not-allowed{{/if}}">
+                {{#if orderDetails.allowsAttack}}Allowed{{else}}Not Allowed{{/if}}
+              </span>
+            </div>
+            <div class="order-detail-row">
+              <span class="order-detail-label">Movement</span>
+              <span class="order-detail-value {{#if orderDetails.allowsMovement}}detail-allowed{{else}}detail-not-allowed{{/if}}">
+                {{#if orderDetails.allowsMovement}}Up to {{orderDetails.movement}} MP{{else}}No Movement{{/if}}
+              </span>
+            </div>
+            <div class="order-detail-row">
+              <span class="order-detail-label">Readiness</span>
+              <span class="order-detail-value">{{orderDetails.readinessCost}} RDY</span>
+            </div>
+            <div class="order-detail-row">
+              <span class="order-detail-label">Supply</span>
+              <span class="order-detail-value">{{orderDetails.supplyModifier}}</span>
+            </div>
+          </div>
+        {{/if}}
+        {{else}}
+        {{!-- Non-owner sees read-only order during Orders phase --}}
+        <span class="status-value">
+          {{#if currentOrderKey}}{{currentOrderData.labelText}}{{else}}Awaiting orders...{{/if}}
+        </span>
+        {{/if}}
+      {{else}}
+        {{!-- Read-only display outside Orders phase --}}
+        <span class="status-value">
+          {{#if currentOrderKey}}
+            {{#if currentOrderData}}
+              {{currentOrderData.labelText}}
+              <span class="order-flags">
+                {{#if currentOrderData.allowsMovement}}
+                  <i class="fas fa-running" title="Movement Allowed"></i>
+                {{else}}
+                  <i class="fas fa-ban" title="No Movement"></i>
+                {{/if}}
+                {{#if currentOrderData.allowsAttack}}
+                  <i class="fas fa-crosshairs" title="Attack Allowed"></i>
+                {{else}}
+                  <i class="fas fa-shield-alt" title="No Attack"></i>
+                {{/if}}
+              </span>
+            {{else}}
+              {{currentOrderKey}}
+            {{/if}}
+          {{else}}
+            None
+          {{/if}}
+        </span>
+      {{/if}}
+    </div>
+
+    {{!-- Movement Points (shown during active combat) --}}
+    {{#if combatActive}}
+      <div class="status-block mp-block">
+        <label>Movement Points</label>
+        <span class="status-value">
+          {{mpRemaining}} / {{mpMax}} MP
+          {{#if mpUsed}}<span class="mp-used">(used {{mpUsed}})</span>{{/if}}
+        </span>
+      </div>
     {{/if}}
   </div>
 
@@ -116,17 +130,6 @@
     </div>
   {{/if}}
 
-  {{!-- Movement Points (shown during active combat) --}}
-  {{#if combatActive}}
-    <div class="status-block mp-block">
-      <label>Movement Points</label>
-      <span class="status-value">
-        {{mpRemaining}} / {{mpMax}} MP
-        {{#if mpUsed}}<span class="mp-used">(used {{mpUsed}})</span>{{/if}}
-      </span>
-    </div>
-  {{/if}}
-
   {{!-- Pending Damage (shown during tactical phase) --}}
   {{#if pendingDamage}}
     <div class="status-block pending-damage-block">
@@ -138,33 +141,48 @@
     </div>
   {{/if}}
 
-  {{!-- Active Signature --}}
-  <div class="status-block active-sig-block">
-    <label>Active Signature</label>
-    <div class="active-sig-display">
-      <span class="active-sig-value">{{activeSignature}}</span>
-      {{#if hasSignatureModifiers}}
-        <span class="sig-breakdown">
-          (base {{baseSignature}}{{#each signatureModifiers}} {{value}} {{label}}{{/each}})
-        </span>
-      {{/if}}
+  {{!-- Active Signature + Sensor Ring Row --}}
+  <div class="sig-sensor-row">
+    {{!-- Active Signature --}}
+    <div class="status-block active-sig-block">
+      <label>Active Signature</label>
+      <div class="active-sig-display">
+        <span class="active-sig-value">{{activeSignature}}</span>
+        {{#if hasSignatureModifiers}}
+          <span class="sig-breakdown">
+            (base {{baseSignature}}{{#each signatureModifiers}} {{value}} {{label}}{{/each}})
+          </span>
+        {{/if}}
+      </div>
+    </div>
+
+    {{!-- Sensor Ring Controls --}}
+    <div class="status-block sensor-ring-block">
+      <label>Sensor Ring</label>
+      <div class="sensor-ring-controls">
+        <label class="sm-ring-toggle-label">
+          <input type="checkbox" class="sm-sheet-ring-toggle" {{#if showDetectionRing}}checked{{/if}}/>
+          Show
+        </label>
+        <label class="sm-ring-sig-label">
+          Target Sig:
+          <input type="number" class="sm-sheet-ring-sig" value="{{detectionRingTargetSig}}" min="-5" max="10" step="1"/>
+        </label>
+      </div>
     </div>
   </div>
 
-  {{!-- Sensor Ring Controls --}}
-  <div class="status-block sensor-ring-block">
-    <label>Sensor Ring</label>
-    <div class="sensor-ring-controls">
-      <label class="sm-ring-toggle-label">
-        <input type="checkbox" class="sm-sheet-ring-toggle" {{#if showDetectionRing}}checked{{/if}}/>
-        Show
-      </label>
-      <label class="sm-ring-sig-label">
-        Target Sig:
-        <input type="number" class="sm-sheet-ring-sig" value="{{detectionRingTargetSig}}" min="-5" max="10" step="1"/>
-      </label>
+  {{!-- Terrain Cover Bonuses --}}
+  {{#if hasTerrainCover}}
+    <div class="status-block terrain-cover-block">
+      <label><i class="fas fa-shield-alt"></i> Terrain Cover</label>
+      <div class="terrain-cover-info">
+        {{#each terrainCoverModifiers}}
+          <span class="terrain-cover-mod">+{{value}} to hit this unit ({{label}})</span>
+        {{/each}}
+      </div>
     </div>
-  </div>
+  {{/if}}
 
   {{!-- Penalties Section (separate panel) --}}
   <div class="combat-penalties-section">

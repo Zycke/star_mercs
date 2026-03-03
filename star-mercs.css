@@ -2276,3 +2276,567 @@ select:focus,
 .star-mercs.chat-card .unit-link:hover {
   color: #fff;
 }
+
+/* ============================================ */
+/*  Combat Tab — Side-by-Side Row Layouts       */
+/* ============================================ */
+
+.star-mercs .sig-sensor-row,
+.star-mercs .order-mp-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.star-mercs .sig-sensor-row > .status-block,
+.star-mercs .order-mp-row > .status-block {
+  margin-bottom: 0;
+  min-width: 0;
+}
+
+/* When MP block is absent (no combat), order block fills full row */
+.star-mercs .order-mp-row > .status-block:only-child {
+  grid-column: 1 / -1;
+}
+
+/* ============================= */
+/*  Terrain Cover Block          */
+/* ============================= */
+
+.star-mercs .terrain-cover-block {
+  border-left: 3px solid var(--sm-primary-light);
+}
+
+.star-mercs .terrain-cover-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.star-mercs .terrain-cover-mod {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--sm-primary-light);
+}
+
+/* ============================================ */
+/*  Custom App Panels — Shared Base Styles      */
+/* ============================================ */
+
+.star-mercs.terrain-painter,
+.star-mercs.tactical-marker-painter,
+.star-mercs.structure-settings,
+.star-mercs.construction-picker,
+.star-mercs.team-settings {
+  background: var(--sm-bg-dark);
+  color: var(--sm-text);
+  border: 1px solid var(--sm-border);
+  font-family: "Roboto", "Segoe UI", Tahoma, sans-serif;
+}
+
+.star-mercs.terrain-painter .window-content,
+.star-mercs.tactical-marker-painter .window-content,
+.star-mercs.structure-settings .window-content,
+.star-mercs.construction-picker .window-content,
+.star-mercs.team-settings .window-content {
+  padding: 8px 10px;
+  background: var(--sm-bg-dark);
+  color: var(--sm-text);
+}
+
+/* Inline form groups (label + input on same line) */
+.star-mercs.terrain-painter .form-group,
+.star-mercs.tactical-marker-painter .form-group,
+.star-mercs.structure-settings .form-group,
+.star-mercs.team-settings .form-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.star-mercs.terrain-painter .form-group > label,
+.star-mercs.tactical-marker-painter .form-group > label,
+.star-mercs.structure-settings .form-group > label,
+.star-mercs.team-settings .form-group > label {
+  flex: 0 0 auto;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--sm-text-muted);
+  font-weight: 600;
+  margin-bottom: 0;
+  white-space: nowrap;
+}
+
+.star-mercs.terrain-painter .form-group select,
+.star-mercs.tactical-marker-painter .form-group select,
+.star-mercs.structure-settings .form-group select,
+.star-mercs.team-settings .form-group select {
+  flex: 1;
+  min-width: 0;
+  background: var(--sm-bg-input);
+  color: var(--sm-text);
+  border: 1px solid var(--sm-border);
+  border-radius: var(--sm-radius);
+  padding: 4px 6px;
+  font-size: 12px;
+}
+
+.star-mercs.terrain-painter .form-group input[type="number"],
+.star-mercs.tactical-marker-painter .form-group input[type="number"],
+.star-mercs.structure-settings .form-group input[type="number"],
+.star-mercs.team-settings .form-group input[type="number"] {
+  width: 48px;
+  text-align: center;
+  background: var(--sm-bg-input);
+  color: var(--sm-text);
+  border: 1px solid var(--sm-border);
+  border-radius: var(--sm-radius);
+  padding: 4px;
+  font-size: 12px;
+}
+
+.star-mercs.terrain-painter .form-group input[type="text"],
+.star-mercs.tactical-marker-painter .form-group input[type="text"] {
+  flex: 1;
+  min-width: 0;
+  background: var(--sm-bg-input);
+  color: var(--sm-text);
+  border: 1px solid var(--sm-border);
+  border-radius: var(--sm-radius);
+  padding: 4px 6px;
+  font-size: 12px;
+}
+
+.star-mercs.terrain-painter .form-group input:focus,
+.star-mercs.tactical-marker-painter .form-group input:focus,
+.star-mercs.structure-settings .form-group input:focus,
+.star-mercs.team-settings .form-group input:focus,
+.star-mercs.terrain-painter .form-group select:focus,
+.star-mercs.tactical-marker-painter .form-group select:focus,
+.star-mercs.structure-settings .form-group select:focus,
+.star-mercs.team-settings .form-group select:focus {
+  border-color: var(--sm-accent);
+  outline: none;
+  box-shadow: 0 0 3px rgba(201, 162, 39, 0.3);
+}
+
+/* Shared button styling for app panels */
+.star-mercs.terrain-painter button,
+.star-mercs.tactical-marker-painter button,
+.star-mercs.structure-settings button,
+.star-mercs.construction-picker button,
+.star-mercs.team-settings button {
+  background: var(--sm-primary);
+  border: 1px solid var(--sm-primary-light);
+  color: #ffffff;
+  padding: 5px 10px;
+  border-radius: var(--sm-radius);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  transition: background 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+
+.star-mercs.terrain-painter button:hover,
+.star-mercs.tactical-marker-painter button:hover,
+.star-mercs.structure-settings button:hover,
+.star-mercs.construction-picker button:hover,
+.star-mercs.team-settings button:hover {
+  background: var(--sm-primary-light);
+}
+
+/* Active toggle button (Stop Painting / Stop Placing) */
+.star-mercs.terrain-painter button.active,
+.star-mercs.tactical-marker-painter button.active {
+  background: var(--sm-danger);
+  border-color: var(--sm-danger-light);
+}
+
+.star-mercs.terrain-painter button.active:hover,
+.star-mercs.tactical-marker-painter button.active:hover {
+  background: var(--sm-danger-light);
+}
+
+/* Danger/clear buttons */
+.star-mercs.terrain-painter .clear-all-terrain,
+.star-mercs.tactical-marker-painter .clear-team-markers {
+  background: var(--sm-bg-light);
+  border-color: var(--sm-border);
+  color: var(--sm-text-muted);
+  font-size: 11px;
+}
+
+.star-mercs.terrain-painter .clear-all-terrain:hover,
+.star-mercs.tactical-marker-painter .clear-team-markers:hover {
+  background: var(--sm-danger);
+  border-color: var(--sm-danger-light);
+  color: #fff;
+}
+
+/* Notes text */
+.star-mercs.terrain-painter .notes,
+.star-mercs.tactical-marker-painter .notes,
+.star-mercs.structure-settings .notes,
+.star-mercs.construction-picker .notes,
+.star-mercs.team-settings .notes {
+  font-size: 10px;
+  color: var(--sm-text-dim);
+  line-height: 1.4;
+  margin: 4px 0;
+}
+
+/* HR dividers */
+.star-mercs.terrain-painter hr,
+.star-mercs.tactical-marker-painter hr,
+.star-mercs.structure-settings hr,
+.star-mercs.construction-picker hr,
+.star-mercs.team-settings hr {
+  border: none;
+  border-top: 1px solid var(--sm-border);
+  margin: 8px 0;
+}
+
+/* Section headings */
+.star-mercs.terrain-painter h4,
+.star-mercs.tactical-marker-painter h4,
+.star-mercs.structure-settings h4,
+.star-mercs.construction-picker h4 {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--sm-accent);
+  margin: 4px 0 6px 0;
+  font-weight: 700;
+}
+
+.star-mercs.team-settings h3 {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--sm-accent);
+  margin: 4px 0 8px 0;
+  font-weight: 700;
+  border-bottom: 1px solid var(--sm-border);
+  padding-bottom: 4px;
+}
+
+/* Checkbox labels inline */
+.star-mercs.terrain-painter .form-group label.checkbox {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  text-transform: none;
+}
+
+/* ============================================ */
+/*  Terrain Painter                             */
+/* ============================================ */
+
+.star-mercs.terrain-painter .terrain-elev-road-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.star-mercs.terrain-painter .terrain-elev-road-row .form-group {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+.star-mercs.terrain-painter .terrain-elev-road-row input[type="number"] {
+  width: 42px;
+}
+
+.star-mercs.terrain-painter .terrain-obj-brush-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.star-mercs.terrain-painter .terrain-obj-brush-row .form-group {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+.star-mercs.terrain-painter .form-group input[type="range"] {
+  flex: 1;
+  min-width: 0;
+}
+
+.star-mercs.terrain-painter .terrain-painter-buttons {
+  margin-top: 4px;
+}
+
+.star-mercs.terrain-painter .terrain-painter-buttons button {
+  width: 100%;
+}
+
+/* ============================================ */
+/*  Tactical Marker Painter                     */
+/* ============================================ */
+
+.star-mercs.tactical-marker-painter .marker-type-serial-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.star-mercs.tactical-marker-painter .marker-type-serial-row .form-group {
+  margin-bottom: 0;
+}
+
+.star-mercs.tactical-marker-painter .marker-type-serial-row .form-group:first-child {
+  flex: 1;
+}
+
+.star-mercs.tactical-marker-painter .marker-type-serial-row input[type="text"] {
+  width: 48px;
+  flex: 0 0 48px;
+  text-align: center;
+}
+
+.star-mercs.tactical-marker-painter .tactical-marker-buttons {
+  margin-top: 4px;
+}
+
+.star-mercs.tactical-marker-painter .tactical-marker-buttons button {
+  width: 100%;
+}
+
+/* ============================================ */
+/*  Structure Settings                          */
+/* ============================================ */
+
+.star-mercs.structure-settings fieldset {
+  border: 1px solid var(--sm-border);
+  border-radius: var(--sm-radius-lg);
+  padding: 8px 10px;
+  margin-bottom: 10px;
+  background: var(--sm-bg-medium);
+}
+
+.star-mercs.structure-settings fieldset legend {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--sm-accent);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 0 6px;
+}
+
+.star-mercs.structure-settings .structure-stats-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.star-mercs.structure-settings .structure-stats-row .form-group {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+.star-mercs.structure-settings .form-group input[type="number"] {
+  width: 48px;
+}
+
+.star-mercs.structure-settings details.supply-capacities {
+  margin-top: 6px;
+}
+
+.star-mercs.structure-settings details.supply-capacities summary {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--sm-text-muted);
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 2px 0;
+}
+
+.star-mercs.structure-settings .supply-capacities .form-group {
+  margin-bottom: 4px;
+}
+
+.star-mercs.structure-settings .structure-settings-buttons {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+.star-mercs.structure-settings .reset-defaults {
+  background: var(--sm-bg-light) !important;
+  border-color: var(--sm-border) !important;
+  color: var(--sm-text-muted) !important;
+}
+
+.star-mercs.structure-settings .reset-defaults:hover {
+  background: var(--sm-danger) !important;
+  border-color: var(--sm-danger-light) !important;
+  color: #fff !important;
+}
+
+/* ============================================ */
+/*  Construction Picker                         */
+/* ============================================ */
+
+.star-mercs.construction-picker .window-content {
+  padding: 8px 10px;
+  background: var(--sm-bg-dark);
+  color: var(--sm-text);
+}
+
+.star-mercs.construction-picker .structure-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.star-mercs.construction-picker .structure-choice {
+  padding: 8px 10px;
+  background: var(--sm-bg-medium);
+  border: 2px solid var(--sm-border);
+  border-radius: var(--sm-radius-lg);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.star-mercs.construction-picker .structure-choice:hover:not(.disabled) {
+  border-color: var(--sm-accent);
+  background: var(--sm-bg-light);
+}
+
+.star-mercs.construction-picker .structure-choice.selected {
+  border-color: var(--sm-accent);
+  background: rgba(201, 162, 39, 0.1);
+  box-shadow: 0 0 6px rgba(201, 162, 39, 0.2);
+}
+
+.star-mercs.construction-picker .structure-choice.disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.star-mercs.construction-picker .choice-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.star-mercs.construction-picker .choice-header i {
+  color: var(--sm-accent);
+  font-size: 14px;
+  width: 16px;
+  text-align: center;
+}
+
+.star-mercs.construction-picker .choice-cost {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--sm-text-muted);
+  white-space: nowrap;
+}
+
+.star-mercs.construction-picker .choice-description {
+  font-size: 11px;
+  color: var(--sm-text-dim);
+  margin-top: 3px;
+  padding-left: 22px;
+}
+
+.star-mercs.construction-picker .choice-unavailable {
+  font-size: 11px;
+  color: var(--sm-danger-light);
+  margin-top: 3px;
+  padding-left: 22px;
+}
+
+.star-mercs.construction-picker .sub-options {
+  background: var(--sm-bg-medium);
+  border: 1px solid var(--sm-border);
+  border-radius: var(--sm-radius);
+  padding: 6px 8px;
+  margin-bottom: 8px;
+}
+
+.star-mercs.construction-picker .sub-type-radios {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.star-mercs.construction-picker .sub-type-radios .radio-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 4px;
+  border-radius: var(--sm-radius);
+}
+
+.star-mercs.construction-picker .sub-type-radios .radio-label:hover {
+  background: var(--sm-bg-light);
+}
+
+.star-mercs.construction-picker .construction-picker-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.star-mercs.construction-picker .construction-picker-buttons button {
+  flex: 1;
+}
+
+.star-mercs.construction-picker .cancel-construction {
+  background: var(--sm-bg-light) !important;
+  border-color: var(--sm-border) !important;
+  color: var(--sm-text-muted) !important;
+}
+
+.star-mercs.construction-picker .cancel-construction:hover {
+  background: var(--sm-bg-medium) !important;
+  color: var(--sm-text) !important;
+}
+
+/* ============================================ */
+/*  Team Settings                               */
+/* ============================================ */
+
+.star-mercs.team-settings .window-content {
+  padding: 8px 10px;
+  background: var(--sm-bg-dark);
+  color: var(--sm-text);
+}
+
+.star-mercs.team-settings .form-group label {
+  min-width: 100px;
+}
+
+.star-mercs.team-settings .form-group input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--sm-primary);
+  margin: 0;
+}
+
+.star-mercs.team-settings .sheet-footer {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--sm-border);
+}
+
+.star-mercs.team-settings .sheet-footer button {
+  width: 100%;
+}

@@ -1,7 +1,7 @@
 import StarMercsActor from "../documents/actor.mjs";
 import { snapToHexCenter, hexKey, computeHexPath, calculatePathCost,
   getHexData, getAdjacentHexCenters, getStructureAtHex, normalizeHexData } from "../hex-utils.mjs";
-import { checkLOS, getActiveSignature } from "../detection.mjs";
+import { checkLOS, getActiveSignature, getTerrainCoverMod } from "../detection.mjs";
 import ConstructionPicker from "../apps/construction-picker.mjs";
 
 /**
@@ -193,6 +193,18 @@ export default class StarMercsUnitSheet extends ActorSheet {
       context.baseSignature = this.actor.system.signature ?? 0;
       context.signatureModifiers = [];
       context.hasSignatureModifiers = false;
+    }
+
+    // Terrain cover (accuracy penalty for attackers targeting this unit)
+    if (activeToken) {
+      const coverData = getTerrainCoverMod(activeToken);
+      context.terrainCoverMod = coverData.mod;
+      context.terrainCoverModifiers = coverData.modifiers;
+      context.hasTerrainCover = coverData.mod > 0;
+    } else {
+      context.terrainCoverMod = 0;
+      context.terrainCoverModifiers = [];
+      context.hasTerrainCover = false;
     }
 
     // Sensor ring controls (client settings)
