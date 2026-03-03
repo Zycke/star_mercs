@@ -249,7 +249,7 @@ export default class StarMercsUnitSheet extends ActorSheet {
       if (item.type === "weapon") {
         // Build weapon display data with resolved target name
         // Resolve attack type label and weapon traits label
-        const attackTypeLabels = { soft: "Soft", hard: "Hard", antiAir: "Anti-Air" };
+        const attackTypeLabels = { soft: "Soft", hard: "Hard", antiAir: "Anti-Air", aps: "APS", zps: "ZPS" };
         const wTraits = [];
         if (item.system.indirect) wTraits.push("Indirect");
         if (item.system.area) wTraits.push("Area");
@@ -265,7 +265,8 @@ export default class StarMercsUnitSheet extends ActorSheet {
           attackTypeLabel: attackTypeLabels[item.system.attackType] ?? item.system.attackType,
           traitsLabel: wTraits.length > 0 ? wTraits.join(", ") : "—",
           targetName: null,
-          targetId: null
+          targetId: null,
+          isDefensive: (item.system.attackType === "aps" || item.system.attackType === "zps")
         };
 
         const targetId = item.system.targetId;
@@ -427,6 +428,12 @@ export default class StarMercsUnitSheet extends ActorSheet {
     const itemId = li.dataset.itemId;
     const item = this.actor.items.get(itemId);
     if (!item) return;
+
+    // APS/ZPS are defensive-only — cannot be assigned targets
+    if (item.system.attackType === "aps" || item.system.attackType === "zps") {
+      ui.notifications.warn(`${item.name} is a defensive system — it cannot be assigned targets.`);
+      return;
+    }
 
     const targets = game.user.targets;
     if (targets.size === 0) {

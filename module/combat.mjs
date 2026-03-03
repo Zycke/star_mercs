@@ -25,6 +25,12 @@ import { getTerrainCoverMod } from "./detection.mjs";
  */
 export function validateAttack(weapon, target) {
   const attackType = weapon.system.attackType;
+
+  // APS/ZPS are defensive-only — cannot target units
+  if (attackType === "aps" || attackType === "zps") {
+    return { valid: false, reason: `${weapon.name} is a defensive system — it cannot target units.`, softVsHeavy: false };
+  }
+
   const isFlying = target.hasTrait("Flying");
   const isHovering = target.hasTrait("Hover");
   const isHeavy = target.hasTrait("Heavy");
@@ -293,6 +299,91 @@ export function calculateDamage(weapon, attacker, target, hitType) {
 }
 
 /**
+ * Resolve APS/ZPS interception for an incoming attack.
+ * Only ordnance-ammo attacks trigger interception.
+ * Both APS and ZPS fire even if damage is already negated (they still consume ammo).
+ * Each weapon's reduction diminishes by 1 per firing this turn (overloaded at 0).
+ *
+ * Does NOT consume ammo or update fire counts — that is the caller's responsibility.
+ *
+ * @param {Item} attackingWeapon - The weapon that fired.
+ * @param {StarMercsActor} target - The unit being attacked.
+ * @param {Map|null} ammoOverrides - actorId -> { ammoType -> remainingCount } for volley tracking
+ * @param {Map|null} fireCountOverrides - actorId -> { weaponId -> count } for volley tracking
+ * @returns {{ totalReduction: number, interceptors: Array<{actorId, weaponId, weaponName, actorName, reduction, baseDamage, fireCount, type, ammoType}> }}
+ */
+export function resolveInterception(attackingWeapon, target, ammoOverrides = null, fireCountOverrides = null) {
+  const ammoType = attackingWeapon.system.ammoType || "projectile";
+  if (ammoType !== "ordnance") return { totalReduction: 0, interceptors: [] };
+
+  const interceptors = [];
+  const targetToken = canvas?.tokens?.placeables.find(t => t.actor === target);
+  if (!targetToken) return { totalReduction: 0, interceptors: [] };
+
+  // Helper: get effective ammo for an actor
+  const getAmmo = (actor, aType) => {
+    if (ammoOverrides?.has(actor.id)) return ammoOverrides.get(actor.id)[aType] ?? 0;
+    return actor.system.supply?.[aType]?.current ?? 0;
+  };
+
+  // Helper: get fire count for a weapon (how many times it has intercepted this turn)
+  const getFireCount = (actor, weaponId) => {
+    if (fireCountOverrides?.has(actor.id)) return fireCountOverrides.get(actor.id)[weaponId] ?? 0;
+    const counts = actor.getFlag("star-mercs", "interceptionCounts") ?? {};
+    return counts[weaponId] ?? 0;
+  };
+
+  // APS: Check target's own APS weapons
+  for (const weapon of target.items) {
+    if (weapon.type !== "weapon" || weapon.system.attackType !== "aps") continue;
+    const wpnAmmo = weapon.system.ammoType || "projectile";
+    if (getAmmo(target, wpnAmmo) <= 0) continue;
+    const fireCount = getFireCount(target, weapon.id);
+    const effectiveReduction = weapon.system.damage - fireCount;
+    if (effectiveReduction <= 0) continue; // Overloaded — doesn't fire
+    interceptors.push({
+      actorId: target.id, weaponId: weapon.id,
+      weaponName: weapon.name, actorName: target.name,
+      reduction: effectiveReduction, baseDamage: weapon.system.damage,
+      fireCount, type: "aps", ammoType: wpnAmmo
+    });
+    break; // One APS weapon per unit per attack
+  }
+
+  // ZPS: Check nearby friendly units' ZPS weapons (including target's own unit)
+  const targetTeam = target.system.team ?? "a";
+  for (const token of (canvas?.tokens?.placeables ?? [])) {
+    if (!token.actor || token.actor.type !== "unit") continue;
+    if ((token.actor.system.team ?? "a") !== targetTeam) continue;
+    for (const weapon of token.actor.items) {
+      if (weapon.type !== "weapon" || weapon.system.attackType !== "zps") continue;
+      // Range check: ZPS weapon's range stat (distance from ZPS carrier to target)
+      const dist = canvas.grid.measurePath([token.center, targetToken.center]);
+      const gridDist = canvas.scene.grid.distance || 1;
+      const hexDist = Math.round(dist.distance / gridDist);
+      if (hexDist > weapon.system.range) continue;
+      // Ammo check
+      const wpnAmmo = weapon.system.ammoType || "projectile";
+      if (getAmmo(token.actor, wpnAmmo) <= 0) continue;
+      // Diminishing returns
+      const fireCount = getFireCount(token.actor, weapon.id);
+      const effectiveReduction = weapon.system.damage - fireCount;
+      if (effectiveReduction <= 0) continue; // Overloaded — doesn't fire
+      interceptors.push({
+        actorId: token.actor.id, weaponId: weapon.id,
+        weaponName: weapon.name, actorName: token.actor.name,
+        reduction: effectiveReduction, baseDamage: weapon.system.damage,
+        fireCount, type: "zps", ammoType: wpnAmmo
+      });
+      break; // One ZPS weapon per friendly unit per attack
+    }
+  }
+
+  const totalReduction = interceptors.reduce((sum, i) => sum + i.reduction, 0);
+  return { totalReduction, interceptors };
+}
+
+/**
  * Resolve a full attack: validate, roll, calculate, and package results.
  * Does NOT apply damage — that is the caller's responsibility.
  *
@@ -311,7 +402,7 @@ export function calculateDamage(weapon, attacker, target, hitType) {
  *   target: StarMercsActor
  * }>}
  */
-export async function resolveAttack(weapon, attacker, target) {
+export async function resolveAttack(weapon, attacker, target, interceptionAmmoOverrides = null, interceptionFireOverrides = null) {
   // Step 1: Validate
   const validation = validateAttack(weapon, target);
   if (!validation.valid) {
@@ -357,6 +448,22 @@ export async function resolveAttack(weapon, attacker, target) {
     }
   }
 
+  // Step 6: Resolve APS/ZPS interception (only for ordnance-ammo hits)
+  // Both APS and ZPS fire even if damage is already at minimum.
+  let interception = { totalReduction: 0, interceptors: [] };
+  if (hitResult.hit && damage) {
+    interception = resolveInterception(weapon, target, interceptionAmmoOverrides, interceptionFireOverrides);
+    if (interception.totalReduction > 0) {
+      damage.final = Math.max(1, damage.final - interception.totalReduction);
+      damage.modifiers.push(
+        ...interception.interceptors.map(i => ({
+          label: `${i.type.toUpperCase()} (${i.actorName})`,
+          value: -i.reduction
+        }))
+      );
+    }
+  }
+
   return {
     valid: true,
     reason: null,
@@ -365,6 +472,7 @@ export async function resolveAttack(weapon, attacker, target) {
     hitResult,
     damage,
     softVsHeavy,
+    interception,
     weapon,
     attacker,
     target

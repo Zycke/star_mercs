@@ -989,6 +989,41 @@
   color: var(--sm-danger-light);
 }
 
+/* APS/ZPS Interception display */
+
+.star-mercs.chat-card .interception-section {
+  margin-top: 4px;
+  padding: 4px 6px;
+  background: rgba(51, 204, 255, 0.1);
+  border-left: 2px solid #33ccff;
+  border-radius: 2px;
+}
+
+.star-mercs.chat-card .interception-entry {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+}
+
+.star-mercs.chat-card .interception-badge {
+  font-weight: 700;
+  font-size: 10px;
+  padding: 1px 4px;
+  border-radius: 2px;
+  background: rgba(51, 204, 255, 0.2);
+  color: #33ccff;
+}
+
+.star-mercs.chat-card .interception-badge.ZPS {
+  background: rgba(51, 255, 153, 0.2);
+  color: #33ff99;
+}
+
+.star-mercs.chat-card .interception-detail {
+  color: var(--sm-text-muted);
+}
+
 /* Target status */
 
 .star-mercs.chat-card .target-status {

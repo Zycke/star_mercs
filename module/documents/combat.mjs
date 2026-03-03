@@ -378,23 +378,30 @@ export default class StarMercsCombat extends Combat {
       const actor = combatant.actor;
       if (!actor || actor.type !== "unit") continue;
 
+      // Energy recharge
       const energy = actor.system.supply?.energy;
-      if (!energy) continue;
-      const rate = energy.rechargeRate ?? 0;
-      if (rate <= 0 || energy.current >= energy.capacity) continue;
+      if (energy) {
+        const rate = energy.rechargeRate ?? 0;
+        if (rate > 0 && energy.current < energy.capacity) {
+          const newEnergy = Math.min(energy.current + rate, energy.capacity);
+          await actor.update({ "system.supply.energy.current": newEnergy });
 
-      const newEnergy = Math.min(energy.current + rate, energy.capacity);
-      await actor.update({ "system.supply.energy.current": newEnergy });
+          const recharged = newEnergy - energy.current;
+          const token = combatant.token;
+          const unitName = token?.name ?? actor.name;
+          const unitTeam = actor.system.team ?? "a";
+          await ChatMessage.create({
+            content: `<div class="star-mercs chat-card"><div class="summary-header"><i class="fas fa-bolt"></i> <strong>${unitName}</strong> — Energy recharged +${recharged} (${newEnergy}/${energy.capacity})</div></div>`,
+            speaker: { alias: "Star Mercs" },
+            whisper: StarMercsCombat.getTeamWhisperIds(unitTeam)
+          });
+        }
+      }
 
-      const recharged = newEnergy - energy.current;
-      const token = combatant.token;
-      const unitName = token?.name ?? actor.name;
-      const unitTeam = actor.system.team ?? "a";
-      await ChatMessage.create({
-        content: `<div class="star-mercs chat-card"><div class="summary-header"><i class="fas fa-bolt"></i> <strong>${unitName}</strong> — Energy recharged +${recharged} (${newEnergy}/${energy.capacity})</div></div>`,
-        speaker: { alias: "Star Mercs" },
-        whisper: StarMercsCombat.getTeamWhisperIds(unitTeam)
-      });
+      // Reset APS/ZPS interception fire counts (diminishing returns reset each turn)
+      if (actor.getFlag("star-mercs", "interceptionCounts")) {
+        await actor.unsetFlag("star-mercs", "interceptionCounts");
+      }
     }
   }
 

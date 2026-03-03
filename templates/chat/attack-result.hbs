@@ -67,6 +67,18 @@
             {{/each}}
           </div>
         {{/if}}
+
+        {{!-- APS/ZPS Interception --}}
+        {{#if hasInterception}}
+          <div class="interception-section">
+            {{#each interceptors}}
+              <div class="interception-entry">
+                <span class="interception-badge {{this.typeBadge}}">{{this.typeBadge}}</span>
+                <span class="interception-detail">{{this.actorName}} — {{this.weaponName}} (-{{this.reduction}})</span>
+              </div>
+            {{/each}}
+          </div>
+        {{/if}}
       </div>
 
       {{!-- Target status after damage --}}

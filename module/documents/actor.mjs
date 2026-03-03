@@ -338,7 +338,15 @@ export default class StarMercsActor extends Actor {
       targetRouted: damageApplied?.routed ?? false,
       targetNewStrength: damageApplied?.newStrength ?? null,
       targetNewReadiness: damageApplied?.newReadiness ?? null,
-      readinessLost: damageApplied?.readinessLost ?? 0
+      readinessLost: damageApplied?.readinessLost ?? 0,
+      // APS/ZPS interception display
+      hasInterception: (result.interception?.interceptors?.length ?? 0) > 0,
+      interceptors: (result.interception?.interceptors ?? []).map(i => ({
+        typeBadge: i.type.toUpperCase(),
+        actorName: i.actorName,
+        weaponName: i.weaponName,
+        reduction: i.reduction
+      }))
     };
 
     const content = await foundry.applications.handlebars.renderTemplate(
@@ -348,6 +356,25 @@ export default class StarMercsActor extends Actor {
 
     // Consume 1 ammo immediately when weapon fires
     await this._consumeAmmo(weapon);
+
+    // Consume interception ammo from APS/ZPS units and update fire counts
+    if (result.interception?.interceptors?.length > 0) {
+      for (const interceptor of result.interception.interceptors) {
+        const intActor = game.actors.get(interceptor.actorId);
+        if (!intActor) continue;
+        const updateData = {};
+        // Consume 1 ammo
+        const sup = intActor.system.supply?.[interceptor.ammoType];
+        if (sup && sup.current > 0) {
+          updateData[`system.supply.${interceptor.ammoType}.current`] = sup.current - 1;
+        }
+        // Increment fire count for diminishing returns
+        const counts = foundry.utils.deepClone(intActor.getFlag("star-mercs", "interceptionCounts") ?? {});
+        counts[interceptor.weaponId] = (counts[interceptor.weaponId] ?? 0) + 1;
+        updateData["flags.star-mercs.interceptionCounts"] = counts;
+        await intActor.update(updateData);
+      }
+    }
 
     // Track per-weapon fired list (for preventing double-fire in same phase)
     if (game.combat?.started && attackerToken) {
@@ -540,6 +567,8 @@ export default class StarMercsActor extends Actor {
     const targetedWeapons = [];
     for (const item of this.items) {
       if (item.type === "weapon" && item.system.targetId) {
+        // APS/ZPS are defensive-only — skip
+        if (item.system.attackType === "aps" || item.system.attackType === "zps") continue;
         // Skip weapons that have already fired this tactical phase
         if (firedWeapons.includes(item.id)) {
           ui.notifications.warn(`${item.name} has already fired this tactical phase.`);
@@ -578,12 +607,42 @@ export default class StarMercsActor extends Actor {
     }
 
     // Phase 1: Resolve all attacks (roll dice + calculate damage, no application yet)
+    // Track interception ammo/fire-counts across the volley for diminishing returns
+    const interceptionAmmoTracker = new Map(); // actorId -> { ammoType -> remaining }
+    const interceptionFireTracker = new Map(); // actorId -> { weaponId -> count }
     const results = [];
     for (const { weapon, target, targetToken } of targetedWeapons) {
-      const result = await resolveAttack(weapon, this, target);
+      const result = await resolveAttack(weapon, this, target, interceptionAmmoTracker, interceptionFireTracker);
       result.targetTokenId = targetToken.id;
       result.targetTokenName = targetToken.name;
       results.push(result);
+
+      // Update interception trackers after each attack resolves
+      if (result.interception?.interceptors?.length > 0) {
+        for (const interceptor of result.interception.interceptors) {
+          // Initialize ammo tracker for this actor if needed
+          if (!interceptionAmmoTracker.has(interceptor.actorId)) {
+            const intActor = game.actors.get(interceptor.actorId);
+            const ammoTypes = {};
+            for (const [key, val] of Object.entries(intActor?.system?.supply ?? {})) {
+              if (val?.current !== undefined) ammoTypes[key] = val.current;
+            }
+            interceptionAmmoTracker.set(interceptor.actorId, ammoTypes);
+          }
+          const ammo = interceptionAmmoTracker.get(interceptor.actorId);
+          ammo[interceptor.ammoType] = Math.max(0, (ammo[interceptor.ammoType] ?? 0) - 1);
+
+          // Initialize fire count tracker for this actor if needed
+          if (!interceptionFireTracker.has(interceptor.actorId)) {
+            const intActor = game.actors.get(interceptor.actorId);
+            interceptionFireTracker.set(interceptor.actorId,
+              foundry.utils.deepClone(intActor?.getFlag("star-mercs", "interceptionCounts") ?? {})
+            );
+          }
+          const fc = interceptionFireTracker.get(interceptor.actorId);
+          fc[interceptor.weaponId] = (fc[interceptor.weaponId] ?? 0) + 1;
+        }
+      }
     }
 
     // Phase 2: Group damage by target token for simultaneous application
@@ -738,7 +797,15 @@ export default class StarMercsActor extends Actor {
         targetRouted: false,
         targetNewStrength: null,
         targetNewReadiness: null,
-        readinessLost: 0
+        readinessLost: 0,
+        // APS/ZPS interception display
+        hasInterception: (result.interception?.interceptors?.length ?? 0) > 0,
+        interceptors: (result.interception?.interceptors ?? []).map(i => ({
+          typeBadge: i.type.toUpperCase(),
+          actorName: i.actorName,
+          weaponName: i.weaponName,
+          reduction: i.reduction
+        }))
       };
 
       await ChatMessage.create({
@@ -807,6 +874,18 @@ export default class StarMercsActor extends Actor {
       }
       if (Object.keys(supplyUpdate).length > 0) {
         await this.update(supplyUpdate);
+      }
+
+      // Batch-apply interception ammo consumption + fire counts for APS/ZPS units
+      for (const [actorId, ammoUsage] of interceptionAmmoTracker) {
+        const intActor = game.actors.get(actorId);
+        if (!intActor) continue;
+        const updateData = {};
+        for (const [ammoType, remaining] of Object.entries(ammoUsage)) {
+          updateData[`system.supply.${ammoType}.current`] = Math.max(0, remaining);
+        }
+        updateData["flags.star-mercs.interceptionCounts"] = interceptionFireTracker.get(actorId) ?? {};
+        await intActor.update(updateData);
       }
 
       // Track each weapon as fired this phase (for preventing double-fire)
