@@ -171,6 +171,27 @@ STARMERCS.orders = {
     supplyModifier: "2x",
     description: "Unit performs a devastating drop assault from orbit or high altitude."
   },
+  change_altitude: {
+    label: "Change Altitude",
+    category: "standard",
+    requiredTrait: "Flying",
+    allowsMovement: false,
+    allowsAttack: true,
+    readinessCost: 0,
+    supplyModifier: "1x",
+    description: "Flying unit changes altitude. Costs 1 fuel per altitude level changed. May fire weapons."
+  },
+  fly: {
+    label: "Fly",
+    category: "standard",
+    requiredTrait: "Flying",
+    allowsMovement: true,
+    allowsAttack: true,
+    accuracyPenalty: 1,
+    readinessCost: -1,
+    supplyModifier: "1x",
+    description: "Flying unit maneuvers to a destination hex and adjusts altitude. May fire at -1 accuracy after movement."
+  },
   supply_order: {
     label: "Supply",
     category: "special",

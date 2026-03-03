@@ -118,30 +118,25 @@
         </div>
         {{#if isPreparationPhase}}
           {{#if isOwner}}
-            <button type="button" class="flight-takeoff-btn">
-              <i class="fas fa-arrow-up"></i> Take Off
-            </button>
+            {{#if canTakeOff}}
+              <button type="button" class="flight-takeoff-btn">
+                <i class="fas fa-arrow-up"></i> Take Off
+              </button>
+            {{else}}
+              <span class="flight-note">No fuel — cannot take off</span>
+            {{/if}}
           {{/if}}
         {{/if}}
       {{else}}
         <div class="flight-status-row">
           <span class="flight-badge airborne">AIRBORNE</span>
           <span class="altitude-display">ALT {{currentAltitude}}</span>
-          <span class="altitude-range">({{minAltitude}}–{{maxAltitude}})</span>
+          <span class="altitude-range">(terrain {{minAltitude}}, max {{maxAltitude}})</span>
         </div>
-        {{#if isTacticalPhase}}
-          {{#if isOwner}}
-            <div class="altitude-controls">
-              <button type="button" class="altitude-down-btn" {{#unless canDescend}}disabled{{/unless}}>
-                <i class="fas fa-chevron-down"></i>
-              </button>
-              <span class="altitude-value">ALT {{currentAltitude}}</span>
-              <button type="button" class="altitude-up-btn" {{#unless canClimb}}disabled{{/unless}}>
-                <i class="fas fa-chevron-up"></i>
-              </button>
-              <span class="altitude-cost">(1 MP each)</span>
-            </div>
-          {{/if}}
+        {{#if altitudeTargetSet}}
+          <div class="flight-order-info">
+            <i class="fas fa-arrow-right"></i> Target ALT {{altitudeTargetValue}}
+          </div>
         {{/if}}
         {{#if isPreparationPhase}}
           {{#if isOwner}}
@@ -150,7 +145,7 @@
                 <i class="fas fa-arrow-down"></i> Land
               </button>
             {{else}}
-              <span class="flight-note">Must descend to hex elevation ({{minAltitude}}) to land</span>
+              <span class="flight-note">Must descend to terrain elevation ({{minAltitude}}) to land</span>
             {{/if}}
           {{/if}}
         {{/if}}
@@ -283,6 +278,22 @@
         {{/each}}
       </select>
     </div>
+    {{#if isFlying}}
+      {{#unless isLanded}}
+        <div class="gm-override-row gm-altitude-row">
+          <label>Altitude Override</label>
+          <div class="altitude-controls">
+            <button type="button" class="altitude-down-btn" {{#unless canDescend}}disabled{{/unless}}>
+              <i class="fas fa-chevron-down"></i>
+            </button>
+            <span class="altitude-value">ALT {{currentAltitude}}</span>
+            <button type="button" class="altitude-up-btn" {{#unless canClimb}}disabled{{/unless}}>
+              <i class="fas fa-chevron-up"></i>
+            </button>
+          </div>
+        </div>
+      {{/unless}}
+    {{/if}}
   </div>
   {{/if}}
 

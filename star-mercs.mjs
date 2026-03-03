@@ -22,6 +22,7 @@ import * as detection from "./module/detection.mjs";
 import DetectionLayer from "./module/canvas/detection-layer.mjs";
 import MovementPathLayer from "./module/canvas/movement-path-layer.mjs";
 import DamageOverlayLayer from "./module/canvas/damage-overlay-layer.mjs";
+import AltitudeOverlayLayer from "./module/canvas/altitude-overlay-layer.mjs";
 import FiringBlipLayer from "./module/canvas/firing-blip-layer.mjs";
 import TacticalMarkerLayer from "./module/canvas/tactical-marker-layer.mjs";
 import TacticalMarkerPainter from "./module/apps/tactical-marker-painter.mjs";
@@ -440,6 +441,16 @@ Hooks.on("canvasReady", () => {
   canvas.interface.addChild(damageOverlayLayer);
   damageOverlayLayer.drawDamageNumbers();
 
+  // Altitude overlay (green number on flying tokens)
+  const previousAltitudeOverlay = game.starmercs.altitudeOverlayLayer;
+  if (previousAltitudeOverlay) {
+    previousAltitudeOverlay.destroy({ children: true });
+  }
+  const altitudeOverlayLayer = new AltitudeOverlayLayer();
+  game.starmercs.altitudeOverlayLayer = altitudeOverlayLayer;
+  canvas.interface.addChild(altitudeOverlayLayer);
+  altitudeOverlayLayer.drawAltitudeLabels();
+
   // Firing blip overlay
   const previousFiringBlipLayer = game.starmercs.firingBlipLayer;
   if (previousFiringBlipLayer) {
@@ -479,6 +490,7 @@ Hooks.on("refreshToken", () => {
   game.starmercs?.targetingArrowLayer?.drawArrows();
   game.starmercs?.commsLinkLayer?.drawLinks();
   game.starmercs?.damageOverlayLayer?.drawDamageNumbers();
+  game.starmercs?.altitudeOverlayLayer?.drawAltitudeLabels();
 });
 
 /** Redraw firing blips and tactical markers when scene flags change. */
@@ -1119,6 +1131,10 @@ Hooks.once("ready", () => {
 Hooks.on("updateActor", (actor, changes) => {
   if (foundry.utils.hasProperty(changes, "system.team")) {
     syncActorOwnership(actor);
+  }
+  // Redraw altitude overlay when flags change (altitude, landed)
+  if (foundry.utils.hasProperty(changes, "flags.star-mercs")) {
+    game.starmercs?.altitudeOverlayLayer?.drawAltitudeLabels();
   }
 });
 
