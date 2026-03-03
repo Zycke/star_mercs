@@ -2505,6 +2505,10 @@ export default class StarMercsCombat extends Combat {
         // 3. (Ammo consumed on fire — no per-type counters to clear)
         // 4. Clear disordered flag (resets each turn)
         await token.unsetFlag("star-mercs", "disordered");
+        // 4b. Clear APS/ZPS interception fire counts (reset on actor, not token)
+        if (actor?.getFlag("star-mercs", "interceptionCounts")) {
+          await actor.unsetFlag("star-mercs", "interceptionCounts");
+        }
         // 5. Clear firedAtThisTurn flag
         await token.unsetFlag("star-mercs", "firedAtThisTurn");
         // 6. Clear per-weapon fired list and "Fired" status effect

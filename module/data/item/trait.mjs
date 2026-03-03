@@ -18,6 +18,12 @@ export default class TraitData extends foundry.abstract.TypeDataModel {
         label: "STARMERCS.TraitValue"
       }),
 
+      // Second numeric value for dual-parameter traits (e.g., ZPS[X][Y])
+      traitValue2: new NumberField({
+        required: false, integer: true, min: 0, initial: 0,
+        label: "STARMERCS.TraitValue2"
+      }),
+
       // Whether this trait is always active, manually activated, or conditional
       passive: new StringField({
         required: true,
@@ -41,8 +47,10 @@ export default class TraitData extends foundry.abstract.TypeDataModel {
 
   /** @override */
   prepareDerivedData() {
-    // Display name with bracket value if applicable, e.g., "Armored[3]"
-    if (this.traitValue > 0) {
+    // Display name with bracket value(s), e.g., "Armored[3]" or "ZPS[3][4]"
+    if (this.traitValue > 0 && this.traitValue2 > 0) {
+      this.displayName = `${this.parent.name}[${this.traitValue}][${this.traitValue2}]`;
+    } else if (this.traitValue > 0) {
       this.displayName = `${this.parent.name}[${this.traitValue}]`;
     } else {
       this.displayName = this.parent.name;

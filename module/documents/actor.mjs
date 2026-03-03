@@ -61,6 +61,19 @@ export default class StarMercsActor extends Actor {
     return trait ? trait.system.traitValue : 0;
   }
 
+  /**
+   * Get the full trait item by name (needed for dual-parameter traits like ZPS[X][Y]).
+   * Only returns the item if the trait is activated.
+   * @param {string} traitName
+   * @returns {Item|undefined} The trait item, or undefined if not found/inactive.
+   */
+  getTraitItem(traitName) {
+    return this.items.find(i =>
+      i.type === "trait" && i.name.toLowerCase() === traitName.toLowerCase()
+      && i.system.active
+    );
+  }
+
   /** Get all active trait items. */
   get activeTraits() {
     return this.items.filter(i => i.type === "trait" && i.system.active);
@@ -266,7 +279,7 @@ export default class StarMercsActor extends Actor {
     let damageApplied = null;
     const deferDamage = game.combat?.started;
 
-    if (result.hitResult.hit && result.damage) {
+    if (result.hitResult.hit && result.damage && result.damage.final > 0) {
       if (deferDamage) {
         // Store as pending — will be applied during consolidation
         const maxStr = target.system.strength.max;
@@ -648,7 +661,7 @@ export default class StarMercsActor extends Actor {
     // Phase 2: Group damage by target token for simultaneous application
     const damageByTarget = new Map();
     for (const result of results) {
-      if (result.valid && result.hitResult.hit && result.damage) {
+      if (result.valid && result.hitResult.hit && result.damage && result.damage.final > 0) {
         const tokenId = result.targetTokenId;
         if (!damageByTarget.has(tokenId)) {
           damageByTarget.set(tokenId, {

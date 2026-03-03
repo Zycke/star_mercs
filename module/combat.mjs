@@ -10,6 +10,7 @@
  * Entrenched: Reduces incoming damage by 1.
  * Fortified: Reduces incoming damage by 2.
  * Heavy: Soft attacks only hit on natural 10.
+ * APS/ZPS: Defensive weapon types that intercept ordnance-ammo attacks.
  */
 
 import { getHexElevation, snapToHexCenter } from "./hex-utils.mjs";
