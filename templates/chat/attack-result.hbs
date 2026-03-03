@@ -69,6 +69,28 @@
         {{/if}}
       </div>
 
+      {{!-- Protection systems (APS/ZPS) --}}
+      {{#if protectionSystems}}
+        <div class="protection-systems">
+          {{#each protectionSystems}}
+            <div class="protection-system">
+              <i class="fas fa-shield-alt"></i>
+              <strong>{{this.type}}</strong> ({{this.unitName}}):
+              d6({{this.roll}}) + {{this.bonus}}{{#if this.penalty}} - {{this.penalty}} penalty{{/if}}
+              = <strong>-{{this.reduction}} damage</strong>
+            </div>
+          {{/each}}
+        </div>
+      {{/if}}
+
+      {{!-- Damage fully intercepted --}}
+      {{#if damageIntercepted}}
+        <div class="target-status">
+          <div class="status-alert intercepted">
+            <i class="fas fa-shield-alt"></i> Damage fully intercepted
+          </div>
+        </div>
+      {{else}}
       {{!-- Target status after damage --}}
       {{#if targetName}}
         <div class="target-status">
@@ -93,6 +115,7 @@
             </div>
           {{/if}}
         </div>
+      {{/if}}
       {{/if}}
     {{/if}}
 

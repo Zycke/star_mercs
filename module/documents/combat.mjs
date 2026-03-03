@@ -2495,6 +2495,9 @@ export default class StarMercsCombat extends Combat {
         await token.unsetFlag("star-mercs", "weaponsFired_ordnance");
         // 4. Clear disordered flag (resets each turn)
         await token.unsetFlag("star-mercs", "disordered");
+        // 4b. Clear APS/ZPS fire counters (cumulative penalty resets each turn)
+        await token.unsetFlag("star-mercs", "apsFireCount");
+        await token.unsetFlag("star-mercs", "zpsFireCount");
         // 5. Clear firedAtThisTurn flag
         await token.unsetFlag("star-mercs", "firedAtThisTurn");
         // 6. Clear per-weapon fired list and "Fired" status effect

@@ -61,6 +61,19 @@ export default class StarMercsActor extends Actor {
     return trait ? trait.system.traitValue : 0;
   }
 
+  /**
+   * Get the full trait item by name (needed for dual-parameter traits like ZPS[X][Y]).
+   * Only returns the item if the trait is activated.
+   * @param {string} traitName
+   * @returns {Item|undefined} The trait item, or undefined if not found/inactive.
+   */
+  getTraitItem(traitName) {
+    return this.items.find(i =>
+      i.type === "trait" && i.name.toLowerCase() === traitName.toLowerCase()
+      && i.system.active
+    );
+  }
+
   /** Get all active trait items. */
   get activeTraits() {
     return this.items.filter(i => i.type === "trait" && i.system.active);
@@ -72,7 +85,7 @@ export default class StarMercsActor extends Actor {
    * @returns {"smallArms"|"heavyWeapons"|"ordnance"}
    */
   _getWeaponSupplyType(weapon) {
-    if (weapon.system.attackType === "antiAir" || weapon.system.artillery || weapon.system.aircraft) {
+    if (weapon.system.ordnance || weapon.system.attackType === "antiAir" || weapon.system.artillery || weapon.system.aircraft) {
       return "ordnance";
     }
     if (weapon.system.attackType === "hard") return "heavyWeapons";
@@ -240,7 +253,7 @@ export default class StarMercsActor extends Actor {
     let damageApplied = null;
     const deferDamage = game.combat?.started;
 
-    if (result.hitResult.hit && result.damage) {
+    if (result.hitResult.hit && result.damage && result.damage.final > 0) {
       if (deferDamage) {
         // Store as pending — will be applied during consolidation
         const maxStr = target.system.strength.max;
@@ -306,6 +319,9 @@ export default class StarMercsActor extends Actor {
       hasDamageModifiers: (result.damage?.modifiers?.length ?? 0) > 0,
       // Soft vs Heavy indicator
       softVsHeavy: result.softVsHeavy ?? false,
+      // Protection systems (APS/ZPS)
+      protectionSystems: result.protectionResult?.systems ?? null,
+      damageIntercepted: result.hitResult.hit && result.damage && result.damage.final <= 0,
       // Damage application results
       damagePending: damageApplied?.pending ?? false,
       targetDestroyed: damageApplied?.destroyed ?? false,
@@ -551,7 +567,7 @@ export default class StarMercsActor extends Actor {
     // Phase 2: Group damage by target token for simultaneous application
     const damageByTarget = new Map();
     for (const result of results) {
-      if (result.valid && result.hitResult.hit && result.damage) {
+      if (result.valid && result.hitResult.hit && result.damage && result.damage.final > 0) {
         const tokenId = result.targetTokenId;
         if (!damageByTarget.has(tokenId)) {
           damageByTarget.set(tokenId, {
@@ -695,6 +711,9 @@ export default class StarMercsActor extends Actor {
         damageModifiers: result.damage?.modifiers ?? [],
         hasDamageModifiers: (result.damage?.modifiers?.length ?? 0) > 0,
         softVsHeavy: result.softVsHeavy ?? false,
+        // Protection systems (APS/ZPS)
+        protectionSystems: result.protectionResult?.systems ?? null,
+        damageIntercepted: result.hitResult.hit && result.damage && result.damage.final <= 0,
         damagePending: deferDamage,
         targetDestroyed: false,
         targetRouted: false,
