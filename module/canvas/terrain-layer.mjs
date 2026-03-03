@@ -929,7 +929,7 @@ export default class TerrainLayer extends PIXI.Container {
       align: "center"
     });
     text.anchor.set(0.5, 0.5);
-    text.position.set(center.x, center.y + hexRadius * 0.35);
+    text.position.set(center.x, center.y + hexRadius * 0.6);
     text.alpha = 0.7;
     this.labelContainer.addChild(text);
   }
