@@ -57,7 +57,8 @@ Hooks.once("init", () => {
     { id: "breaking",   name: "Breaking",   img: "icons/svg/skull.svg" },
     { id: "engaged",    name: "Engaged",    img: "icons/svg/sword.svg" },
     { id: "entrenched", name: "Entrenched", img: "icons/svg/shield.svg" },
-    { id: "fortified",  name: "Fortified",  img: "icons/svg/castle.svg" }
+    { id: "fortified",  name: "Fortified",  img: "icons/svg/castle.svg" },
+    { id: "landed",     name: "Landed",     img: "icons/svg/downgrade.svg" }
   );
 
   // --- Register Document Classes ---
@@ -745,19 +746,36 @@ Hooks.on("updateItem", (item, changes) => {
 });
 
 /** Redraw arrows when a weapon is created or deleted, and comms links when traits change. */
-Hooks.on("createItem", (item) => {
+Hooks.on("createItem", async (item) => {
   if (item.type === "weapon") game.starmercs?.targetingArrowLayer?.drawArrows();
   if (item.type === "trait") {
     game.starmercs?.commsLinkManager?.invalidate();
     game.starmercs?.commsLinkLayer?.drawLinks();
+
+    // When Flying trait is added, initialise flight flags
+    if (item.name === "Flying" && item.parent) {
+      const actor = item.parent;
+      const token = actor.getActiveTokens()?.[0];
+      const hexElev = token ? hexUtils.getHexElevation(hexUtils.snapToHexCenter(token.center)) : 0;
+      await actor.setFlag("star-mercs", "altitude", hexElev);
+      await actor.setFlag("star-mercs", "landed", false);
+    }
   }
 });
 
-Hooks.on("deleteItem", (item) => {
+Hooks.on("deleteItem", async (item) => {
   if (item.type === "weapon") game.starmercs?.targetingArrowLayer?.drawArrows();
   if (item.type === "trait") {
     game.starmercs?.commsLinkManager?.invalidate();
     game.starmercs?.commsLinkLayer?.drawLinks();
+
+    // When Flying trait is removed, clean up flight flags and status effect
+    if (item.name === "Flying" && item.parent) {
+      const actor = item.parent;
+      try { await actor.unsetFlag("star-mercs", "altitude"); } catch (e) { /* flag may not exist */ }
+      try { await actor.unsetFlag("star-mercs", "landed"); } catch (e) { /* flag may not exist */ }
+      await actor.toggleStatusEffect("landed", { active: false });
+    }
   }
 });
 
@@ -932,6 +950,12 @@ Hooks.on("renderChatMessageHTML", (message, html) => {
       const targetToken = canvas.tokens.placeables.find(t => t.document.id === targetDocId);
       if (!attackerToken?.actor || !targetToken?.actor) return;
 
+      // Landed flying units cannot fire
+      if (attackerToken.actor.hasTrait("Flying") && attackerToken.actor.getFlag("star-mercs", "landed")) {
+        ui.notifications.warn(`${attackerToken.actor.name} is landed — must take off to fire weapons.`);
+        return;
+      }
+
       btn.disabled = true;
       btn.textContent = "Firing...";
       html.querySelectorAll(".overwatch-skip-btn").forEach(el => el.disabled = true);
@@ -977,6 +1001,12 @@ Hooks.on("renderChatMessageHTML", (message, html) => {
 
       // Only the owning player or GM can fire
       if (!token.actor.isOwner && !game.user.isGM) return;
+
+      // Landed flying units cannot fire
+      if (token.actor.hasTrait("Flying") && token.actor.getFlag("star-mercs", "landed")) {
+        ui.notifications.warn(`${token.actor.name} is landed — must take off to fire weapons.`);
+        return;
+      }
 
       btn.disabled = true;
       btn.textContent = "Firing...";

@@ -1,6 +1,6 @@
 import StarMercsActor from "../documents/actor.mjs";
 import { snapToHexCenter, hexKey, computeHexPath, calculatePathCost,
-  getHexData, getAdjacentHexCenters, getStructureAtHex, normalizeHexData } from "../hex-utils.mjs";
+  getHexData, getHexElevation, getAdjacentHexCenters, getStructureAtHex, normalizeHexData } from "../hex-utils.mjs";
 import { checkLOS, getActiveSignature, getTerrainCoverMod } from "../detection.mjs";
 import ConstructionPicker from "../apps/construction-picker.mjs";
 
@@ -231,6 +231,30 @@ export default class StarMercsUnitSheet extends ActorSheet {
     // Log tab data
     context.log = this.actor.system.log ?? [];
 
+    // Flight status (altitude & landing) for Flying units
+    context.isFlying = this.actor.hasTrait("Flying");
+    if (context.isFlying) {
+      context.isLanded = this.actor.getFlag("star-mercs", "landed") ?? false;
+      context.isAirborne = !context.isLanded;
+
+      // Get hex elevation for altitude bounds
+      let hexElev = 0;
+      if (activeToken) {
+        hexElev = getHexElevation(snapToHexCenter(activeToken.center));
+      }
+      context.currentAltitude = this.actor.getFlag("star-mercs", "altitude") ?? hexElev;
+      context.minAltitude = hexElev;
+      context.maxAltitude = 5;
+      context.canLandHere = this.actor.canLand();
+      context.canTakeOff = this.actor.canTakeOff();
+
+      // Altitude change costs 1 MP per level
+      const canClimb = context.isAirborne && context.currentAltitude < 5 && context.mpRemaining > 0;
+      const canDescend = context.isAirborne && context.currentAltitude > hexElev && context.mpRemaining > 0;
+      context.canClimb = canClimb;
+      context.canDescend = canDescend;
+    }
+
     return context;
   }
 
@@ -341,6 +365,12 @@ export default class StarMercsUnitSheet extends ActorSheet {
     // Supply transfer
     html.on("click", ".transfer-supply-btn", this._onTransferSupply.bind(this));
 
+    // Flight controls (landing, takeoff, altitude)
+    html.on("click", ".flight-land-btn", this._onLand.bind(this));
+    html.on("click", ".flight-takeoff-btn", this._onTakeOff.bind(this));
+    html.on("click", ".altitude-up-btn", this._onAltitudeUp.bind(this));
+    html.on("click", ".altitude-down-btn", this._onAltitudeDown.bind(this));
+
     // Log tab: clear log
     html.on("click", ".clear-log-btn", this._onClearLog.bind(this));
 
@@ -399,6 +429,13 @@ export default class StarMercsUnitSheet extends ActorSheet {
    */
   async _onWeaponRoll(event) {
     event.preventDefault();
+
+    // Block weapon fire for landed flying units
+    if (this.actor.hasTrait("Flying") && this.actor.getFlag("star-mercs", "landed")) {
+      ui.notifications.warn("Landed units cannot fire weapons — take off first.");
+      return;
+    }
+
     const li = event.currentTarget.closest(".item");
     const item = this.actor.items.get(li.dataset.itemId);
     if (!item) return;
@@ -530,7 +567,48 @@ export default class StarMercsUnitSheet extends ActorSheet {
    */
   async _onFireAll(event) {
     event.preventDefault();
+    // Block firing for landed flying units
+    if (this.actor.hasTrait("Flying") && this.actor.getFlag("star-mercs", "landed")) {
+      ui.notifications.warn("Landed units cannot fire weapons — take off first.");
+      return;
+    }
     return this.actor.rollAllAttacks();
+  }
+
+  /* ---------------------------------------- */
+  /*  Flight Controls                         */
+  /* ---------------------------------------- */
+
+  async _onLand(event) {
+    event.preventDefault();
+    if (!this.actor.canLand()) {
+      ui.notifications.warn("Cannot land here. Altitude must equal hex elevation.");
+      return;
+    }
+    await this.actor.land();
+    ui.notifications.info(`${this.actor.name} has landed.`);
+  }
+
+  async _onTakeOff(event) {
+    event.preventDefault();
+    if (!this.actor.canTakeOff()) {
+      ui.notifications.warn("Cannot take off.");
+      return;
+    }
+    await this.actor.takeOff();
+    ui.notifications.info(`${this.actor.name} is now airborne.`);
+  }
+
+  async _onAltitudeUp(event) {
+    event.preventDefault();
+    const result = await this.actor.changeAltitude(1);
+    if (!result.success) ui.notifications.warn(result.reason);
+  }
+
+  async _onAltitudeDown(event) {
+    event.preventDefault();
+    const result = await this.actor.changeAltitude(-1);
+    if (!result.success) ui.notifications.warn(result.reason);
   }
 
   /**

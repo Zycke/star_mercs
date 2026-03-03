@@ -79,6 +79,152 @@ export default class StarMercsActor extends Actor {
     return this.items.filter(i => i.type === "trait" && i.system.active);
   }
 
+  /* ---------------------------------------- */
+  /*  Flight: Altitude & Landing              */
+  /* ---------------------------------------- */
+
+  /** Whether this unit is an airborne flying unit (Flying trait, not landed). */
+  get isAirborne() {
+    return this.hasTrait("Flying") && !this.getFlag("star-mercs", "landed");
+  }
+
+  /** Current altitude for flying units (0–5). */
+  get altitude() {
+    return this.getFlag("star-mercs", "altitude") ?? 0;
+  }
+
+  /**
+   * Check if this unit can land at its current position.
+   * Requires: Flying trait, not already landed, altitude == hex elevation,
+   * and the terrain must be landable (no water unless Amphibious).
+   * @returns {boolean}
+   */
+  canLand() {
+    if (!this.hasTrait("Flying")) return false;
+    if (this.getFlag("star-mercs", "landed")) return false;
+
+    const token = this.getActiveTokens()?.[0];
+    if (!token || !canvas?.scene) return false;
+
+    const { getHexElevation, getHexTerrainConfig, snapToHexCenter } = game.starmercs?.hexUtils ?? {};
+    if (!getHexElevation) return false;
+
+    const hexCenter = snapToHexCenter(token.center);
+    const hexElev = getHexElevation(hexCenter);
+    const altitude = this.getFlag("star-mercs", "altitude") ?? hexElev;
+
+    // Must be at hex elevation to land
+    if (altitude !== hexElev) return false;
+
+    // Terrain checks
+    const config = getHexTerrainConfig(hexCenter);
+    if (config?.waterTerrain && !this.hasTrait("Amphibious")) return false;
+    if (config?.impassableVehicle && this.hasTrait("Vehicle")) return false;
+
+    return true;
+  }
+
+  /**
+   * Land this flying unit. Sets landed flag and applies "landed" status effect.
+   */
+  async land() {
+    if (!this.canLand()) return;
+    await this.setFlag("star-mercs", "landed", true);
+
+    // Apply "landed" status effect on token
+    const token = this.getActiveTokens()?.[0];
+    if (token) {
+      const effect = token.actor.effects.find(e => e.statuses?.has("landed"));
+      if (!effect) {
+        await token.actor.createEmbeddedDocuments("ActiveEffect", [{
+          name: "Landed",
+          img: "icons/svg/downgrade.svg",
+          statuses: ["landed"]
+        }]);
+      }
+    }
+  }
+
+  /**
+   * Check if this unit can take off.
+   * Requires: Flying trait, currently landed.
+   * @returns {boolean}
+   */
+  canTakeOff() {
+    return this.hasTrait("Flying") && (this.getFlag("star-mercs", "landed") ?? false);
+  }
+
+  /**
+   * Take off from landed state. Altitude stays at hex elevation (low hover).
+   */
+  async takeOff() {
+    if (!this.canTakeOff()) return;
+    await this.setFlag("star-mercs", "landed", false);
+
+    // Set altitude to hex elevation (flying low)
+    const token = this.getActiveTokens()?.[0];
+    if (token && canvas?.scene) {
+      const { getHexElevation, snapToHexCenter } = game.starmercs?.hexUtils ?? {};
+      if (getHexElevation) {
+        const hexElev = getHexElevation(snapToHexCenter(token.center));
+        await this.setFlag("star-mercs", "altitude", hexElev);
+      }
+    }
+
+    // Remove "landed" status effect
+    const effect = this.effects.find(e => e.statuses?.has("landed"));
+    if (effect) await effect.delete();
+  }
+
+  /**
+   * Change altitude by a delta (positive = climb, negative = descend).
+   * Costs 1 MP per level changed.
+   * @param {number} delta - Altitude change (+1 or -1 typically).
+   * @returns {Promise<{success: boolean, reason?: string}>}
+   */
+  async changeAltitude(delta) {
+    if (!this.hasTrait("Flying") || this.getFlag("star-mercs", "landed")) {
+      return { success: false, reason: "Only airborne flying units can change altitude." };
+    }
+
+    const token = this.getActiveTokens()?.[0];
+    if (!token || !canvas?.scene) return { success: false, reason: "No token found." };
+
+    const { getHexElevation, snapToHexCenter } = game.starmercs?.hexUtils ?? {};
+    if (!getHexElevation) return { success: false, reason: "Hex utilities not available." };
+
+    const hexElev = getHexElevation(snapToHexCenter(token.center));
+    const currentAlt = this.getFlag("star-mercs", "altitude") ?? hexElev;
+    const newAlt = Math.max(hexElev, Math.min(5, currentAlt + delta));
+
+    if (newAlt === currentAlt) {
+      return { success: false, reason: delta > 0 ? "Already at maximum altitude (5)." : `Already at minimum altitude (${hexElev}).` };
+    }
+
+    const mpCost = Math.abs(newAlt - currentAlt);
+
+    // Check remaining MP
+    let mpMax = this.system.movement ?? 0;
+    const curOrderConfig = CONFIG.STARMERCS.orders?.[this.system.currentOrder];
+    if (curOrderConfig?.speedMultiplier) mpMax *= curOrderConfig.speedMultiplier;
+    const mpUsed = token.document?.getFlag("star-mercs", "movementUsed") ?? 0;
+    const mpRemaining = mpMax - mpUsed;
+
+    if (mpCost > mpRemaining) {
+      return { success: false, reason: `Not enough MP. Need ${mpCost}, have ${mpRemaining}.` };
+    }
+
+    // Apply altitude change and deduct MP
+    await this.setFlag("star-mercs", "altitude", newAlt);
+    await token.document.setFlag("star-mercs", "movementUsed", mpUsed + mpCost);
+
+    return { success: true };
+  }
+
+  /* ---------------------------------------- */
+  /*  Ammo Helpers                            */
+  /* ---------------------------------------- */
+
   /**
    * Determine which supply category a weapon consumes based on its ammoType.
    * @param {Item} weapon - A weapon item.

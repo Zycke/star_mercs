@@ -16,7 +16,8 @@
  */
 
 import { snapToHexCenter, hexKey, computeHexPath,
-  getHexTerrain, getHexTerrainConfig, getHexElevation } from "./hex-utils.mjs";
+  getHexTerrain, getHexTerrainConfig, getHexElevation,
+  getEffectiveElevation, isAirborne } from "./hex-utils.mjs";
 import StarMercsActor from "./documents/actor.mjs";
 
 /**
@@ -34,9 +35,11 @@ import StarMercsActor from "./documents/actor.mjs";
  *
  * @param {{x: number, y: number}} fromCenter - Observer hex center.
  * @param {{x: number, y: number}} toCenter - Target hex center.
+ * @param {Token|null} [fromToken=null] - Observer token (for flying altitude).
+ * @param {Token|null} [toToken=null] - Target token (for flying altitude).
  * @returns {boolean} True if LOS is clear.
  */
-export function checkLOS(fromCenter, toCenter) {
+export function checkLOS(fromCenter, toCenter, fromToken = null, toToken = null) {
   const from = snapToHexCenter(fromCenter);
   const to = snapToHexCenter(toCenter);
 
@@ -46,8 +49,9 @@ export function checkLOS(fromCenter, toCenter) {
   const path = computeHexPath(from, to);
   if (path.length === 0) return true;
 
-  const fromElev = getHexElevation(from);
-  const toElev = getHexElevation(to);
+  // Use effective elevation (accounts for flying altitude) when tokens are provided
+  const fromElev = fromToken ? getEffectiveElevation(fromToken) : getHexElevation(from);
+  const toElev = toToken ? getEffectiveElevation(toToken) : getHexElevation(to);
   const maxEndpointElev = Math.max(fromElev, toElev);
 
   // Check intermediate hexes (exclude final destination).
@@ -109,6 +113,12 @@ export function getActiveSignature(token) {
   if (!actor) return { active: 0, base: 0, totalMod: 0, modifiers: [] };
 
   const baseSig = actor.system.signature ?? 0;
+
+  // Airborne flying units get no terrain signature modifiers (exposed in the sky)
+  if (isAirborne(token)) {
+    return { active: baseSig, base: baseSig, totalMod: 0, modifiers: [] };
+  }
+
   const modifiers = [];
   let totalMod = 0;
   const hexCenter = snapToHexCenter(token.center);
@@ -162,6 +172,9 @@ export function getTerrainCoverMod(targetToken) {
   const actor = targetToken?.actor;
   if (!actor) return { mod: 0, modifiers: [] };
 
+  // Airborne flying units get no terrain cover (exposed in the sky)
+  if (isAirborne(targetToken)) return { mod: 0, modifiers: [] };
+
   const hexCenter = snapToHexCenter(targetToken.center);
   const terrainType = getHexTerrain(hexCenter);
   const terrainLabel = CONFIG.STARMERCS?.terrainTypes?.[terrainType] ?? terrainType;
@@ -209,8 +222,8 @@ export function canDetect(observerToken, targetToken, sensorBonus = 0) {
   const sensors = (observerToken.actor.system.sensors ?? 0) + sensorBonus;
   const { active: signature } = getActiveSignature(targetToken);
 
-  // Check hex-based LOS
-  const hasLOS = checkLOS(observerToken.center, targetToken.center);
+  // Check hex-based LOS (pass tokens for altitude-aware elevation)
+  const hasLOS = checkLOS(observerToken.center, targetToken.center, observerToken, targetToken);
 
   // Calculate detection range
   const effectiveSensors = hasLOS ? sensors : Math.floor(sensors / 2);

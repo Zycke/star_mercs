@@ -402,6 +402,42 @@ export default class StarMercsCombat extends Combat {
       if (actor.getFlag("star-mercs", "interceptionCounts")) {
         await actor.unsetFlag("star-mercs", "interceptionCounts");
       }
+
+      // Auto-land airborne flying units with 0 fuel (emergency landing)
+      if (actor.isAirborne) {
+        const fuel = actor.system.supply?.fuel?.current ?? 0;
+        if (fuel <= 0) {
+          await actor.setFlag("star-mercs", "landed", true);
+          // Set altitude to hex elevation
+          const token = combatant.token;
+          if (token) {
+            const tokenObj = canvas?.tokens?.get(token.id);
+            if (tokenObj) {
+              const { getHexElevation, snapToHexCenter } = game.starmercs?.hexUtils ?? {};
+              if (getHexElevation) {
+                const hexElev = getHexElevation(snapToHexCenter(tokenObj.center));
+                await actor.setFlag("star-mercs", "altitude", hexElev);
+              }
+            }
+          }
+          // Apply "landed" status effect
+          const existingEffect = actor.effects.find(e => e.statuses?.has("landed"));
+          if (!existingEffect) {
+            await actor.createEmbeddedDocuments("ActiveEffect", [{
+              name: "Landed",
+              img: "icons/svg/downgrade.svg",
+              statuses: ["landed"]
+            }]);
+          }
+          const unitName = token?.name ?? actor.name;
+          const unitTeam = actor.system.team ?? "a";
+          await ChatMessage.create({
+            content: `<div class="star-mercs chat-card"><div class="summary-header"><i class="fas fa-exclamation-triangle"></i> <strong>${unitName}</strong> — Emergency Landing (no fuel!)</div></div>`,
+            speaker: { alias: "Star Mercs" },
+            whisper: StarMercsCombat.getTeamWhisperIds(unitTeam)
+          });
+        }
+      }
     }
   }
 
@@ -461,18 +497,27 @@ export default class StarMercsCombat extends Combat {
       }
 
       // 2. Deduct readiness cost from the unit's current order
+      // Airborne flying units cannot gain readiness (positive cost) from orders
       const order = this._getActorOrder(actor);
       const supplyMod = order ? this._parseSupplyMultiplier(order.system.supplyModifier) : 1;
       if (order && order.system.readinessCost !== 0) {
         const cost = order.system.readinessCost;
-        const currentRdy = actor.system.readiness.value;
-        const newRdy = Math.max(0, Math.min(actor.system.readiness.max, currentRdy + cost));
-        if (newRdy !== currentRdy) {
-          await actor.update({ "system.readiness.value": newRdy });
-          const label = cost > 0 ? `+${cost}` : `${cost}`;
+        // Block positive readiness gains for airborne units
+        if (cost > 0 && actor.isAirborne) {
           sections.push(`<div class="consolidation-section readiness">
-            <div class="consolidation-section-header"><i class="fas fa-battery-half"></i> Order Readiness: ${label} (${esc(order.name)})</div>
+            <div class="consolidation-section-header"><i class="fas fa-plane"></i> Airborne — Cannot Recover Readiness</div>
+            <div class="status-update">Must land to benefit from ${esc(order.name)} (+${cost} RDY).</div>
           </div>`);
+        } else {
+          const currentRdy = actor.system.readiness.value;
+          const newRdy = Math.max(0, Math.min(actor.system.readiness.max, currentRdy + cost));
+          if (newRdy !== currentRdy) {
+            await actor.update({ "system.readiness.value": newRdy });
+            const label = cost > 0 ? `+${cost}` : `${cost}`;
+            sections.push(`<div class="consolidation-section readiness">
+              <div class="consolidation-section-header"><i class="fas fa-battery-half"></i> Order Readiness: ${label} (${esc(order.name)})</div>
+            </div>`);
+          }
         }
       }
 
@@ -720,7 +765,13 @@ export default class StarMercsCombat extends Combat {
       }
 
       // 2h. Outpost supply distribution — outposts transfer supply to nearby friendlies
-      if (token) {
+      // Airborne flying units cannot receive resupply (must land first)
+      if (token && actor.isAirborne) {
+        sections.push(`<div class="consolidation-section supply">
+          <div class="consolidation-section-header"><i class="fas fa-plane"></i> Airborne — Cannot Resupply</div>
+          <div class="status-update">Must land to receive outpost supplies.</div>
+        </div>`);
+      } else if (token) {
         const supTeam = actor.system.team ?? "a";
         const supCenter = snapToHexCenter(canvas.tokens.get(token.id)?.center ?? { x: 0, y: 0 });
         const supStructures = canvas.scene?.getFlag("star-mercs", "structures") ?? [];
@@ -1639,6 +1690,8 @@ export default class StarMercsCombat extends Combat {
       const actor = combatant.actor;
       if (!actor || actor.type !== "unit") continue;
       if (actor.system.strength.value <= 0) continue;
+      // Landed flying units cannot fire weapons
+      if (actor.hasTrait("Flying") && actor.getFlag("star-mercs", "landed")) continue;
 
       const artilleryWeapons = actor.items.filter(
         i => i.type === "weapon" && i.system.artillery && i.system.targetId
@@ -1672,6 +1725,8 @@ export default class StarMercsCombat extends Combat {
       const actor = combatant.actor;
       if (!actor || actor.type !== "unit") continue;
       if (actor.system.strength.value <= 0) continue;
+      // Landed flying units cannot fire weapons
+      if (actor.hasTrait("Flying") && actor.getFlag("star-mercs", "landed")) continue;
 
       const aircraftWeapons = actor.items.filter(
         i => i.type === "weapon" && i.system.aircraft && i.system.targetId
@@ -1706,6 +1761,8 @@ export default class StarMercsCombat extends Combat {
       const actor = combatant.actor;
       if (!actor || actor.type !== "unit") continue;
       if (actor.system.strength.value <= 0) continue;
+      // Landed flying units cannot fire weapons
+      if (actor.hasTrait("Flying") && actor.getFlag("star-mercs", "landed")) continue;
 
       const order = this._getActorOrder(actor);
       if (order && !order.system.allowsAttack) continue;
@@ -2406,6 +2463,9 @@ export default class StarMercsCombat extends Combat {
       const token = tokens[0];
       const team = token.actor?.system?.team;
       if (!team) continue;
+
+      // Airborne flying units cannot score objectives (must land)
+      if (token.actor?.isAirborne) continue;
 
       const basePoints = objectiveConfig[hexData.objective].points;
       const engaged = isEngaged(token);

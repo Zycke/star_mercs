@@ -2092,6 +2092,136 @@ select:focus,
 }
 
 /* ============================= */
+/*  Flight Status                */
+/* ============================= */
+
+.flight-status-block {
+  border: 1px solid var(--sm-border);
+  border-radius: 4px;
+  padding: 6px;
+  margin: 4px 0;
+  background: rgba(0, 0, 0, 0.15);
+}
+
+.flight-status-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.flight-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-weight: 700;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.flight-badge.landed {
+  background: rgba(68, 170, 102, 0.25);
+  color: #44aa66;
+  border: 1px solid rgba(68, 170, 102, 0.4);
+}
+
+.flight-badge.airborne {
+  background: rgba(85, 119, 204, 0.25);
+  color: #77aaff;
+  border: 1px solid rgba(85, 119, 204, 0.4);
+}
+
+.flight-warning {
+  font-size: 11px;
+  color: #cc8844;
+  font-style: italic;
+}
+
+.flight-note {
+  font-size: 11px;
+  color: var(--sm-text-muted, #999);
+  font-style: italic;
+  margin-top: 2px;
+}
+
+.altitude-display {
+  font-weight: 700;
+  font-size: 13px;
+  color: #77aaff;
+}
+
+.altitude-range {
+  font-size: 11px;
+  color: var(--sm-text-muted, #999);
+}
+
+.altitude-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.altitude-controls button {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--sm-bg-mid, #2a2a2a);
+  border: 1px solid var(--sm-border);
+  border-radius: 3px;
+  color: var(--sm-text);
+  cursor: pointer;
+}
+
+.altitude-controls button:hover:not(:disabled) {
+  background: var(--sm-primary, #446688);
+  border-color: var(--sm-primary-light, #5588aa);
+}
+
+.altitude-controls button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.altitude-value {
+  font-weight: 700;
+  min-width: 45px;
+  text-align: center;
+  color: #77aaff;
+}
+
+.altitude-cost {
+  font-size: 10px;
+  color: var(--sm-text-muted, #999);
+}
+
+.flight-land-btn,
+.flight-takeoff-btn {
+  margin-top: 4px;
+  padding: 3px 10px;
+  font-size: 11px;
+  cursor: pointer;
+  border-radius: 3px;
+  border: 1px solid var(--sm-border);
+  background: var(--sm-bg-mid, #2a2a2a);
+  color: var(--sm-text);
+}
+
+.flight-land-btn:hover {
+  background: rgba(68, 170, 102, 0.3);
+  border-color: #44aa66;
+}
+
+.flight-takeoff-btn:hover {
+  background: rgba(85, 119, 204, 0.3);
+  border-color: #5577cc;
+}
+
+/* ============================= */
 /*  Turn Control Panel           */
 /* ============================= */
 

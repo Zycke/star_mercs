@@ -13,7 +13,7 @@
  * APS/ZPS: Defensive weapon types that intercept ordnance-ammo attacks.
  */
 
-import { getHexElevation, snapToHexCenter } from "./hex-utils.mjs";
+import { getHexElevation, snapToHexCenter, getEffectiveElevation } from "./hex-utils.mjs";
 import { getTerrainCoverMod } from "./detection.mjs";
 
 /**
@@ -24,7 +24,7 @@ import { getTerrainCoverMod } from "./detection.mjs";
  * @param {StarMercsActor} target - The target unit.
  * @returns {{valid: boolean, reason: string|null}}
  */
-export function validateAttack(weapon, target) {
+export function validateAttack(weapon, target, attacker = null) {
   const attackType = weapon.system.attackType;
 
   // APS/ZPS are defensive-only — cannot target units
@@ -32,12 +32,18 @@ export function validateAttack(weapon, target) {
     return { valid: false, reason: `${weapon.name} is a defensive system — it cannot target units.`, softVsHeavy: false };
   }
 
+  // Landed flying units cannot fire weapons
+  if (attacker?.hasTrait("Flying") && attacker.getFlag("star-mercs", "landed")) {
+    return { valid: false, reason: `${attacker.name} is landed — must take off to fire weapons.`, softVsHeavy: false };
+  }
+
   const isFlying = target.hasTrait("Flying");
   const isHovering = target.hasTrait("Hover");
   const isHeavy = target.hasTrait("Heavy");
+  const isLanded = isFlying && target.getFlag("star-mercs", "landed");
 
-  // Flying units can only be hit by anti-air
-  if (isFlying && !isHovering && attackType !== "antiAir") {
+  // Flying units can only be hit by anti-air (unless they are landed)
+  if (isFlying && !isHovering && !isLanded && attackType !== "antiAir") {
     return { valid: false, reason: `${target.name} is Flying — only Anti-Air weapons can target it.`, softVsHeavy: false };
   }
 
@@ -110,13 +116,14 @@ export function calculateAccuracy(weapon, attacker, target = null) {
   }
 
   // Elevation bonus: -1 to threshold (easier to hit) when firing from higher elevation
+  // Uses effective elevation (accounts for flying unit altitude)
   let elevationMod = 0;
   if (target) {
     const attackerToken = canvas?.tokens?.placeables.find(t => t.actor === attacker);
     const targetTokenElev = canvas?.tokens?.placeables.find(t => t.actor === target);
     if (attackerToken && targetTokenElev) {
-      const attackerElev = getHexElevation(snapToHexCenter(attackerToken.center));
-      const targetElev = getHexElevation(snapToHexCenter(targetTokenElev.center));
+      const attackerElev = getEffectiveElevation(attackerToken);
+      const targetElev = getEffectiveElevation(targetTokenElev);
       if (attackerElev > targetElev) {
         elevationMod = -1;
       }
@@ -405,7 +412,7 @@ export function resolveInterception(attackingWeapon, target, ammoOverrides = nul
  */
 export async function resolveAttack(weapon, attacker, target, interceptionAmmoOverrides = null, interceptionFireOverrides = null) {
   // Step 1: Validate
-  const validation = validateAttack(weapon, target);
+  const validation = validateAttack(weapon, target, attacker);
   if (!validation.valid) {
     return {
       valid: false,
