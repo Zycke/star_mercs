@@ -157,13 +157,14 @@ export default class StarMercsCombat extends Combat {
     return this;
   }
 
-  /** @override — New round resets to preparation. */
+  /** @override — New round resets to preparation and runs preparation effects. */
   async nextRound() {
     await this.update({
       "flags.star-mercs.phase": "preparation",
       "flags.star-mercs.phaseIndex": 0
     });
     const result = await super.nextRound();
+    await this._runPreparationEffects();
     this._announcePhase();
     this._refreshEngagementStatus();
     return result;
@@ -368,11 +369,48 @@ export default class StarMercsCombat extends Combat {
   }
 
   /**
+   * Preparation phase effects: runs at the start of each new round.
+   * - Recharge energy for all units (increase by rechargeRate, cap at capacity).
+   * @private
+   */
+  async _runPreparationEffects() {
+    for (const combatant of this.combatants) {
+      const actor = combatant.actor;
+      if (!actor || actor.type !== "unit") continue;
+
+      // Energy recharge
+      const energy = actor.system.supply?.energy;
+      if (energy) {
+        const rate = energy.rechargeRate ?? 0;
+        if (rate > 0 && energy.current < energy.capacity) {
+          const newEnergy = Math.min(energy.current + rate, energy.capacity);
+          await actor.update({ "system.supply.energy.current": newEnergy });
+
+          const recharged = newEnergy - energy.current;
+          const token = combatant.token;
+          const unitName = token?.name ?? actor.name;
+          const unitTeam = actor.system.team ?? "a";
+          await ChatMessage.create({
+            content: `<div class="star-mercs chat-card"><div class="summary-header"><i class="fas fa-bolt"></i> <strong>${unitName}</strong> — Energy recharged +${recharged} (${newEnergy}/${energy.capacity})</div></div>`,
+            speaker: { alias: "Star Mercs" },
+            whisper: StarMercsCombat.getTeamWhisperIds(unitTeam)
+          });
+        }
+      }
+
+      // Reset APS/ZPS interception fire counts (diminishing returns reset each turn)
+      if (actor.getFlag("star-mercs", "interceptionCounts")) {
+        await actor.unsetFlag("star-mercs", "interceptionCounts");
+      }
+    }
+  }
+
+  /**
    * Consolidation effects: runs at the BEGINNING of consolidation phase.
    * 1. Apply all pending damage to targets (track damage taken per token)
    * 2. Deduct readiness costs from orders
    * 3. Extra -1 readiness for Disordered units (failed withdraw morale)
-   * 4. Consume supply (usage × order multiplier + weapons fired)
+   * 4. Consume supply (fuel + basic supplies; ammo consumed on fire)
    * 5. Morale checks for units with readiness < 10
    * 6. Assault morale resolution
    * @private
@@ -529,7 +567,7 @@ export default class StarMercsCombat extends Combat {
                     structure.supplyRange = merged.defaultSupplyRange ?? 3;
                     const caps = merged.defaultSupplyCapacity ?? {};
                     structure.supply = {};
-                    for (const cat of ["smallArms", "heavyWeapons", "ordnance", "fuel", "materials", "parts", "basicSupplies"]) {
+                    for (const cat of ["projectile", "ordnance", "energy", "fuel", "materials", "parts", "basicSupplies"]) {
                       structure.supply[cat] = { current: 0, capacity: caps[cat] ?? 0 };
                     }
                   }
@@ -700,7 +738,7 @@ export default class StarMercsCombat extends Combat {
 
           const supplyUpdate = {};
           let transferred = false;
-          for (const cat of ["smallArms", "heavyWeapons", "ordnance", "fuel", "materials", "parts", "basicSupplies"]) {
+          for (const cat of ["projectile", "ordnance", "energy", "fuel", "materials", "parts", "basicSupplies"]) {
             const unitCurrent = actor.system.supply?.[cat]?.current ?? 0;
             const unitCapacity = actor.system.supply?.[cat]?.capacity ?? 0;
             const outpostCurrent = s.supply[cat]?.current ?? 0;
@@ -738,37 +776,12 @@ export default class StarMercsCombat extends Combat {
         }
       }
 
-      // 4. Consume supply by category
+      // 4. Consume supply by category (ammo is consumed on fire, only fuel/basic here)
       const supply = actor.system.supply;
       const supplyUpdate = {};
       const consumedParts = [];
 
-      // 4a. Ammo consumption based on weapons fired (multiplied by order supply modifier)
-      if (token) {
-        const smallArmsFired = token.getFlag("star-mercs", "weaponsFired_smallArms") ?? 0;
-        const heavyFired = token.getFlag("star-mercs", "weaponsFired_heavyWeapons") ?? 0;
-        const ordnanceFired = token.getFlag("star-mercs", "weaponsFired_ordnance") ?? 0;
-
-        const smallArmsUse = smallArmsFired * supplyMod;
-        const heavyUse = heavyFired * supplyMod;
-        const ordnanceUse = ordnanceFired * supplyMod;
-
-        if (smallArmsUse > 0 && supply.smallArms.current > 0) {
-          const used = Math.min(smallArmsUse, supply.smallArms.current);
-          supplyUpdate["system.supply.smallArms.current"] = supply.smallArms.current - used;
-          consumedParts.push(`Small Arms: -${used}${supplyMod > 1 ? ` (${smallArmsFired}×${supplyMod})` : ""}`);
-        }
-        if (heavyUse > 0 && supply.heavyWeapons.current > 0) {
-          const used = Math.min(heavyUse, supply.heavyWeapons.current);
-          supplyUpdate["system.supply.heavyWeapons.current"] = supply.heavyWeapons.current - used;
-          consumedParts.push(`Heavy Wpns: -${used}${supplyMod > 1 ? ` (${heavyFired}×${supplyMod})` : ""}`);
-        }
-        if (ordnanceUse > 0 && supply.ordnance.current > 0) {
-          const used = Math.min(ordnanceUse, supply.ordnance.current);
-          supplyUpdate["system.supply.ordnance.current"] = supply.ordnance.current - used;
-          consumedParts.push(`Ordnance: -${used}${supplyMod > 1 ? ` (${ordnanceFired}×${supplyMod})` : ""}`);
-        }
-      }
+      // 4a. (Ammo is now consumed immediately when weapons fire — no deferred consumption)
 
       // 4b. Fuel consumption: MP spent × fuelPerMP + assault surcharge + Vehicle baseline
       {
@@ -2489,15 +2502,13 @@ export default class StarMercsCombat extends Combat {
         await token.unsetFlag("star-mercs", "assaultTarget");
         // 2b. Clear Advanced Recon Equipment target
         await token.unsetFlag("star-mercs", "advReconTarget");
-        // 3. Clear per-type weapons fired counters
-        await token.unsetFlag("star-mercs", "weaponsFired_smallArms");
-        await token.unsetFlag("star-mercs", "weaponsFired_heavyWeapons");
-        await token.unsetFlag("star-mercs", "weaponsFired_ordnance");
+        // 3. (Ammo consumed on fire — no per-type counters to clear)
         // 4. Clear disordered flag (resets each turn)
         await token.unsetFlag("star-mercs", "disordered");
-        // 4b. Clear APS/ZPS fire counters (cumulative penalty resets each turn)
-        await token.unsetFlag("star-mercs", "apsFireCount");
-        await token.unsetFlag("star-mercs", "zpsFireCount");
+        // 4b. Clear APS/ZPS interception fire counts (reset on actor, not token)
+        if (actor?.getFlag("star-mercs", "interceptionCounts")) {
+          await actor.unsetFlag("star-mercs", "interceptionCounts");
+        }
         // 5. Clear firedAtThisTurn flag
         await token.unsetFlag("star-mercs", "firedAtThisTurn");
         // 6. Clear per-weapon fired list and "Fired" status effect

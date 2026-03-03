@@ -16,11 +16,8 @@ export default class StarMercsWeaponSheet extends ItemSheet {
   async getData(options) {
     const context = await super.getData(options);
     context.system = this.item.system;
-    context.attackTypeChoices = {
-      soft: "Soft Attack",
-      hard: "Hard Attack",
-      antiAir: "Anti-Air"
-    };
+    context.attackTypeChoices = CONFIG.STARMERCS.attackTypes;
+    context.ammoTypeChoices = CONFIG.STARMERCS.ammoTypes;
     return context;
   }
 }

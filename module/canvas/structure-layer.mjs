@@ -375,7 +375,7 @@ export default class StructureLayer extends PIXI.Container {
       healthText += ` | Type: ${sub?.label ?? structure.subType}`;
     }
 
-    const content = `<div class="star-mercs structure-inspect">
+    const content = `<div class="star-mercs sm-dialog structure-inspect">
       <h3>${esc(displayName)}</h3>
       <p><strong>Team:</strong> ${structure.team === "none" ? "Neutral" : "Team " + (structure.team ?? "none").toUpperCase()}</p>
       <p><strong>Status:</strong> ${statusText}</p>
@@ -492,10 +492,10 @@ export default class StructureLayer extends PIXI.Container {
     const currentName = structure.name ?? "";
     new Dialog({
       title: "Rename Structure",
-      content: `<form><div class="form-group">
+      content: `<div class="star-mercs sm-dialog"><form><div class="form-group">
         <label>Name</label>
         <input type="text" name="name" value="${esc(currentName)}" placeholder="${esc(config?.label ?? "")}" maxlength="24" autofocus />
-      </div></form>`,
+      </div></form></div>`,
       buttons: {
         save: {
           icon: '<i class="fas fa-check"></i>',
@@ -522,39 +522,47 @@ export default class StructureLayer extends PIXI.Container {
     if (!config) return;
     const merged = StructureLayer.getStructureConfig(structure.type);
     const isOutpost = structure.type === "outpost";
-    const supplyCats = ["smallArms", "heavyWeapons", "ordnance", "fuel", "materials", "parts", "basicSupplies"];
+    const supplyCats = ["projectile", "ordnance", "energy", "fuel", "materials", "parts", "basicSupplies"];
+    const supplyLabels = {
+      projectile: "Proj", ordnance: "Ord", energy: "Energy",
+      fuel: "Fuel", materials: "Mats", parts: "Parts", basicSupplies: "Basic"
+    };
 
     let supplyHtml = "";
     if (isOutpost && structure.supply) {
-      supplyHtml = `<hr><h4>Supply</h4>`;
+      supplyHtml = `<hr><h4>Supply (Current / Max)</h4><div class="sm-supply-grid">`;
       for (const cat of supplyCats) {
         const cur = structure.supply[cat]?.current ?? 0;
         const cap = structure.supply[cat]?.capacity ?? 0;
         supplyHtml += `<div class="form-group">
-          <label>${cat}</label>
+          <label>${supplyLabels[cat]}</label>
           <input type="number" name="supply-${cat}" value="${cur}" min="0" max="${cap}" />
-          <span class="hint">/ ${cap}</span>
+          <span class="hint">/</span>
+          <input type="number" name="supply-cap-${cat}" value="${cap}" min="0" />
         </div>`;
       }
+      supplyHtml += `</div>`;
     }
 
-    const content = `<form>
+    const content = `<div class="star-mercs sm-dialog"><form>
       <div class="form-group">
         <label>Name</label>
         <input type="text" name="name" value="${esc(structure.name ?? "")}" placeholder="${esc(config.label)}" maxlength="24" />
       </div>
-      <div class="form-group">
-        <label>Strength</label>
-        <input type="number" name="strength" value="${structure.strength}" min="0" max="${structure.maxStrength}" />
-        <span class="hint">/ ${structure.maxStrength}</span>
-      </div>
-      <div class="form-group">
-        <label>Turns Built</label>
-        <input type="number" name="turnsBuilt" value="${structure.turnsBuilt}" min="0" max="${structure.turnsRequired}" />
-        <span class="hint">/ ${structure.turnsRequired}</span>
+      <div class="sm-stats-row">
+        <div class="form-group">
+          <label>STR</label>
+          <input type="number" name="strength" value="${structure.strength}" min="0" max="${structure.maxStrength}" />
+          <span class="hint">/ ${structure.maxStrength}</span>
+        </div>
+        <div class="form-group">
+          <label>Built</label>
+          <input type="number" name="turnsBuilt" value="${structure.turnsBuilt}" min="0" max="${structure.turnsRequired}" />
+          <span class="hint">/ ${structure.turnsRequired}</span>
+        </div>
       </div>
       ${supplyHtml}
-    </form>`;
+    </form></div>`;
 
     new Dialog({
       title: `Edit — ${structure.name ?? config.label}`,
@@ -597,10 +605,14 @@ export default class StructureLayer extends PIXI.Container {
             if (isOutpost && structure.supply) {
               const supply = foundry.utils.deepClone(structure.supply);
               for (const cat of supplyCats) {
-                const cap = supply[cat]?.capacity ?? 0;
+                const newCap = Math.max(
+                  parseInt(el.querySelector(`[name="supply-cap-${cat}"]`).value) || 0,
+                  0
+                );
+                supply[cat].capacity = newCap;
                 supply[cat].current = Math.clamped(
                   parseInt(el.querySelector(`[name="supply-${cat}"]`).value) || 0,
-                  0, cap
+                  0, newCap
                 );
               }
               changes.supply = supply;
@@ -624,9 +636,9 @@ export default class StructureLayer extends PIXI.Container {
   _openOutpostSupplyTransfer(structure) {
     if (structure.type !== "outpost" || !structure.supply) return;
 
-    const supplyCats = ["smallArms", "heavyWeapons", "ordnance", "fuel", "materials", "parts", "basicSupplies"];
+    const supplyCats = ["projectile", "ordnance", "energy", "fuel", "materials", "parts", "basicSupplies"];
     const supplyLabels = {
-      smallArms: "Small Arms", heavyWeapons: "Heavy Weapons", ordnance: "Ordnance",
+      projectile: "Projectile", ordnance: "Ordnance", energy: "Energy",
       fuel: "Fuel", materials: "Materials", parts: "Parts", basicSupplies: "Basic Supplies"
     };
     const gridSize = canvas.grid.size || 100;
@@ -664,7 +676,7 @@ export default class StructureLayer extends PIXI.Container {
       </div>`;
     }).join("");
 
-    const content = `<form>
+    const content = `<div class="star-mercs sm-dialog"><form>
       <div class="form-group">
         <label>Direction</label>
         <select name="direction">
@@ -678,7 +690,7 @@ export default class StructureLayer extends PIXI.Container {
       </div>
       <hr/><h4>Amounts</h4>
       ${catInputs}
-    </form>`;
+    </form></div>`;
 
     const displayName = structure.name ?? "Outpost";
     new Dialog({
@@ -811,7 +823,7 @@ export default class StructureLayer extends PIXI.Container {
       }
     }
 
-    const content = `<div class="star-mercs structure-attack">
+    const content = `<div class="star-mercs sm-dialog structure-attack">
       <p>Select unit and weapon to attack <strong>${esc(sConfig?.label ?? structure.type)}</strong>
         (Strength: ${structure.strength}/${structure.maxStrength})</p>
       <div class="form-group">

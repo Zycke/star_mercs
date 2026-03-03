@@ -10,9 +10,7 @@
  * Entrenched: Reduces incoming damage by 1.
  * Fortified: Reduces incoming damage by 2.
  * Heavy: Soft attacks only hit on natural 10.
- * Ordnance: Weapon consumes ordnance supply; triggers APS/ZPS defense.
- * APS[X]: Active Protection System — rolls d6+X to reduce ordnance damage.
- * ZPS[X][Y]: Zone Protection System — provides APS-like coverage to friendlies within Y hexes.
+ * APS/ZPS: Defensive weapon types that intercept ordnance-ammo attacks.
  */
 
 import { getHexElevation, snapToHexCenter } from "./hex-utils.mjs";
@@ -28,6 +26,12 @@ import { getTerrainCoverMod } from "./detection.mjs";
  */
 export function validateAttack(weapon, target) {
   const attackType = weapon.system.attackType;
+
+  // APS/ZPS are defensive-only — cannot target units
+  if (attackType === "aps" || attackType === "zps") {
+    return { valid: false, reason: `${weapon.name} is a defensive system — it cannot target units.`, softVsHeavy: false };
+  }
+
   const isFlying = target.hasTrait("Flying");
   const isHovering = target.hasTrait("Hover");
   const isHeavy = target.hasTrait("Heavy");
@@ -296,120 +300,88 @@ export function calculateDamage(weapon, attacker, target, hitType) {
 }
 
 /**
- * Check whether a weapon is classified as ordnance (triggers APS/ZPS defense).
- * A weapon is ordnance if it has the ordnance trait, is artillery/aircraft, or is anti-air.
+ * Resolve APS/ZPS interception for an incoming attack.
+ * Only ordnance-ammo attacks trigger interception.
+ * Both APS and ZPS fire even if damage is already negated (they still consume ammo).
+ * Each weapon's reduction diminishes by 1 per firing this turn (overloaded at 0).
  *
- * @param {Item} weapon - The weapon to check.
- * @returns {boolean}
- */
-export function isOrdnanceWeapon(weapon) {
-  return !!(weapon.system.ordnance || weapon.system.artillery || weapon.system.aircraft
-    || weapon.system.attackType === "antiAir");
-}
-
-/**
- * Measure hex distance between two tokens (avoids circular import with actor.mjs).
- * @param {Token} token1
- * @param {Token} token2
- * @returns {number} Distance in hexes.
- */
-function _hexDistance(token1, token2) {
-  const result = canvas.grid.measurePath([token1.center, token2.center]);
-  const gridDistance = canvas.scene?.grid?.distance || 1;
-  return Math.round(result.distance / gridDistance);
-}
-
-/**
- * Apply Active Protection Systems (APS) and Zone Protection Systems (ZPS)
- * against an incoming ordnance attack. Both fire independently and their
- * damage reductions stack.
+ * Does NOT consume ammo or update fire counts — that is the caller's responsibility.
  *
- * APS: Defender rolls d6 + X − cumulative penalty. Tracked on defender's token.
- * ZPS: Best nearby friendly ZPS unit rolls d6 + X − cumulative penalty.
- *      Tracked on the ZPS owner's token.
- *
- * @param {Item} weapon - The ordnance weapon being fired.
- * @param {StarMercsActor} attacker - The attacking unit.
- * @param {StarMercsActor} target - The target unit.
- * @param {{final: number, base: number, modifiers: Array}} damage - The calculated damage object.
- * @returns {Promise<{systems: Array, totalReduction: number}|null>}
+ * @param {Item} attackingWeapon - The weapon that fired.
+ * @param {StarMercsActor} target - The unit being attacked.
+ * @param {Map|null} ammoOverrides - actorId -> { ammoType -> remainingCount } for volley tracking
+ * @param {Map|null} fireCountOverrides - actorId -> { weaponId -> count } for volley tracking
+ * @returns {{ totalReduction: number, interceptors: Array<{actorId, weaponId, weaponName, actorName, reduction, baseDamage, fireCount, type, ammoType}> }}
  */
-async function applyProtectionSystems(weapon, attacker, target, damage) {
-  const systems = [];
-  let totalReduction = 0;
+export function resolveInterception(attackingWeapon, target, ammoOverrides = null, fireCountOverrides = null) {
+  const ammoType = attackingWeapon.system.ammoType || "projectile";
+  if (ammoType !== "ordnance") return { totalReduction: 0, interceptors: [] };
 
-  // 1. Check if target has APS trait
-  const apsValue = target.getTraitValue("APS");
-  if (apsValue > 0) {
-    const targetToken = canvas?.tokens?.placeables.find(t => t.actor === target);
-    const fireCount = targetToken?.document?.getFlag("star-mercs", "apsFireCount") ?? 0;
-    const penalty = fireCount;
-
-    const roll = new Roll("1d6");
-    await roll.evaluate();
-    const reduction = Math.max(0, roll.total + apsValue - penalty);
-    totalReduction += reduction;
-
-    if (targetToken?.document) {
-      await targetToken.document.setFlag("star-mercs", "apsFireCount", fireCount + 1);
-    }
-
-    systems.push({
-      type: "APS", unitName: target.name,
-      roll: roll.total, bonus: apsValue, penalty, reduction
-    });
-  }
-
-  // 2. Check for nearby friendly ZPS units (fires even if APS also fired)
+  const interceptors = [];
   const targetToken = canvas?.tokens?.placeables.find(t => t.actor === target);
-  if (targetToken) {
-    const targetTeam = target.system.team ?? "a";
+  if (!targetToken) return { totalReduction: 0, interceptors: [] };
 
-    // Find the best ZPS unit in range (highest effective bonus)
-    let bestZPS = null;
-    for (const tok of canvas.tokens.placeables) {
-      if (!tok.actor) continue;
-      if ((tok.actor.system.team ?? "a") !== targetTeam) continue;
-      if (tok.actor.system.strength?.value <= 0) continue;
+  // Helper: get effective ammo for an actor
+  const getAmmo = (actor, aType) => {
+    if (ammoOverrides?.has(actor.id)) return ammoOverrides.get(actor.id)[aType] ?? 0;
+    return actor.system.supply?.[aType]?.current ?? 0;
+  };
 
-      const zpsItem = tok.actor.getTraitItem?.("ZPS");
-      if (!zpsItem) continue;
+  // Helper: get fire count for a weapon (how many times it has intercepted this turn)
+  const getFireCount = (actor, weaponId) => {
+    if (fireCountOverrides?.has(actor.id)) return fireCountOverrides.get(actor.id)[weaponId] ?? 0;
+    const counts = actor.getFlag("star-mercs", "interceptionCounts") ?? {};
+    return counts[weaponId] ?? 0;
+  };
 
-      const zpsBonus = zpsItem.system.traitValue;   // X
-      const zpsRange = zpsItem.system.traitValue2;  // Y
-      if (zpsBonus <= 0 || zpsRange <= 0) continue;
+  // APS: Check target's own APS weapons
+  for (const weapon of target.items) {
+    if (weapon.type !== "weapon" || weapon.system.attackType !== "aps") continue;
+    const wpnAmmo = weapon.system.ammoType || "projectile";
+    if (getAmmo(target, wpnAmmo) <= 0) continue;
+    const fireCount = getFireCount(target, weapon.id);
+    const effectiveReduction = weapon.system.damage - fireCount;
+    if (effectiveReduction <= 0) continue; // Overloaded — doesn't fire
+    interceptors.push({
+      actorId: target.id, weaponId: weapon.id,
+      weaponName: weapon.name, actorName: target.name,
+      reduction: effectiveReduction, baseDamage: weapon.system.damage,
+      fireCount, type: "aps", ammoType: wpnAmmo
+    });
+    break; // One APS weapon per unit per attack
+  }
 
-      const distance = _hexDistance(tok, targetToken);
-      if (distance > zpsRange) continue;
-
-      const fireCount = tok.document?.getFlag("star-mercs", "zpsFireCount") ?? 0;
-      const effectiveBonus = zpsBonus - fireCount;
-
-      if (!bestZPS || effectiveBonus > bestZPS.effectiveBonus) {
-        bestZPS = {
-          token: tok, actor: tok.actor, item: zpsItem,
-          bonus: zpsBonus, range: zpsRange, fireCount, effectiveBonus
-        };
-      }
-    }
-
-    if (bestZPS) {
-      const roll = new Roll("1d6");
-      await roll.evaluate();
-      const reduction = Math.max(0, roll.total + bestZPS.bonus - bestZPS.fireCount);
-      totalReduction += reduction;
-
-      await bestZPS.token.document.setFlag("star-mercs", "zpsFireCount", bestZPS.fireCount + 1);
-
-      systems.push({
-        type: "ZPS", unitName: bestZPS.actor.name,
-        roll: roll.total, bonus: bestZPS.bonus, penalty: bestZPS.fireCount, reduction
+  // ZPS: Check nearby friendly units' ZPS weapons (including target's own unit)
+  const targetTeam = target.system.team ?? "a";
+  for (const token of (canvas?.tokens?.placeables ?? [])) {
+    if (!token.actor || token.actor.type !== "unit") continue;
+    if ((token.actor.system.team ?? "a") !== targetTeam) continue;
+    for (const weapon of token.actor.items) {
+      if (weapon.type !== "weapon" || weapon.system.attackType !== "zps") continue;
+      // Range check: ZPS weapon's range stat (distance from ZPS carrier to target)
+      const dist = canvas.grid.measurePath([token.center, targetToken.center]);
+      const gridDist = canvas.scene.grid.distance || 1;
+      const hexDist = Math.round(dist.distance / gridDist);
+      if (hexDist > weapon.system.range) continue;
+      // Ammo check
+      const wpnAmmo = weapon.system.ammoType || "projectile";
+      if (getAmmo(token.actor, wpnAmmo) <= 0) continue;
+      // Diminishing returns
+      const fireCount = getFireCount(token.actor, weapon.id);
+      const effectiveReduction = weapon.system.damage - fireCount;
+      if (effectiveReduction <= 0) continue; // Overloaded — doesn't fire
+      interceptors.push({
+        actorId: token.actor.id, weaponId: weapon.id,
+        weaponName: weapon.name, actorName: token.actor.name,
+        reduction: effectiveReduction, baseDamage: weapon.system.damage,
+        fireCount, type: "zps", ammoType: wpnAmmo
       });
+      break; // One ZPS weapon per friendly unit per attack
     }
   }
 
-  if (systems.length === 0) return null;
-  return { systems, totalReduction };
+  const totalReduction = interceptors.reduce((sum, i) => sum + i.reduction, 0);
+  return { totalReduction, interceptors };
 }
 
 /**
@@ -431,7 +403,7 @@ async function applyProtectionSystems(weapon, attacker, target, damage) {
  *   target: StarMercsActor
  * }>}
  */
-export async function resolveAttack(weapon, attacker, target) {
+export async function resolveAttack(weapon, attacker, target, interceptionAmmoOverrides = null, interceptionFireOverrides = null) {
   // Step 1: Validate
   const validation = validateAttack(weapon, target);
   if (!validation.valid) {
@@ -477,19 +449,19 @@ export async function resolveAttack(weapon, attacker, target) {
     }
   }
 
-  // Step 6: Apply APS/ZPS protection (only if hit and weapon is ordnance)
-  let protectionResult = null;
-  if (damage && isOrdnanceWeapon(weapon)) {
-    protectionResult = await applyProtectionSystems(weapon, attacker, target, damage);
-    if (protectionResult && protectionResult.totalReduction > 0) {
-      damage.final = Math.max(0, damage.final - protectionResult.totalReduction);
-      // Add each system as a separate damage modifier
-      for (const sys of protectionResult.systems) {
-        damage.modifiers.push({
-          label: `${sys.type}[${sys.bonus}] (d6:${sys.roll}${sys.penalty > 0 ? ` -${sys.penalty} penalty` : ""})`,
-          value: -sys.reduction
-        });
-      }
+  // Step 6: Resolve APS/ZPS interception (only for ordnance-ammo hits)
+  // Both APS and ZPS fire even if damage is already at minimum.
+  let interception = { totalReduction: 0, interceptors: [] };
+  if (hitResult.hit && damage) {
+    interception = resolveInterception(weapon, target, interceptionAmmoOverrides, interceptionFireOverrides);
+    if (interception.totalReduction > 0) {
+      damage.final = Math.max(1, damage.final - interception.totalReduction);
+      damage.modifiers.push(
+        ...interception.interceptors.map(i => ({
+          label: `${i.type.toUpperCase()} (${i.actorName})`,
+          value: -i.reduction
+        }))
+      );
     }
   }
 
@@ -500,8 +472,8 @@ export async function resolveAttack(weapon, attacker, target) {
     accuracy,
     hitResult,
     damage,
-    protectionResult,
     softVsHeavy,
+    interception,
     weapon,
     attacker,
     target

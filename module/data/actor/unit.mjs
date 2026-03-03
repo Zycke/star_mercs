@@ -38,17 +38,18 @@ export default class UnitData extends foundry.abstract.TypeDataModel {
 
       // --- Supply (7 categories) ---
       supply: new SchemaField({
-        smallArms: new SchemaField({
-          current: new NumberField({ required: true, integer: true, min: 0, initial: 10 }),
-          capacity: new NumberField({ required: true, integer: true, min: 0, initial: 10 })
-        }),
-        heavyWeapons: new SchemaField({
+        projectile: new SchemaField({
           current: new NumberField({ required: true, integer: true, min: 0, initial: 10 }),
           capacity: new NumberField({ required: true, integer: true, min: 0, initial: 10 })
         }),
         ordnance: new SchemaField({
           current: new NumberField({ required: true, integer: true, min: 0, initial: 5 }),
           capacity: new NumberField({ required: true, integer: true, min: 0, initial: 5 })
+        }),
+        energy: new SchemaField({
+          current: new NumberField({ required: true, integer: true, min: 0, initial: 10 }),
+          capacity: new NumberField({ required: true, integer: true, min: 0, initial: 10 }),
+          rechargeRate: new NumberField({ required: true, integer: true, min: 0, initial: 2 })
         }),
         fuel: new SchemaField({
           current: new NumberField({ required: true, integer: true, min: 0, initial: 10 }),

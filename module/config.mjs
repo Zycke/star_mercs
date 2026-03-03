@@ -16,11 +16,24 @@ STARMERCS.ratings = {
 
 /**
  * Weapon attack types and their targeting rules.
+ * APS/ZPS are defensive weapon types that intercept incoming ordnance.
  */
 STARMERCS.attackTypes = {
   soft: "Soft Attack",
   hard: "Hard Attack",
-  antiAir: "Anti-Air"
+  antiAir: "Anti-Air",
+  aps: "APS (Active Protection)",
+  zps: "ZPS (Zone Protection)"
+};
+
+/**
+ * Ammo types consumed by weapons when firing.
+ * Each weapon specifies which ammo type it uses.
+ */
+STARMERCS.ammoTypes = {
+  projectile: "Projectile",
+  ordnance: "Ordnance",
+  energy: "Energy"
 };
 
 /**
@@ -453,7 +466,7 @@ STARMERCS.structures = {
     defaultCommsRange: 5,
     defaultSupplyRange: 3,
     defaultSupplyCapacity: {
-      smallArms: 10, heavyWeapons: 10, ordnance: 5,
+      projectile: 10, ordnance: 5, energy: 10,
       fuel: 10, materials: 10, parts: 5, basicSupplies: 10
     },
     description: "Fortified position providing cover, supplies, and comms relay."
@@ -483,7 +496,9 @@ STARMERCS.maxElevation = 5;
 STARMERCS.arrowColors = {
   soft: 0xFFFF00,     // Yellow
   hard: 0xFF3333,     // Red
-  antiAir: 0x9933FF   // Purple
+  antiAir: 0x9933FF,  // Purple
+  aps: 0x33CCFF,      // Cyan
+  zps: 0x33FF99       // Green
 };
 
 /**

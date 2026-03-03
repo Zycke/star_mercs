@@ -29,7 +29,7 @@
       </li>
       {{#each weapons as |weapon|}}
       <li class="item {{#if weapon.targetName}}has-target{{/if}}" data-item-id="{{weapon._id}}">
-        <span class="item-name clickable weapon-roll" title="Roll Attack (single)">
+        <span class="item-name clickable {{#unless weapon.isDefensive}}weapon-roll{{/unless}}" title="{{#if weapon.isDefensive}}Defensive System{{else}}Roll Attack (single){{/if}}">
           <img src="{{weapon.img}}" width="24" height="24"/>
           {{weapon.name}}
         </span>
@@ -45,10 +45,12 @@
           {{/if}}
         </span>
         <span class="item-controls">
-          <a class="weapon-assign-target" title="Assign Target (select a token first)"><i class="fas fa-crosshairs"></i></a>
-          {{#if weapon.targetName}}
-            <a class="weapon-clear-target" title="Clear Target"><i class="fas fa-times"></i></a>
-          {{/if}}
+          {{#unless weapon.isDefensive}}
+            <a class="weapon-assign-target" title="Assign Target (select a token first)"><i class="fas fa-crosshairs"></i></a>
+            {{#if weapon.targetName}}
+              <a class="weapon-clear-target" title="Clear Target"><i class="fas fa-times"></i></a>
+            {{/if}}
+          {{/unless}}
           <a class="item-chat" title="Post to Chat"><i class="fas fa-comment"></i></a>
           <a class="item-edit" title="Edit"><i class="fas fa-edit"></i></a>
           <a class="item-delete" title="Delete"><i class="fas fa-trash"></i></a>

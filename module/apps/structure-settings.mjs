@@ -17,7 +17,7 @@ export default class StructureSettings extends HandlebarsApplicationMixin(Applic
     },
     classes: ["star-mercs", "structure-settings"],
     position: {
-      width: 420,
+      width: 380,
       height: "auto"
     }
   };
@@ -53,9 +53,9 @@ export default class StructureSettings extends HandlebarsApplicationMixin(Applic
         entry.commsRange = merged.defaultCommsRange ?? 5;
         entry.supplyRange = merged.defaultSupplyRange ?? 3;
         const caps = merged.defaultSupplyCapacity ?? {};
-        entry.supplySmallArms = caps.smallArms ?? 10;
-        entry.supplyHeavyWeapons = caps.heavyWeapons ?? 10;
+        entry.supplyProjectile = caps.projectile ?? 10;
         entry.supplyOrdnance = caps.ordnance ?? 5;
+        entry.supplyEnergy = caps.energy ?? 10;
         entry.supplyFuel = caps.fuel ?? 10;
         entry.supplyMaterials = caps.materials ?? 10;
         entry.supplyParts = caps.parts ?? 5;
@@ -120,7 +120,7 @@ export default class StructureSettings extends HandlebarsApplicationMixin(Applic
         if (supRange) ov.defaultSupplyRange = parseInt(supRange.value) || 1;
 
         ov.defaultSupplyCapacity = {};
-        for (const cat of ["smallArms", "heavyWeapons", "ordnance", "fuel", "materials", "parts", "basicSupplies"]) {
+        for (const cat of ["projectile", "ordnance", "energy", "fuel", "materials", "parts", "basicSupplies"]) {
           const input = html.querySelector(`[name="${prefix}supply.${cat}"]`);
           if (input) ov.defaultSupplyCapacity[cat] = parseInt(input.value) || 0;
         }
