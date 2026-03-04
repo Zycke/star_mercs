@@ -1,5 +1,11 @@
 <form class="{{cssClass}} star-mercs sheet actor unit" autocomplete="off">
 
+  {{#if isDeployLocked}}
+  <div class="deploy-lock-banner">
+    <i class="fas fa-lock"></i> Unit is awaiting deployment — sheet is read-only
+  </div>
+  {{/if}}
+
   {{!-- Header: Unit Name, Image, Rating --}}
   <header class="sheet-header">
     <img class="profile-img" src="{{actor.img}}" data-edit="img"

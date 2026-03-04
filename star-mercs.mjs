@@ -29,6 +29,7 @@ import TacticalMarkerPainter from "./module/apps/tactical-marker-painter.mjs";
 import TurnControlPanel from "./module/apps/turn-control.mjs";
 import StructureLayer from "./module/canvas/structure-layer.mjs";
 import StructureSettings from "./module/apps/structure-settings.mjs";
+import DeployPanel from "./module/apps/deploy-panel.mjs";
 
 /* ============================================ */
 /*  Foundry VTT Initialization                  */
@@ -216,6 +217,15 @@ Hooks.once("init", () => {
     type: Object,
     default: {}
   });
+
+  game.settings.register("star-mercs", "deployPool", {
+    name: "Deploy Pool",
+    hint: "Actor IDs waiting to deploy, keyed by team.",
+    scope: "world",
+    config: false,
+    type: Object,
+    default: { a: [], b: [] }
+  });
 });
 
 /* ============================================ */
@@ -303,6 +313,62 @@ Hooks.once("ready", async () => {
             await scene.unsetFlag("star-mercs", "structures");
           } else {
             await scene.setFlag("star-mercs", "structures", updated);
+          }
+          break;
+        }
+      }
+    }
+
+    // Deploy operations relayed from players
+    if (data.action === "deploy") {
+      switch (data.op) {
+        case "addToPool": {
+          const pool = foundry.utils.deepClone(game.settings.get("star-mercs", "deployPool") ?? { a: [], b: [] });
+          if (!pool[data.team]) pool[data.team] = [];
+          if (!pool[data.team].some(e => e.actorId === data.actorId)) {
+            pool[data.team].push({ actorId: data.actorId, addedBy: data.userId });
+            await game.settings.set("star-mercs", "deployPool", pool);
+          }
+          break;
+        }
+        case "removeFromPool": {
+          const pool = foundry.utils.deepClone(game.settings.get("star-mercs", "deployPool") ?? { a: [], b: [] });
+          if (pool[data.team]) {
+            pool[data.team] = pool[data.team].filter(e => e.actorId !== data.actorId);
+            await game.settings.set("star-mercs", "deployPool", pool);
+          }
+          break;
+        }
+        case "place": {
+          const scene = game.scenes.get(data.sceneId);
+          if (!scene) break;
+          const actor = game.actors.get(data.actorId);
+          if (!actor) break;
+
+          // Create the token
+          const protoToken = actor.prototypeToken;
+          const tokenData = foundry.utils.mergeObject(protoToken.toObject(), {
+            actorId: actor.id,
+            x: data.x,
+            y: data.y
+          });
+          const created = await scene.createEmbeddedDocuments("Token", [tokenData]);
+          const tokenDoc = created[0];
+
+          // Add combatant if combat is active
+          if (game.combat?.started) {
+            await game.combat.createEmbeddedDocuments("Combatant", [{
+              actorId: actor.id,
+              tokenId: tokenDoc.id,
+              sceneId: scene.id
+            }]);
+          }
+
+          // Apply deploy effects
+          const panel = game.starmercs?.deployPanel;
+          if (panel) {
+            await panel._applyDeployEffects(actor, tokenDoc, data.mode);
+            await panel._removeFromPool(data.actorId, data.team);
           }
           break;
         }
@@ -854,8 +920,9 @@ Hooks.on("updateCombat", (combat, changes) => {
     }
   }
 
-  // Refresh turn control panel on any combat update
+  // Refresh turn control panel and deploy panel on any combat update
   game.starmercs?.turnControlPanel?.render(false);
+  game.starmercs?.deployPanel?.render(false);
 });
 
 /** Refresh turn control panel when combat updates (tactical step changes, score changes, etc.). */
@@ -1342,6 +1409,25 @@ Hooks.on("getSceneControlButtons", (controls) => {
     }
   };
 
+  const deployPanelTool = {
+    name: "deployPanel",
+    title: "Deploy Panel",
+    icon: "fas fa-parachute-box",
+    visible: true,
+    toggle: true,
+    active: game.starmercs?.deployPanel?.rendered ?? false,
+    onChange: (event, active) => {
+      if (active) {
+        if (!game.starmercs.deployPanel) {
+          game.starmercs.deployPanel = new DeployPanel();
+        }
+        game.starmercs.deployPanel.render(true);
+      } else {
+        game.starmercs.deployPanel?.close();
+      }
+    }
+  };
+
   if (isV13) {
     tool.order = Object.keys(tokenControls.tools).length;
     tokenControls.tools.targetingArrows = tool;
@@ -1361,6 +1447,8 @@ Hooks.on("getSceneControlButtons", (controls) => {
     tokenControls.tools.structureSettings = structureSettingsTool;
     turnControlTool.order = Object.keys(tokenControls.tools).length;
     tokenControls.tools.turnControl = turnControlTool;
+    deployPanelTool.order = Object.keys(tokenControls.tools).length;
+    tokenControls.tools.deployPanel = deployPanelTool;
   } else {
     tokenControls.tools.push(tool);
     tokenControls.tools.push(commsTool);
@@ -1371,5 +1459,6 @@ Hooks.on("getSceneControlButtons", (controls) => {
     tokenControls.tools.push(tacticalMarkerTool);
     tokenControls.tools.push(structureSettingsTool);
     tokenControls.tools.push(turnControlTool);
+    tokenControls.tools.push(deployPanelTool);
   }
 });

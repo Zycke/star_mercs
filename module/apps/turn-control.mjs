@@ -44,7 +44,7 @@ export default class TurnControlPanel extends FormApplication {
 
     // Tactical sub-step label
     let tacticalStepLabel = null;
-    if (phaseIndex === 2) {
+    if (phaseIndex === 3) {
       const stepIdx = combat.getFlag("star-mercs", "tacticalStep") ?? 0;
       const step = StarMercsCombat.TACTICAL_STEPS[stepIdx];
       if (step) tacticalStepLabel = step.label;

@@ -46,6 +46,12 @@ export default class StarMercsUnitSheet extends ActorSheet {
     // Ownership flag for template guards
     context.isOwner = this.actor.isOwner;
 
+    // Deploy pool lock: unit in deploy pool is read-only for players
+    const deployPool = game.settings.get("star-mercs", "deployPool") ?? { a: [], b: [] };
+    const isInDeployPool = Object.values(deployPool).flat().some(e => e.actorId === this.actor.id);
+    context.isInDeployPool = isInDeployPool;
+    context.isDeployLocked = isInDeployPool && !game.user.isGM;
+
     // Detection range (derived): range vs configured target signature
     const sensors = this.actor.system.sensors ?? 0;
     const targetSig = game.settings.get("star-mercs", "detectionRingTargetSig") ?? 2;

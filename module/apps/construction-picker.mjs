@@ -85,6 +85,9 @@ export default class ConstructionPicker extends HandlebarsApplicationMixin(Appli
     // Build available structure choices
     const choices = [];
     for (const [typeKey, config] of Object.entries(CONFIG.STARMERCS.structures)) {
+      // Skip GM-placed-only structures (e.g. Headquarters)
+      if (config.gmPlacedOnly) continue;
+
       const merged = StructureLayer.getStructureConfig(typeKey);
       const choice = {
         key: typeKey,

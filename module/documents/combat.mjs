@@ -10,8 +10,8 @@ import StructureLayer from "../canvas/structure-layer.mjs";
 /**
  * Extended Combat class for Star Mercs that implements phase-based rounds.
  *
- * Each round cycles through 4 phases:
- *   preparation → orders → tactical → consolidation
+ * Each round cycles through 5 phases:
+ *   deploy → preparation → orders → tactical → consolidation
  *
  * Phase state is stored via flags for v12 compatibility.
  * The GM advances phases using the "Next Turn" button in the combat tracker.
@@ -19,7 +19,7 @@ import StructureLayer from "../canvas/structure-layer.mjs";
 export default class StarMercsCombat extends Combat {
 
   /** Ordered phase keys. */
-  static PHASES = ["preparation", "orders", "tactical", "consolidation"];
+  static PHASES = ["deploy", "preparation", "orders", "tactical", "consolidation"];
 
   /** Tactical sub-step definitions, executed in order during the tactical phase. */
   static TACTICAL_STEPS = [
@@ -35,6 +35,7 @@ export default class StarMercsCombat extends Combat {
 
   /** Per-phase permission rules. */
   static PHASE_RULES = {
+    deploy:        { allowsMovement: false, allowsAttack: false },
     preparation:   { allowsMovement: false, allowsAttack: false },
     orders:        { allowsMovement: false, allowsAttack: false },
     tactical:      { allowsMovement: true,  allowsAttack: true  },
@@ -45,9 +46,9 @@ export default class StarMercsCombat extends Combat {
   /*  Accessors                               */
   /* ---------------------------------------- */
 
-  /** Current phase key (e.g. "preparation"). */
+  /** Current phase key (e.g. "deploy"). */
   get phase() {
-    return this.getFlag("star-mercs", "phase") || "preparation";
+    return this.getFlag("star-mercs", "phase") || "deploy";
   }
 
   /** Current phase index (0–3). */
@@ -69,10 +70,10 @@ export default class StarMercsCombat extends Combat {
   /*  Combat Lifecycle Overrides              */
   /* ---------------------------------------- */
 
-  /** @override — Initialize phase to preparation when combat starts. */
+  /** @override — Initialize phase to deploy when combat starts. */
   async startCombat() {
     await this.update({
-      "flags.star-mercs.phase": "preparation",
+      "flags.star-mercs.phase": "deploy",
       "flags.star-mercs.phaseIndex": 0
     });
     const result = await super.startCombat();
@@ -93,7 +94,7 @@ export default class StarMercsCombat extends Combat {
     const currentIndex = this.phaseIndex;
 
     // If currently IN tactical, advance sub-step instead of phase
-    if (currentIndex === 2) {
+    if (currentIndex === 3) {
       const currentStep = this.getFlag("star-mercs", "tacticalStep") ?? 0;
       const nextStep = currentStep + 1;
 
@@ -107,7 +108,7 @@ export default class StarMercsCombat extends Combat {
       await this._runConsolidationEffects();
       await this.update({
         "flags.star-mercs.phase": "consolidation",
-        "flags.star-mercs.phaseIndex": 3
+        "flags.star-mercs.phaseIndex": 4
       });
       this._announcePhase();
       return this;
@@ -115,14 +116,19 @@ export default class StarMercsCombat extends Combat {
 
     const nextIndex = currentIndex + 1;
 
+    // Entering preparation — run preparation effects
+    if (nextIndex === 1) {
+      await this._runPreparationEffects();
+    }
+
     // Entering tactical — start sub-step sequence
-    if (nextIndex === 2) {
+    if (nextIndex === 3) {
       // Apply assault +1 incoming damage flag at the start of tactical phase
       await this._applyAssaultIncomingDamageFlags();
 
       await this.update({
         "flags.star-mercs.phase": "tactical",
-        "flags.star-mercs.phaseIndex": 2,
+        "flags.star-mercs.phaseIndex": 3,
         "flags.star-mercs.tacticalStep": 0
       });
       this._announcePhase();
@@ -131,12 +137,12 @@ export default class StarMercsCombat extends Combat {
     }
 
     // Leaving consolidation — clear targets, destinations, orders
-    if (currentIndex === 3) {
+    if (currentIndex === 4) {
       await this._runConsolidationCleanup();
     }
 
     // Entering consolidation — apply damage, readiness costs, supply consumption
-    if (nextIndex === 3) {
+    if (nextIndex === 4) {
       await this._runConsolidationEffects();
     }
 
@@ -157,23 +163,22 @@ export default class StarMercsCombat extends Combat {
     return this;
   }
 
-  /** @override — New round resets to preparation and runs preparation effects. */
+  /** @override — New round resets to deploy phase. */
   async nextRound() {
     await this.update({
-      "flags.star-mercs.phase": "preparation",
+      "flags.star-mercs.phase": "deploy",
       "flags.star-mercs.phaseIndex": 0
     });
     const result = await super.nextRound();
-    await this._runPreparationEffects();
     this._announcePhase();
     this._refreshEngagementStatus();
     return result;
   }
 
-  /** @override — Previous round resets to preparation. */
+  /** @override — Previous round resets to deploy phase. */
   async previousRound() {
     await this.update({
-      "flags.star-mercs.phase": "preparation",
+      "flags.star-mercs.phase": "deploy",
       "flags.star-mercs.phaseIndex": 0
     });
     return super.previousRound();
@@ -743,7 +748,7 @@ export default class StarMercsCombat extends Combat {
         const supStructures = canvas.scene?.getFlag("star-mercs", "structures") ?? [];
 
         for (const s of supStructures) {
-          if (s.type !== "outpost" || s.team !== supTeam) continue;
+          if ((s.type !== "outpost" && s.type !== "headquarters") || s.team !== supTeam) continue;
           if (s.turnsBuilt < s.turnsRequired || s.strength <= 0) continue;
           if (!s.supply) continue;
           if (s.autoSupply === false) continue;
@@ -1325,7 +1330,9 @@ export default class StarMercsCombat extends Combat {
       const defenderComms = this._getCommsChainStatus(defenderToken?.id ?? assaultTargetId);
 
       // Shock trait: attacker's Shock [X] value applies as defender penalty (if defender lacks Shock)
-      const attackerShockValue = actor.getTraitValue?.("Shock") ?? 0;
+      const attackerShockBase = actor.getTraitValue?.("Shock") ?? 0;
+      const attackerShockBonus = actor.getFlag("star-mercs", "deployShockBonus") ?? 0;
+      const attackerShockValue = attackerShockBase + attackerShockBonus;
       const defenderHasShock = targetActor.hasTrait?.("Shock") ?? false;
       const shockPenalty = (!defenderHasShock && attackerShockValue > 0) ? attackerShockValue : 0;
 
@@ -2661,6 +2668,16 @@ export default class StarMercsCombat extends Combat {
 
       // 7. Clear current order
       await actor.update({ "system.currentOrder": "" });
+
+      // 8. Clear deployment effects (temporary bonuses from special deployment)
+      if (actor.getFlag("star-mercs", "deployMode")) {
+        await actor.update({
+          "flags.star-mercs.-=deploySignatureBonus": null,
+          "flags.star-mercs.-=deployShockBonus": null,
+          "flags.star-mercs.-=deployAntiAirVulnerable": null,
+          "flags.star-mercs.-=deployMode": null
+        });
+      }
     }
 
     // Clear tactical step counter

@@ -20,7 +20,7 @@
       </div>
     </div>
 
-    {{#if isOutpost}}
+    {{#if hasSupply}}
     <div class="structure-stats-row">
       <div class="form-group">
         <label>Comms Range</label>
@@ -30,6 +30,12 @@
         <label>Supply Range</label>
         <input type="number" name="{{key}}.supplyRange" value="{{supplyRange}}" min="0" step="1"/>
       </div>
+      {{#if isHeadquarters}}
+      <div class="form-group">
+        <label>Deploy Radius</label>
+        <input type="number" name="{{key}}.deployRadius" value="{{deployRadius}}" min="1" step="1"/>
+      </div>
+      {{/if}}
     </div>
     <details class="supply-capacities">
       <summary>Supply Capacities</summary>

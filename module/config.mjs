@@ -218,6 +218,7 @@ STARMERCS.orders = {
  * Turn phases.
  */
 STARMERCS.phases = {
+  deploy: "Deploy",
   preparation: "Preparation",
   orders: "Orders",
   tactical: "Tactical",
@@ -227,7 +228,7 @@ STARMERCS.phases = {
 /**
  * Ordered array of phase keys for sequencing.
  */
-STARMERCS.phaseOrder = ["preparation", "orders", "tactical", "consolidation"];
+STARMERCS.phaseOrder = ["deploy", "preparation", "orders", "tactical", "consolidation"];
 
 /**
  * Terrain types — labels for dropdowns.
@@ -502,6 +503,25 @@ STARMERCS.structures = {
     canCapture: false,
     grantsFortified: true,
     description: "Field fortifications granting Fortified trait to any occupying unit."
+  },
+  headquarters: {
+    label: "Headquarters",
+    icon: "fas fa-chess-rook",
+    color: 0xFFAA00,
+    maxStrength: 8,
+    turnsRequired: 0,
+    materialsPerTurn: 0,
+    canCapture: true,
+    grantsFortified: true,
+    gmPlacedOnly: true,
+    defaultCommsRange: 8,
+    defaultSupplyRange: 5,
+    defaultDeployRadius: 3,
+    defaultSupplyCapacity: {
+      projectile: 20, ordnance: 10, energy: 20,
+      fuel: 20, materials: 20, parts: 10, basicSupplies: 20
+    },
+    description: "Team headquarters. Deployment point, supply hub, and comms relay. One per team."
   }
 };
 
