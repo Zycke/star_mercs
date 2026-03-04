@@ -1,0 +1,41 @@
+<div class="deploy-panel-content">
+  {{#if isGM}}
+    <div class="deploy-team-selector">
+      <button class="team-tab {{#if (eq viewedTeam 'a')}}active{{/if}}" data-team="a">Team A</button>
+      <button class="team-tab {{#if (eq viewedTeam 'b')}}active{{/if}}" data-team="b">Team B</button>
+    </div>
+  {{/if}}
+
+  <div class="deploy-pool-list" data-team="{{viewedTeam}}">
+    {{#each poolEntries}}
+      <div class="deploy-entry" data-actor-id="{{actorId}}">
+        <img src="{{img}}" width="32" height="32"/>
+        <div class="deploy-entry-info">
+          <span class="deploy-entry-name">{{name}}</span>
+          <span class="deploy-entry-detail">{{ratingLabel}} | STR {{strength}}</span>
+          {{#if specialTraits}}
+            <span class="deploy-entry-traits">{{specialTraits}}</span>
+          {{/if}}
+        </div>
+        {{#if ../canRemove}}
+          <button class="remove-btn" title="Remove from pool"><i class="fas fa-times"></i></button>
+        {{/if}}
+      </div>
+    {{/each}}
+    {{#unless poolEntries.length}}
+      <p class="empty-pool">No units waiting to deploy.</p>
+    {{/unless}}
+  </div>
+
+  {{#unless isDeployPhase}}
+    <p class="phase-notice"><i class="fas fa-clock"></i> Right-click a unit during Deploy phase to deploy</p>
+  {{/unless}}
+
+  {{#if isDeployPhase}}
+    <p class="phase-notice phase-active"><i class="fas fa-parachute-box"></i> Right-click a unit to deploy</p>
+  {{/if}}
+
+  {{#if canAdd}}
+    <button class="add-unit-btn"><i class="fas fa-plus"></i> Add Unit</button>
+  {{/if}}
+</div>

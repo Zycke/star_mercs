@@ -147,11 +147,16 @@ export default class StarMercsActor extends Actor {
 
   /**
    * Check if this unit can take off.
-   * Requires: Flying trait, currently landed.
+   * Requires: Flying trait, currently landed, and has fuel.
    * @returns {boolean}
    */
   canTakeOff() {
-    return this.hasTrait("Flying") && (this.getFlag("star-mercs", "landed") ?? false);
+    if (!this.hasTrait("Flying")) return false;
+    if (!(this.getFlag("star-mercs", "landed") ?? false)) return false;
+    // Cannot take off without fuel
+    const fuel = this.system.supply?.fuel?.current ?? 0;
+    if (fuel <= 0) return false;
+    return true;
   }
 
   /**
@@ -177,8 +182,8 @@ export default class StarMercsActor extends Actor {
   }
 
   /**
-   * Change altitude by a delta (positive = climb, negative = descend).
-   * Costs 1 MP per level changed.
+   * Change altitude by a delta (GM override — no fuel/MP cost).
+   * For order-based altitude changes, altitude is applied during the tactical phase.
    * @param {number} delta - Altitude change (+1 or -1 typically).
    * @returns {Promise<{success: boolean, reason?: string}>}
    */
@@ -201,23 +206,7 @@ export default class StarMercsActor extends Actor {
       return { success: false, reason: delta > 0 ? "Already at maximum altitude (5)." : `Already at minimum altitude (${hexElev}).` };
     }
 
-    const mpCost = Math.abs(newAlt - currentAlt);
-
-    // Check remaining MP
-    let mpMax = this.system.movement ?? 0;
-    const curOrderConfig = CONFIG.STARMERCS.orders?.[this.system.currentOrder];
-    if (curOrderConfig?.speedMultiplier) mpMax *= curOrderConfig.speedMultiplier;
-    const mpUsed = token.document?.getFlag("star-mercs", "movementUsed") ?? 0;
-    const mpRemaining = mpMax - mpUsed;
-
-    if (mpCost > mpRemaining) {
-      return { success: false, reason: `Not enough MP. Need ${mpCost}, have ${mpRemaining}.` };
-    }
-
-    // Apply altitude change and deduct MP
     await this.setFlag("star-mercs", "altitude", newAlt);
-    await token.document.setFlag("star-mercs", "movementUsed", mpUsed + mpCost);
-
     return { success: true };
   }
 

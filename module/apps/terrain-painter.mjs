@@ -434,11 +434,25 @@ export default class TerrainPainter extends FormApplication {
       return;
     }
 
-    // Cannot place fortification/outpost on noFortification terrain
+    // Cannot place fortification/outpost/headquarters on noFortification terrain
     if (terrainConfig?.noFortification &&
-        (this._selectedStructure === "outpost" || this._selectedStructure === "fortification")) {
+        (this._selectedStructure === "outpost" || this._selectedStructure === "fortification" || this._selectedStructure === "headquarters")) {
       ui.notifications.warn("Cannot place fortifications on this terrain type.");
       return;
+    }
+
+    // Headquarters: one per team enforcement
+    if (this._selectedStructure === "headquarters") {
+      const team = this._structureTeam;
+      if (!team || team === "none") {
+        ui.notifications.warn("Headquarters must be assigned to a team.");
+        return;
+      }
+      const existingHQ = structures.find(s => s.type === "headquarters" && s.team === team);
+      if (existingHQ) {
+        ui.notifications.warn(`${team === "a" ? "Team A" : "Team B"} already has a Headquarters. Remove it first.`);
+        return;
+      }
     }
 
     const type = this._selectedStructure;
@@ -466,14 +480,17 @@ export default class TerrainPainter extends FormApplication {
       autoSupply: true
     };
 
-    // Outpost-specific fields (empty supply)
-    if (type === "outpost") {
-      structureData.commsRange = config.defaultCommsRange ?? 5;
-      structureData.supplyRange = config.defaultSupplyRange ?? 3;
+    // Outpost/Headquarters-specific fields (empty supply)
+    if (type === "outpost" || type === "headquarters") {
+      structureData.commsRange = config.defaultCommsRange ?? (type === "headquarters" ? 8 : 5);
+      structureData.supplyRange = config.defaultSupplyRange ?? (type === "headquarters" ? 5 : 3);
       const caps = config.defaultSupplyCapacity ?? {};
       structureData.supply = {};
       for (const cat of ["projectile", "ordnance", "energy", "fuel", "materials", "parts", "basicSupplies"]) {
         structureData.supply[cat] = { current: 0, capacity: caps[cat] ?? 0 };
+      }
+      if (type === "headquarters") {
+        structureData.deployRadius = config.defaultDeployRadius ?? 3;
       }
     }
 

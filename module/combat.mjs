@@ -47,8 +47,10 @@ export function validateAttack(weapon, target, attacker = null) {
     return { valid: false, reason: `${target.name} is Flying — only Anti-Air weapons can target it.`, softVsHeavy: false };
   }
 
-  // Anti-air weapons can only target units with the Flying trait
-  if (attackType === "antiAir" && !isFlying) {
+  // Anti-air weapons can only target units with the Flying trait (or Air Assault deployed)
+  const targetTokenDoc = target.getActiveTokens(true)[0]?.document;
+  const isAntiAirVulnerable = targetTokenDoc?.hasStatusEffect("air-assault") ?? false;
+  if (attackType === "antiAir" && !isFlying && !isAntiAirVulnerable) {
     return { valid: false, reason: `${weapon.name} (Anti-Air) can only target units with the Flying trait.`, softVsHeavy: false };
   }
 

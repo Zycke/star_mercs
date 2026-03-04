@@ -3179,3 +3179,152 @@ select:focus,
 .star-mercs.team-settings .sheet-footer button {
   width: 100%;
 }
+
+/* ============================================ */
+/*  Deploy Panel                                */
+/* ============================================ */
+
+.deploy-panel .deploy-pool-list {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.deploy-panel .deploy-entry {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--sm-border, #333);
+  cursor: context-menu;
+}
+
+.deploy-panel .deploy-entry:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.deploy-panel .deploy-entry img {
+  border-radius: 3px;
+  border: 1px solid var(--sm-border, #444);
+}
+
+.deploy-panel .deploy-entry-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.deploy-panel .deploy-entry-name {
+  font-weight: bold;
+  font-size: 12px;
+}
+
+.deploy-panel .deploy-entry-detail {
+  font-size: 10px;
+  color: #aaa;
+}
+
+.deploy-panel .deploy-entry-traits {
+  font-size: 9px;
+  color: #6af;
+}
+
+.deploy-panel .remove-btn {
+  background: #a44;
+  color: white;
+  border: none;
+  border-radius: 3px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.deploy-panel .remove-btn:hover {
+  background: #c55;
+}
+
+.deploy-panel .add-unit-btn {
+  width: 100%;
+  margin-top: 6px;
+  padding: 6px;
+}
+
+.deploy-panel .empty-pool {
+  text-align: center;
+  color: #888;
+  font-style: italic;
+  padding: 20px;
+}
+
+.deploy-panel .phase-notice {
+  text-align: center;
+  color: #aa8;
+  font-size: 10px;
+  padding: 4px;
+  margin: 4px 0;
+}
+
+.deploy-panel .phase-notice.phase-active {
+  color: #4a6;
+  font-weight: bold;
+}
+
+.deploy-panel .deploy-team-selector {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.deploy-panel .team-tab {
+  flex: 1;
+  padding: 4px 12px;
+  border: 1px solid #555;
+  background: #333;
+  color: #ccc;
+  cursor: pointer;
+  text-align: center;
+}
+
+.deploy-panel .team-tab.active {
+  background: #555;
+  color: white;
+}
+
+/* Deploy context menu */
+.deploy-context-menu {
+  position: fixed;
+  z-index: 1000;
+  background: #2a2a2a;
+  border: 1px solid #555;
+  border-radius: 4px;
+  padding: 4px 0;
+  min-width: 180px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+.deploy-context-menu .menu-item {
+  padding: 6px 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #ddd;
+}
+
+.deploy-context-menu .menu-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.deploy-context-menu .menu-item i {
+  width: 16px;
+  text-align: center;
+}
+
+/* Deploy lock banner */
+.deploy-lock-banner {
+  background: #553;
+  color: #ffa;
+  padding: 6px;
+  text-align: center;
+  border-radius: 3px;
+  margin: 4px;
+  font-size: 11px;
+}

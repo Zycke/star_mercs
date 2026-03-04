@@ -171,6 +171,27 @@ STARMERCS.orders = {
     supplyModifier: "2x",
     description: "Unit performs a devastating drop assault from orbit or high altitude."
   },
+  change_altitude: {
+    label: "Change Altitude",
+    category: "standard",
+    requiredTrait: "Flying",
+    allowsMovement: false,
+    allowsAttack: true,
+    readinessCost: 0,
+    supplyModifier: "1x",
+    description: "Flying unit changes altitude. Costs 1 fuel per altitude level changed. May fire weapons."
+  },
+  fly: {
+    label: "Fly",
+    category: "standard",
+    requiredTrait: "Flying",
+    allowsMovement: true,
+    allowsAttack: true,
+    accuracyPenalty: 1,
+    readinessCost: -1,
+    supplyModifier: "1x",
+    description: "Flying unit maneuvers to a destination hex and adjusts altitude. May fire at -1 accuracy after movement."
+  },
   supply_order: {
     label: "Supply",
     category: "special",
@@ -197,6 +218,7 @@ STARMERCS.orders = {
  * Turn phases.
  */
 STARMERCS.phases = {
+  deploy: "Deploy",
   preparation: "Preparation",
   orders: "Orders",
   tactical: "Tactical",
@@ -206,7 +228,7 @@ STARMERCS.phases = {
 /**
  * Ordered array of phase keys for sequencing.
  */
-STARMERCS.phaseOrder = ["preparation", "orders", "tactical", "consolidation"];
+STARMERCS.phaseOrder = ["deploy", "preparation", "orders", "tactical", "consolidation"];
 
 /**
  * Terrain types — labels for dropdowns.
@@ -481,6 +503,25 @@ STARMERCS.structures = {
     canCapture: false,
     grantsFortified: true,
     description: "Field fortifications granting Fortified trait to any occupying unit."
+  },
+  headquarters: {
+    label: "Headquarters",
+    icon: "fas fa-chess-rook",
+    color: 0xFFAA00,
+    maxStrength: 8,
+    turnsRequired: 0,
+    materialsPerTurn: 0,
+    canCapture: true,
+    grantsFortified: true,
+    gmPlacedOnly: true,
+    defaultCommsRange: 8,
+    defaultSupplyRange: 5,
+    defaultDeployRadius: 3,
+    defaultSupplyCapacity: {
+      projectile: 20, ordnance: 10, energy: 20,
+      fuel: 20, materials: 20, parts: 10, basicSupplies: 20
+    },
+    description: "Team headquarters. Deployment point, supply hub, and comms relay. One per team."
   }
 };
 

@@ -46,6 +46,12 @@ export default class StarMercsUnitSheet extends ActorSheet {
     // Ownership flag for template guards
     context.isOwner = this.actor.isOwner;
 
+    // Deploy pool lock: unit in deploy pool is read-only for players
+    const deployPool = game.settings.get("star-mercs", "deployPool") ?? { a: [], b: [] };
+    const isInDeployPool = Object.values(deployPool).flat().some(e => e.actorId === this.actor.id);
+    context.isInDeployPool = isInDeployPool;
+    context.isDeployLocked = isInDeployPool && !game.user.isGM;
+
     // Detection range (derived): range vs configured target signature
     const sensors = this.actor.system.sensors ?? 0;
     const targetSig = game.settings.get("star-mercs", "detectionRingTargetSig") ?? 2;
@@ -88,7 +94,7 @@ export default class StarMercsUnitSheet extends ActorSheet {
     const hasNoSupply = (sup.projectile?.current ?? 0) <= 0
       && (sup.ordnance?.current ?? 0) <= 0
       && (sup.energy?.current ?? 0) <= 0;
-    const zeroSupplyOrders = ["hold", "move", "withdraw", "entrench", "stand_down", "forced_march"];
+    const zeroSupplyOrders = ["hold", "move", "withdraw", "entrench", "stand_down", "forced_march", "fly", "change_altitude"];
 
     // Check Breaking/Broken status from token flags
     const activeToken = this.actor.getActiveTokens()?.[0];
@@ -105,7 +111,10 @@ export default class StarMercsUnitSheet extends ActorSheet {
     context.isEngaged = unitIsEngaged;
 
     // Orders that engaged units cannot take (movement orders except withdraw/assault)
-    const engagedBlockedOrders = ["move", "forced_march"];
+    const engagedBlockedOrders = ["move", "forced_march", "fly"];
+
+    // Flying units replace Maneuver/Forced March with Fly/Change Altitude
+    const isFlying = this.actor.hasTrait("Flying");
 
     context.availableOrders = Object.entries(allOrders)
       .filter(([key, data]) => {
@@ -113,10 +122,12 @@ export default class StarMercsUnitSheet extends ActorSheet {
         if ((isBreaking || isBroken) && !breakingOrders.includes(key)) return false;
         // Engaged units cannot Maneuver or Forced March
         if (unitIsEngaged && engagedBlockedOrders.includes(key)) return false;
-        // Special orders require a trait
-        if (data.category === "special" && data.requiredTrait) {
+        // All orders with requiredTrait need that trait
+        if (data.requiredTrait) {
           if (!this.actor.hasTrait(data.requiredTrait)) return false;
         }
+        // Flying units use Fly/Change Altitude instead of Maneuver/Forced March
+        if (isFlying && (key === "move" || key === "forced_march")) return false;
         // Zero supply: only Hold, Move, Withdraw
         if (hasNoSupply && !zeroSupplyOrders.includes(key)) return false;
         return true;
@@ -178,7 +189,11 @@ export default class StarMercsUnitSheet extends ActorSheet {
 
     // Supply transfer: only during preparation phase
     context.isPreparationPhase = combat?.phase === "preparation";
-    context.canTransferSupply = !combat?.started || combat?.phase === "preparation";
+    // Supply transfer: preparation phase only; airborne flying units need the Supply trait
+    const isAirborneNoSupply = this.actor.hasTrait("Flying")
+      && !this.actor.getFlag("star-mercs", "landed")
+      && !this.actor.hasTrait("Supply");
+    context.canTransferSupply = (!combat?.started || combat?.phase === "preparation") && !isAirborneNoSupply;
     context.supplyTransferRange = this.actor.getSupplyTransferRange();
 
     // Active Signature (base + terrain modifiers)
@@ -248,11 +263,22 @@ export default class StarMercsUnitSheet extends ActorSheet {
       context.canLandHere = this.actor.canLand();
       context.canTakeOff = this.actor.canTakeOff();
 
-      // Altitude change costs 1 MP per level
-      const canClimb = context.isAirborne && context.currentAltitude < 5 && context.mpRemaining > 0;
-      const canDescend = context.isAirborne && context.currentAltitude > hexElev && context.mpRemaining > 0;
+      // GM altitude override: always available for GMs when airborne
+      const canClimb = context.isAirborne && context.currentAltitude < 5;
+      const canDescend = context.isAirborne && context.currentAltitude > hexElev;
       context.canClimb = canClimb;
       context.canDescend = canDescend;
+
+      // Show altitude target from Change Altitude or Fly orders
+      const altTarget = activeToken?.document?.getFlag("star-mercs", "altitudeTarget");
+      const flyAltTarget = activeToken?.document?.getFlag("star-mercs", "flyAltitudeTarget");
+      if (altTarget != null) {
+        context.altitudeTargetSet = true;
+        context.altitudeTargetValue = altTarget;
+      } else if (flyAltTarget != null) {
+        context.altitudeTargetSet = true;
+        context.altitudeTargetValue = flyAltTarget;
+      }
     }
 
     return context;
@@ -612,6 +638,82 @@ export default class StarMercsUnitSheet extends ActorSheet {
   }
 
   /**
+   * Prompt the player to pick a target altitude for the Change Altitude order.
+   * Validates fuel availability and stores the target on a token flag.
+   * @private
+   */
+  _promptAltitudeTarget() {
+    const myToken = this.actor.getActiveTokens()?.[0];
+    if (!myToken) {
+      ui.notifications.warn("Place this unit's token on the canvas first.");
+      return;
+    }
+
+    const currentAlt = this.actor.getFlag("star-mercs", "altitude") ?? 0;
+    const hexElev = getHexElevation(snapToHexCenter(myToken.center));
+    const fuelAvailable = this.actor.system.supply?.fuel?.current ?? 0;
+    const maxAlt = 5;
+
+    // Build altitude options
+    const options = [];
+    for (let alt = hexElev; alt <= maxAlt; alt++) {
+      if (alt === currentAlt) continue;
+      const fuelCost = Math.abs(alt - currentAlt);
+      const valid = fuelCost <= fuelAvailable;
+      options.push(`<option value="${alt}" ${!valid ? "disabled" : ""}>${alt} (${fuelCost} fuel${!valid ? " — insufficient" : ""})</option>`);
+    }
+
+    if (options.length === 0) {
+      ui.notifications.warn("No valid altitude changes available.");
+      this.actor.update({ "system.currentOrder": "" });
+      return;
+    }
+
+    const actor = this.actor;
+    const dialogContent = `
+      <form class="altitude-target-form">
+        <p>Current Altitude: <strong>${currentAlt}</strong> | Fuel: <strong>${fuelAvailable}</strong></p>
+        <div class="form-group">
+          <label>Target Altitude</label>
+          <select id="altitude-target">${options.join("")}</select>
+        </div>
+        <p class="notes">Costs 1 fuel per altitude level changed.</p>
+      </form>
+    `;
+
+    new Dialog({
+      title: "Change Altitude — Select Target",
+      content: dialogContent,
+      buttons: {
+        confirm: {
+          icon: '<i class="fas fa-check"></i>',
+          label: "Confirm",
+          callback: async (html) => {
+            const targetAlt = parseInt(html.find("#altitude-target").val());
+            if (isNaN(targetAlt)) return;
+            const fuelCost = Math.abs(targetAlt - currentAlt);
+            if (fuelCost > fuelAvailable) {
+              ui.notifications.warn("Not enough fuel for this altitude change.");
+              return;
+            }
+            await myToken.document.setFlag("star-mercs", "altitudeTarget", targetAlt);
+            ui.notifications.info(`Altitude target set: ${currentAlt} → ${targetAlt} (${fuelCost} fuel).`);
+          }
+        },
+        cancel: {
+          icon: '<i class="fas fa-times"></i>',
+          label: "Cancel",
+          callback: async () => {
+            await actor.update({ "system.currentOrder": "" });
+            ui.notifications.info("Change Altitude order cancelled.");
+          }
+        }
+      },
+      default: "confirm"
+    }).render(true);
+  }
+
+  /**
    * Clear all weapon targets at once.
    */
   async _onClearAllTargets(event) {
@@ -712,11 +814,13 @@ export default class StarMercsUnitSheet extends ActorSheet {
       await this.actor.addLogEntry(`Order: ${orderConfig.label}`, "order");
     }
 
-    // Clear any previous assault target and movement destination
+    // Clear any previous assault target, movement destination, and flight targets
     const token = this.actor.getActiveTokens()?.[0];
     if (token?.document) {
       await token.document.unsetFlag("star-mercs", "assaultTarget");
       await token.document.unsetFlag("star-mercs", "moveDestination");
+      await token.document.unsetFlag("star-mercs", "altitudeTarget");
+      await token.document.unsetFlag("star-mercs", "flyAltitudeTarget");
     }
 
     // Redraw arrows to remove stale movement arrows
@@ -734,6 +838,14 @@ export default class StarMercsUnitSheet extends ActorSheet {
     if (selectedOrderKey === "assault") {
       this._promptAssaultTarget();
     }
+
+    // If change_altitude order selected, prompt for target altitude
+    if (selectedOrderKey === "change_altitude") {
+      this._promptAltitudeTarget();
+    }
+
+    // If fly order selected, extend move destination to include altitude
+    // (altitude is picked during move destination confirmation)
 
     // If construct order selected, open ConstructionPicker
     if (selectedOrderKey === "construct") {
@@ -1172,7 +1284,70 @@ export default class StarMercsUnitSheet extends ActorSheet {
 
       game.starmercs?.targetingArrowLayer?.drawArrows();
       cleanup();
-      ui.notifications.info(`Movement path confirmed (${totalCost} MP).`);
+
+      // Fly order: prompt for target altitude after path is confirmed
+      if (orderKey === "fly") {
+        const currentAlt = actor.getFlag("star-mercs", "altitude") ?? 0;
+        const destHexElev = getHexElevation(snapToHexCenter(finalDest));
+        const fuelAvailable = actor.system.supply?.fuel?.current ?? 0;
+        const fuelPerMP = actor.system.fuelPerMP ?? 0;
+        const moveFuel = totalCost * fuelPerMP;
+        const maxAlt = 5;
+
+        // Build altitude option list
+        const altOptions = [];
+        for (let alt = destHexElev; alt <= maxAlt; alt++) {
+          const altFuel = Math.abs(alt - currentAlt);
+          const totalFuel = moveFuel + altFuel;
+          const valid = totalFuel <= fuelAvailable;
+          const label = alt === currentAlt ? `${alt} (no change)` : `${alt} (+${altFuel} fuel for altitude)`;
+          altOptions.push(`<option value="${alt}" ${alt === currentAlt ? "selected" : ""} ${!valid ? "disabled" : ""}>${label}${!valid ? " — insufficient fuel" : ""}</option>`);
+        }
+
+        const altContent = `
+          <form class="fly-altitude-form">
+            <p>Path: ${totalCost} MP (${moveFuel} fuel) | Current Altitude: <strong>${currentAlt}</strong> | Fuel: <strong>${fuelAvailable}</strong></p>
+            <div class="form-group">
+              <label>Altitude at Destination</label>
+              <select id="fly-altitude-target">${altOptions.join("")}</select>
+            </div>
+          </form>
+        `;
+
+        new Dialog({
+          title: "Fly — Select Destination Altitude",
+          content: altContent,
+          buttons: {
+            confirm: {
+              icon: '<i class="fas fa-check"></i>',
+              label: "Confirm",
+              callback: async (html) => {
+                const targetAlt = parseInt(html.find("#fly-altitude-target").val());
+                if (isNaN(targetAlt)) return;
+                const altFuel = Math.abs(targetAlt - currentAlt);
+                const totalFuel = moveFuel + altFuel;
+                if (totalFuel > fuelAvailable) {
+                  ui.notifications.warn("Not enough fuel for movement + altitude change.");
+                  return;
+                }
+                await token.document.setFlag("star-mercs", "flyAltitudeTarget", targetAlt);
+                ui.notifications.info(`Fly path confirmed (${totalCost} MP). Altitude: ${currentAlt} → ${targetAlt}.`);
+              }
+            },
+            cancel: {
+              icon: '<i class="fas fa-times"></i>',
+              label: "Keep Current Altitude",
+              callback: async () => {
+                // Keep the move destination but no altitude change
+                ui.notifications.info(`Fly path confirmed (${totalCost} MP). Altitude unchanged.`);
+              }
+            }
+          },
+          default: "confirm"
+        }).render(true);
+      } else {
+        ui.notifications.info(`Movement path confirmed (${totalCost} MP).`);
+      }
     };
 
     const cleanup = () => {
@@ -1254,6 +1429,12 @@ export default class StarMercsUnitSheet extends ActorSheet {
     const combat = game.combat;
     if (combat?.started && combat.phase !== "preparation") {
       ui.notifications.warn("Supply transfers are only allowed during the Preparation phase.");
+      return;
+    }
+
+    // Airborne flying units without Supply trait cannot transfer supplies
+    if (this.actor.hasTrait("Flying") && !this.actor.getFlag("star-mercs", "landed") && !this.actor.hasTrait("Supply")) {
+      ui.notifications.warn("Airborne units must land to transfer supplies (unless they have the Supply trait).");
       return;
     }
 

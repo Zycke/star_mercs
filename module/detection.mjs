@@ -114,9 +114,16 @@ export function getActiveSignature(token) {
 
   const baseSig = actor.system.signature ?? 0;
 
+  // Deploy signature bonus (temporary, from special deployment status effects)
+  let deploySigBonus = 0;
+  if (token.document?.hasStatusEffect("meteoric-assault")) deploySigBonus = 2;
+  else if (token.document?.hasStatusEffect("air-assault")) deploySigBonus = 5;
+
   // Airborne flying units get no terrain signature modifiers (exposed in the sky)
   if (isAirborne(token)) {
-    return { active: baseSig, base: baseSig, totalMod: 0, modifiers: [] };
+    const airMod = deploySigBonus;
+    const airModifiers = deploySigBonus ? [{ label: "Deploy signature", value: deploySigBonus }] : [];
+    return { active: baseSig + airMod, base: baseSig, totalMod: airMod, modifiers: airModifiers };
   }
 
   const modifiers = [];
@@ -150,6 +157,12 @@ export function getActiveSignature(token) {
       totalMod += mod;
       modifiers.push({ label: `Vehicle in ${terrainLabel}`, value: mod });
     }
+  }
+
+  // Deploy signature bonus (special deployment)
+  if (deploySigBonus) {
+    totalMod += deploySigBonus;
+    modifiers.push({ label: "Deploy signature", value: deploySigBonus });
   }
 
   return { active: baseSig + totalMod, base: baseSig, totalMod, modifiers };
@@ -276,10 +289,10 @@ export function computeBestDetectionLevel(friendlyTeam, enemyToken) {
   const levels = { visible: 3, blip: 2, hidden: 1 };
   let bestLevel = "hidden";
 
-  // Outpost comms relay: find friendly outposts for sensor bonus
+  // Outpost/HQ comms relay: find friendly outposts and headquarters for sensor bonus
   const structures = canvas.scene?.getFlag("star-mercs", "structures") ?? [];
   const friendlyOutposts = structures.filter(s =>
-    s.type === "outpost" && s.team === friendlyTeam
+    (s.type === "outpost" || s.type === "headquarters") && s.team === friendlyTeam
     && s.turnsBuilt >= s.turnsRequired && s.strength > 0
   );
 

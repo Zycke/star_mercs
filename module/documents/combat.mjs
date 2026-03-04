@@ -10,8 +10,8 @@ import StructureLayer from "../canvas/structure-layer.mjs";
 /**
  * Extended Combat class for Star Mercs that implements phase-based rounds.
  *
- * Each round cycles through 4 phases:
- *   preparation → orders → tactical → consolidation
+ * Each round cycles through 5 phases:
+ *   deploy → preparation → orders → tactical → consolidation
  *
  * Phase state is stored via flags for v12 compatibility.
  * The GM advances phases using the "Next Turn" button in the combat tracker.
@@ -19,7 +19,7 @@ import StructureLayer from "../canvas/structure-layer.mjs";
 export default class StarMercsCombat extends Combat {
 
   /** Ordered phase keys. */
-  static PHASES = ["preparation", "orders", "tactical", "consolidation"];
+  static PHASES = ["deploy", "preparation", "orders", "tactical", "consolidation"];
 
   /** Tactical sub-step definitions, executed in order during the tactical phase. */
   static TACTICAL_STEPS = [
@@ -35,6 +35,7 @@ export default class StarMercsCombat extends Combat {
 
   /** Per-phase permission rules. */
   static PHASE_RULES = {
+    deploy:        { allowsMovement: false, allowsAttack: false },
     preparation:   { allowsMovement: false, allowsAttack: false },
     orders:        { allowsMovement: false, allowsAttack: false },
     tactical:      { allowsMovement: true,  allowsAttack: true  },
@@ -45,9 +46,9 @@ export default class StarMercsCombat extends Combat {
   /*  Accessors                               */
   /* ---------------------------------------- */
 
-  /** Current phase key (e.g. "preparation"). */
+  /** Current phase key (e.g. "deploy"). */
   get phase() {
-    return this.getFlag("star-mercs", "phase") || "preparation";
+    return this.getFlag("star-mercs", "phase") || "deploy";
   }
 
   /** Current phase index (0–3). */
@@ -69,10 +70,10 @@ export default class StarMercsCombat extends Combat {
   /*  Combat Lifecycle Overrides              */
   /* ---------------------------------------- */
 
-  /** @override — Initialize phase to preparation when combat starts. */
+  /** @override — Initialize phase to deploy when combat starts. */
   async startCombat() {
     await this.update({
-      "flags.star-mercs.phase": "preparation",
+      "flags.star-mercs.phase": "deploy",
       "flags.star-mercs.phaseIndex": 0
     });
     const result = await super.startCombat();
@@ -93,7 +94,7 @@ export default class StarMercsCombat extends Combat {
     const currentIndex = this.phaseIndex;
 
     // If currently IN tactical, advance sub-step instead of phase
-    if (currentIndex === 2) {
+    if (currentIndex === 3) {
       const currentStep = this.getFlag("star-mercs", "tacticalStep") ?? 0;
       const nextStep = currentStep + 1;
 
@@ -107,7 +108,7 @@ export default class StarMercsCombat extends Combat {
       await this._runConsolidationEffects();
       await this.update({
         "flags.star-mercs.phase": "consolidation",
-        "flags.star-mercs.phaseIndex": 3
+        "flags.star-mercs.phaseIndex": 4
       });
       this._announcePhase();
       return this;
@@ -115,14 +116,19 @@ export default class StarMercsCombat extends Combat {
 
     const nextIndex = currentIndex + 1;
 
+    // Entering preparation — run preparation effects
+    if (nextIndex === 1) {
+      await this._runPreparationEffects();
+    }
+
     // Entering tactical — start sub-step sequence
-    if (nextIndex === 2) {
+    if (nextIndex === 3) {
       // Apply assault +1 incoming damage flag at the start of tactical phase
       await this._applyAssaultIncomingDamageFlags();
 
       await this.update({
         "flags.star-mercs.phase": "tactical",
-        "flags.star-mercs.phaseIndex": 2,
+        "flags.star-mercs.phaseIndex": 3,
         "flags.star-mercs.tacticalStep": 0
       });
       this._announcePhase();
@@ -131,12 +137,12 @@ export default class StarMercsCombat extends Combat {
     }
 
     // Leaving consolidation — clear targets, destinations, orders
-    if (currentIndex === 3) {
+    if (currentIndex === 4) {
       await this._runConsolidationCleanup();
     }
 
     // Entering consolidation — apply damage, readiness costs, supply consumption
-    if (nextIndex === 3) {
+    if (nextIndex === 4) {
       await this._runConsolidationEffects();
     }
 
@@ -157,23 +163,22 @@ export default class StarMercsCombat extends Combat {
     return this;
   }
 
-  /** @override — New round resets to preparation and runs preparation effects. */
+  /** @override — New round resets to deploy phase. */
   async nextRound() {
     await this.update({
-      "flags.star-mercs.phase": "preparation",
+      "flags.star-mercs.phase": "deploy",
       "flags.star-mercs.phaseIndex": 0
     });
     const result = await super.nextRound();
-    await this._runPreparationEffects();
     this._announcePhase();
     this._refreshEngagementStatus();
     return result;
   }
 
-  /** @override — Previous round resets to preparation. */
+  /** @override — Previous round resets to deploy phase. */
   async previousRound() {
     await this.update({
-      "flags.star-mercs.phase": "preparation",
+      "flags.star-mercs.phase": "deploy",
       "flags.star-mercs.phaseIndex": 0
     });
     return super.previousRound();
@@ -403,41 +408,7 @@ export default class StarMercsCombat extends Combat {
         await actor.unsetFlag("star-mercs", "interceptionCounts");
       }
 
-      // Auto-land airborne flying units with 0 fuel (emergency landing)
-      if (actor.isAirborne) {
-        const fuel = actor.system.supply?.fuel?.current ?? 0;
-        if (fuel <= 0) {
-          await actor.setFlag("star-mercs", "landed", true);
-          // Set altitude to hex elevation
-          const token = combatant.token;
-          if (token) {
-            const tokenObj = canvas?.tokens?.get(token.id);
-            if (tokenObj) {
-              const { getHexElevation, snapToHexCenter } = game.starmercs?.hexUtils ?? {};
-              if (getHexElevation) {
-                const hexElev = getHexElevation(snapToHexCenter(tokenObj.center));
-                await actor.setFlag("star-mercs", "altitude", hexElev);
-              }
-            }
-          }
-          // Apply "landed" status effect
-          const existingEffect = actor.effects.find(e => e.statuses?.has("landed"));
-          if (!existingEffect) {
-            await actor.createEmbeddedDocuments("ActiveEffect", [{
-              name: "Landed",
-              img: "icons/svg/downgrade.svg",
-              statuses: ["landed"]
-            }]);
-          }
-          const unitName = token?.name ?? actor.name;
-          const unitTeam = actor.system.team ?? "a";
-          await ChatMessage.create({
-            content: `<div class="star-mercs chat-card"><div class="summary-header"><i class="fas fa-exclamation-triangle"></i> <strong>${unitName}</strong> — Emergency Landing (no fuel!)</div></div>`,
-            speaker: { alias: "Star Mercs" },
-            whisper: StarMercsCombat.getTeamWhisperIds(unitTeam)
-          });
-        }
-      }
+      // (Auto-landing for 0 fuel now happens in consolidation phase, after fuel consumption)
     }
   }
 
@@ -777,7 +748,7 @@ export default class StarMercsCombat extends Combat {
         const supStructures = canvas.scene?.getFlag("star-mercs", "structures") ?? [];
 
         for (const s of supStructures) {
-          if (s.type !== "outpost" || s.team !== supTeam) continue;
+          if ((s.type !== "outpost" && s.type !== "headquarters") || s.team !== supTeam) continue;
           if (s.turnsBuilt < s.turnsRequired || s.strength <= 0) continue;
           if (!s.supply) continue;
           if (s.autoSupply === false) continue;
@@ -834,34 +805,54 @@ export default class StarMercsCombat extends Combat {
 
       // 4a. (Ammo is now consumed immediately when weapons fire — no deferred consumption)
 
-      // 4b. Fuel consumption: MP spent × fuelPerMP + assault surcharge + Vehicle baseline
+      // 4b. Fuel consumption: MP spent × fuelPerMP + altitude change + assault surcharge + Vehicle baseline
+      //     Landed flying units consume no fuel. Airborne flying units have a minimum of 1 fuel/turn.
       {
         const mpSpent = token ? (token.getFlag("star-mercs", "movementUsed") ?? 0) : 0;
         const fuelPerMP = actor.system.fuelPerMP ?? 0;
         const orderKey = actor.system.currentOrder;
+        const isLandedFlying = actor.hasTrait("Flying") && actor.getFlag("star-mercs", "landed");
+        const isAirborneFlying = actor.hasTrait("Flying") && !actor.getFlag("star-mercs", "landed");
 
-        // Base movement fuel (MP spent × fuel per MP) + assault surcharge
-        let moveFuel = mpSpent * fuelPerMP;
-        if (orderKey === "assault" && fuelPerMP > 0) {
-          moveFuel += fuelPerMP;
-        }
+        // Landed flying units spend no fuel at all
+        if (isLandedFlying) {
+          // No fuel consumed — unit is powered down on the ground
+        } else {
+          // Base movement fuel (MP spent × fuel per MP) + assault surcharge
+          let moveFuel = mpSpent * fuelPerMP;
+          if (orderKey === "assault" && fuelPerMP > 0) {
+            moveFuel += fuelPerMP;
+          }
 
-        // Apply supply modifier to movement/assault fuel
-        const modifiedMoveFuel = moveFuel * supplyMod;
+          // Apply supply modifier to movement/assault fuel
+          const modifiedMoveFuel = moveFuel * supplyMod;
 
-        // Vehicle trait baseline: 1 fuel/turn unless Stand Down order (not modified by supply multiplier)
-        const vehicleBaseline = (actor.hasTrait("Vehicle") && orderKey !== "stand_down") ? 1 : 0;
-        const fuelUsed = modifiedMoveFuel + vehicleBaseline;
+          // Altitude change fuel (1 fuel per level changed, tracked by altitudeChanged flag)
+          const altChanged = token ? (token.getFlag("star-mercs", "altitudeChanged") ?? 0) : 0;
+          const altFuel = altChanged * supplyMod;
 
-        if (fuelUsed > 0 && supply.fuel.current > 0) {
-          const used = Math.min(fuelUsed, supply.fuel.current);
-          supplyUpdate["system.supply.fuel.current"] = supply.fuel.current - used;
-          const fuelDetails = [];
-          if (mpSpent > 0) fuelDetails.push(`${mpSpent} MP × ${fuelPerMP}`);
-          if (orderKey === "assault" && fuelPerMP > 0) fuelDetails.push(`+${fuelPerMP} assault`);
-          if (supplyMod > 1) fuelDetails.push(`×${supplyMod} supply mod`);
-          if (vehicleBaseline > 0) fuelDetails.push("+1 vehicle baseline");
-          consumedParts.push(`Fuel: -${used} (${fuelDetails.join(", ")})`);
+          // Vehicle trait baseline: 1 fuel/turn unless Stand Down order (not modified by supply multiplier)
+          const vehicleBaseline = (actor.hasTrait("Vehicle") && orderKey !== "stand_down") ? 1 : 0;
+
+          let fuelUsed = modifiedMoveFuel + altFuel + vehicleBaseline;
+
+          // Airborne flying units always consume at least 1 fuel per turn (hovering)
+          if (isAirborneFlying && fuelUsed < 1) {
+            fuelUsed = 1;
+          }
+
+          if (fuelUsed > 0 && supply.fuel.current > 0) {
+            const used = Math.min(fuelUsed, supply.fuel.current);
+            supplyUpdate["system.supply.fuel.current"] = supply.fuel.current - used;
+            const fuelDetails = [];
+            if (mpSpent > 0) fuelDetails.push(`${mpSpent} MP × ${fuelPerMP}`);
+            if (orderKey === "assault" && fuelPerMP > 0) fuelDetails.push(`+${fuelPerMP} assault`);
+            if (altChanged > 0) fuelDetails.push(`+${altChanged} altitude`);
+            if (supplyMod > 1) fuelDetails.push(`×${supplyMod} supply mod`);
+            if (vehicleBaseline > 0) fuelDetails.push("+1 vehicle baseline");
+            if (isAirborneFlying && modifiedMoveFuel + altFuel + vehicleBaseline < 1) fuelDetails.push("min 1 airborne");
+            consumedParts.push(`Fuel: -${used} (${fuelDetails.join(", ")})`);
+          }
         }
       }
 
@@ -878,6 +869,49 @@ export default class StarMercsCombat extends Combat {
           <div class="consolidation-section-header"><i class="fas fa-box"></i> Supply Consumed</div>
           <div class="status-update">${consumedParts.join(" | ")}</div>
         </div>`);
+      }
+
+      // Clean up altitude change tracking flags
+      if (token) {
+        if (token.getFlag("star-mercs", "altitudeChanged") != null) {
+          await token.unsetFlag("star-mercs", "altitudeChanged");
+        }
+        if (token.getFlag("star-mercs", "altitudeTarget") != null) {
+          await token.unsetFlag("star-mercs", "altitudeTarget");
+        }
+        if (token.getFlag("star-mercs", "flyAltitudeTarget") != null) {
+          await token.unsetFlag("star-mercs", "flyAltitudeTarget");
+        }
+      }
+
+      // 4d. Auto-land airborne flying units with 0 fuel (emergency landing)
+      if (actor.isAirborne) {
+        const postFuel = actor.system.supply?.fuel?.current ?? 0;
+        if (postFuel <= 0) {
+          await actor.setFlag("star-mercs", "landed", true);
+          if (token) {
+            const tokenObj = canvas?.tokens?.get(token.id);
+            if (tokenObj) {
+              const { getHexElevation: ghElev, snapToHexCenter: shc } = game.starmercs?.hexUtils ?? {};
+              if (ghElev) {
+                const hexElev = ghElev(shc(tokenObj.center));
+                await actor.setFlag("star-mercs", "altitude", hexElev);
+              }
+            }
+          }
+          const existingEffect = actor.effects.find(e => e.statuses?.has("landed"));
+          if (!existingEffect) {
+            await actor.createEmbeddedDocuments("ActiveEffect", [{
+              name: "Landed",
+              img: "icons/svg/downgrade.svg",
+              statuses: ["landed"]
+            }]);
+          }
+          sections.push(`<div class="consolidation-section supply">
+            <div class="consolidation-section-header"><i class="fas fa-exclamation-triangle"></i> Emergency Landing — No Fuel!</div>
+            <div class="status-update">Unit has been forced to land. Cannot take off until refueled.</div>
+          </div>`);
+        }
       }
 
       // Post ONE combined chat card for this unit (if there are any sections)
@@ -1296,7 +1330,12 @@ export default class StarMercsCombat extends Combat {
       const defenderComms = this._getCommsChainStatus(defenderToken?.id ?? assaultTargetId);
 
       // Shock trait: attacker's Shock [X] value applies as defender penalty (if defender lacks Shock)
-      const attackerShockValue = actor.getTraitValue?.("Shock") ?? 0;
+      const attackerShockBase = actor.getTraitValue?.("Shock") ?? 0;
+      let attackerShockBonus = 0;
+      if (token.hasStatusEffect("meteoric-assault")) attackerShockBonus = 3;
+      else if (token.hasStatusEffect("air-assault")) attackerShockBonus = 2;
+      else if (token.hasStatusEffect("air-drop")) attackerShockBonus = 1;
+      const attackerShockValue = attackerShockBase + attackerShockBonus;
       const defenderHasShock = targetActor.hasTrait?.("Shock") ?? false;
       const shockPenalty = (!defenderHasShock && attackerShockValue > 0) ? attackerShockValue : 0;
 
@@ -1767,8 +1806,9 @@ export default class StarMercsCombat extends Combat {
       const order = this._getActorOrder(actor);
       if (order && !order.system.allowsAttack) continue;
 
-      // Maneuver units fire in the maneuver_fire step (after movement)
-      if (actor.system.currentOrder === "move") continue;
+      // Maneuver/Fly units fire in the maneuver_fire step (after movement)
+      const curOrder = actor.system.currentOrder;
+      if (curOrder === "move" || curOrder === "fly") continue;
 
       const weapons = actor.items.filter(
         i => i.type === "weapon" && i.system.targetId
@@ -1967,11 +2007,44 @@ export default class StarMercsCombat extends Combat {
       movers.push({ combatant, actor, token, dest, contestLost: false });
     }
 
+    // Also process Change Altitude orders (no movement, just altitude change)
+    let altitudeChanges = 0;
+    for (const combatant of this.combatants) {
+      const actor = combatant.actor;
+      if (!actor || actor.type !== "unit") continue;
+      if (actor.system.strength.value <= 0) continue;
+      if (actor.system.currentOrder !== "change_altitude") continue;
+
+      const token = combatant.token;
+      if (!token) continue;
+
+      const altTarget = token.getFlag("star-mercs", "altitudeTarget");
+      if (altTarget == null) continue;
+
+      const currentAlt = actor.getFlag("star-mercs", "altitude") ?? 0;
+      const altDelta = Math.abs(altTarget - currentAlt);
+      if (altDelta > 0) {
+        await actor.setFlag("star-mercs", "altitude", altTarget);
+        await token.setFlag("star-mercs", "altitudeChanged", altDelta);
+        const unitName = token.name ?? actor.name;
+        const unitTeam = actor.system.team ?? "a";
+        await ChatMessage.create({
+          content: `<div class="star-mercs chat-card tactical-step">
+            <div class="summary-header unit-link" data-token-id="${token.id}"><i class="fas fa-helicopter"></i> <strong>${esc(unitName)}</strong> — Altitude Changed</div>
+            <div class="status-update">ALT ${currentAlt} → ${altTarget} (${altDelta} fuel)</div>
+          </div>`,
+          speaker: { alias: "Star Mercs" },
+          whisper: StarMercsCombat.getTeamWhisperIds(unitTeam)
+        });
+        altitudeChanges++;
+      }
+    }
+
     if (movers.length === 0) {
       await ChatMessage.create({
         content: `<div class="star-mercs chat-card tactical-step">
           <div class="summary-header"><i class="fas fa-arrows-alt"></i> Movement Complete</div>
-          <div class="status-update">No units to move.</div>
+          <div class="status-update">No units to move.${altitudeChanges > 0 ? ` ${altitudeChanges} altitude change${altitudeChanges !== 1 ? "s" : ""}.` : ""}</div>
         </div>`,
         speaker: { alias: "Star Mercs" }
       });
@@ -2143,6 +2216,21 @@ export default class StarMercsCombat extends Combat {
         await mover.token.update({ x: finalPos.x, y: finalPos.y }, { _starMercsAutoMove: true });
       }
       await mover.token.setFlag("star-mercs", "movementUsed", totalCost);
+
+      // Fly order: apply altitude change after movement
+      if (mover.actor.system.currentOrder === "fly") {
+        const flyAltTarget = mover.token.getFlag("star-mercs", "flyAltitudeTarget");
+        if (flyAltTarget != null) {
+          const currentAlt = mover.actor.getFlag("star-mercs", "altitude") ?? 0;
+          const altDelta = Math.abs(flyAltTarget - currentAlt);
+          if (altDelta > 0) {
+            await mover.actor.setFlag("star-mercs", "altitude", flyAltTarget);
+            await mover.token.setFlag("star-mercs", "altitudeChanged", altDelta);
+            altitudeChanges++;
+          }
+        }
+      }
+
       movedCount++;
     }
 
@@ -2152,7 +2240,7 @@ export default class StarMercsCombat extends Combat {
     await ChatMessage.create({
       content: `<div class="star-mercs chat-card tactical-step">
         <div class="summary-header"><i class="fas fa-arrows-alt"></i> Movement Complete</div>
-        <div class="status-update">${movedCount} unit${movedCount !== 1 ? "s" : ""} moved.</div>
+        <div class="status-update">${movedCount} unit${movedCount !== 1 ? "s" : ""} moved.${altitudeChanges > 0 ? ` ${altitudeChanges} altitude change${altitudeChanges !== 1 ? "s" : ""}.` : ""}</div>
       </div>`,
       speaker: { alias: "Star Mercs" }
     });
@@ -2339,7 +2427,8 @@ export default class StarMercsCombat extends Combat {
     for (const combatant of this.combatants) {
       const actor = combatant.actor;
       if (!actor || actor.type !== "unit") continue;
-      if (actor.system.currentOrder !== "move") continue;
+      const mfOrder = actor.system.currentOrder;
+      if (mfOrder !== "move" && mfOrder !== "fly") continue;
       if (actor.system.strength.value <= 0) continue;
 
       const token = combatant.token;
@@ -2353,12 +2442,14 @@ export default class StarMercsCombat extends Combat {
 
       // Post a chat card with a fire button for this unit
       const weaponList = weapons.map(w => `${esc(w.name)} (D${w.system.damage}/R${w.system.range})`).join(", ");
+      const mfOrderLabel = mfOrder === "fly" ? "Fly" : "Maneuver";
+      const mfIcon = mfOrder === "fly" ? "fa-helicopter" : "fa-running";
 
       await ChatMessage.create({
         content: `<div class="star-mercs chat-card maneuver-fire-card">
-          <div class="summary-header unit-link" data-token-id="${token.id}"><i class="fas fa-running"></i> <strong>${esc(token.name)}</strong> — Maneuver Fire</div>
+          <div class="summary-header unit-link" data-token-id="${token.id}"><i class="fas ${mfIcon}"></i> <strong>${esc(token.name)}</strong> — ${mfOrderLabel} Fire</div>
           <div class="status-update">Weapons: ${weaponList}</div>
-          <div class="status-update">Fires weapons with assigned targets. Accuracy penalty: +1 (Maneuver order)</div>
+          <div class="status-update">Fires weapons with assigned targets. Accuracy penalty: +1 (${mfOrderLabel} order)</div>
           <button class="maneuver-fire-btn"
             data-token-id="${token.id}"
             data-combat-id="${this.id}">
@@ -2580,6 +2671,13 @@ export default class StarMercsCombat extends Combat {
 
       // 7. Clear current order
       await actor.update({ "system.currentOrder": "" });
+
+      // 8. Clear deployment status effects
+      for (const effectId of ["meteoric-assault", "air-drop", "air-assault"]) {
+        if (token.hasStatusEffect(effectId) && actor) {
+          await actor.toggleStatusEffect(effectId, { active: false });
+        }
+      }
     }
 
     // Clear tactical step counter

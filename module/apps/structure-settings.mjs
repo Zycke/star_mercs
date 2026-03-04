@@ -46,20 +46,26 @@ export default class StructureSettings extends HandlebarsApplicationMixin(Applic
         turnsRequired: merged.turnsRequired,
         materialsPerTurn: merged.materialsPerTurn,
         isOutpost: key === "outpost",
-        isMinefield: key === "minefield"
+        isHeadquarters: key === "headquarters",
+        isMinefield: key === "minefield",
+        hasSupply: key === "outpost" || key === "headquarters"
       };
 
-      if (key === "outpost") {
-        entry.commsRange = merged.defaultCommsRange ?? 5;
-        entry.supplyRange = merged.defaultSupplyRange ?? 3;
+      if (key === "outpost" || key === "headquarters") {
+        entry.commsRange = merged.defaultCommsRange ?? (key === "headquarters" ? 8 : 5);
+        entry.supplyRange = merged.defaultSupplyRange ?? (key === "headquarters" ? 5 : 3);
         const caps = merged.defaultSupplyCapacity ?? {};
-        entry.supplyProjectile = caps.projectile ?? 10;
-        entry.supplyOrdnance = caps.ordnance ?? 5;
-        entry.supplyEnergy = caps.energy ?? 10;
-        entry.supplyFuel = caps.fuel ?? 10;
-        entry.supplyMaterials = caps.materials ?? 10;
-        entry.supplyParts = caps.parts ?? 5;
-        entry.supplyBasicSupplies = caps.basicSupplies ?? 10;
+        entry.supplyProjectile = caps.projectile ?? (key === "headquarters" ? 20 : 10);
+        entry.supplyOrdnance = caps.ordnance ?? (key === "headquarters" ? 10 : 5);
+        entry.supplyEnergy = caps.energy ?? (key === "headquarters" ? 20 : 10);
+        entry.supplyFuel = caps.fuel ?? (key === "headquarters" ? 20 : 10);
+        entry.supplyMaterials = caps.materials ?? (key === "headquarters" ? 20 : 10);
+        entry.supplyParts = caps.parts ?? (key === "headquarters" ? 10 : 5);
+        entry.supplyBasicSupplies = caps.basicSupplies ?? (key === "headquarters" ? 20 : 10);
+      }
+
+      if (key === "headquarters") {
+        entry.deployRadius = merged.defaultDeployRadius ?? 3;
       }
 
       if (key === "minefield") {
@@ -112,7 +118,7 @@ export default class StructureSettings extends HandlebarsApplicationMixin(Applic
       const mats = html.querySelector(`[name="${prefix}materialsPerTurn"]`);
       if (mats) ov.materialsPerTurn = parseInt(mats.value) || 1;
 
-      if (key === "outpost") {
+      if (key === "outpost" || key === "headquarters") {
         const comms = html.querySelector(`[name="${prefix}commsRange"]`);
         if (comms) ov.defaultCommsRange = parseInt(comms.value) || 1;
 
@@ -123,6 +129,11 @@ export default class StructureSettings extends HandlebarsApplicationMixin(Applic
         for (const cat of ["projectile", "ordnance", "energy", "fuel", "materials", "parts", "basicSupplies"]) {
           const input = html.querySelector(`[name="${prefix}supply.${cat}"]`);
           if (input) ov.defaultSupplyCapacity[cat] = parseInt(input.value) || 0;
+        }
+
+        if (key === "headquarters") {
+          const deployRad = html.querySelector(`[name="${prefix}deployRadius"]`);
+          if (deployRad) ov.defaultDeployRadius = parseInt(deployRad.value) || 1;
         }
       }
 
