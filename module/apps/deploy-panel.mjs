@@ -463,33 +463,12 @@ export default class DeployPanel extends HandlebarsApplicationMixin(ApplicationV
    * @param {string} mode
    */
   async _applyDeployEffects(actor, tokenDoc, mode) {
-    const updates = {};
-
-    switch (mode) {
-      case "meteoric_assault":
-        updates["flags.star-mercs.deploySignatureBonus"] = 2;
-        updates["flags.star-mercs.deployShockBonus"] = 3;
-        updates["flags.star-mercs.deployMode"] = "meteoric_assault";
-        break;
-
-      case "air_drop":
-        updates["flags.star-mercs.deployShockBonus"] = 1;
-        updates["flags.star-mercs.deployMode"] = "air_drop";
-        break;
-
-      case "air_assault":
-        updates["flags.star-mercs.deploySignatureBonus"] = 5;
-        updates["flags.star-mercs.deployShockBonus"] = 2;
-        updates["flags.star-mercs.deployAntiAirVulnerable"] = true;
-        updates["flags.star-mercs.deployMode"] = "air_assault";
-        // Immediate -1 readiness
-        const currentReadiness = actor.system.readiness?.value ?? 10;
-        updates["system.readiness.value"] = Math.max(0, currentReadiness - 1);
-        break;
-    }
-
-    if (Object.keys(updates).length > 0) {
-      await actor.update(updates);
+    if (mode === "meteoric_assault") {
+      await actor.toggleStatusEffect("meteoric-assault", { active: true });
+    } else if (mode === "air_drop") {
+      await actor.toggleStatusEffect("air-drop", { active: true });
+    } else if (mode === "air_assault") {
+      await actor.toggleStatusEffect("air-assault", { active: true });
     }
   }
 

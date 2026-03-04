@@ -114,8 +114,10 @@ export function getActiveSignature(token) {
 
   const baseSig = actor.system.signature ?? 0;
 
-  // Deploy signature bonus (temporary, from special deployment)
-  const deploySigBonus = actor.getFlag("star-mercs", "deploySignatureBonus") ?? 0;
+  // Deploy signature bonus (temporary, from special deployment status effects)
+  let deploySigBonus = 0;
+  if (token.document?.hasStatusEffect("meteoric-assault")) deploySigBonus = 2;
+  else if (token.document?.hasStatusEffect("air-assault")) deploySigBonus = 5;
 
   // Airborne flying units get no terrain signature modifiers (exposed in the sky)
   if (isAirborne(token)) {

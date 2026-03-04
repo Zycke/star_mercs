@@ -1331,7 +1331,10 @@ export default class StarMercsCombat extends Combat {
 
       // Shock trait: attacker's Shock [X] value applies as defender penalty (if defender lacks Shock)
       const attackerShockBase = actor.getTraitValue?.("Shock") ?? 0;
-      const attackerShockBonus = actor.getFlag("star-mercs", "deployShockBonus") ?? 0;
+      let attackerShockBonus = 0;
+      if (token.hasStatusEffect("meteoric-assault")) attackerShockBonus = 3;
+      else if (token.hasStatusEffect("air-assault")) attackerShockBonus = 2;
+      else if (token.hasStatusEffect("air-drop")) attackerShockBonus = 1;
       const attackerShockValue = attackerShockBase + attackerShockBonus;
       const defenderHasShock = targetActor.hasTrait?.("Shock") ?? false;
       const shockPenalty = (!defenderHasShock && attackerShockValue > 0) ? attackerShockValue : 0;
@@ -2669,14 +2672,11 @@ export default class StarMercsCombat extends Combat {
       // 7. Clear current order
       await actor.update({ "system.currentOrder": "" });
 
-      // 8. Clear deployment effects (temporary bonuses from special deployment)
-      if (actor.getFlag("star-mercs", "deployMode")) {
-        await actor.update({
-          "flags.star-mercs.-=deploySignatureBonus": null,
-          "flags.star-mercs.-=deployShockBonus": null,
-          "flags.star-mercs.-=deployAntiAirVulnerable": null,
-          "flags.star-mercs.-=deployMode": null
-        });
+      // 8. Clear deployment status effects
+      for (const effectId of ["meteoric-assault", "air-drop", "air-assault"]) {
+        if (token.hasStatusEffect(effectId) && actor) {
+          await actor.toggleStatusEffect(effectId, { active: false });
+        }
       }
     }
 

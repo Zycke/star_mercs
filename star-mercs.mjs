@@ -60,7 +60,10 @@ Hooks.once("init", () => {
     { id: "engaged",    name: "Engaged",    img: "icons/svg/sword.svg" },
     { id: "entrenched", name: "Entrenched", img: "icons/svg/shield.svg" },
     { id: "fortified",  name: "Fortified",  img: "icons/svg/castle.svg" },
-    { id: "landed",     name: "Landed",     img: "icons/svg/downgrade.svg" }
+    { id: "landed",     name: "Landed",     img: "icons/svg/downgrade.svg" },
+    { id: "meteoric-assault", name: "Meteoric Assault", img: "icons/svg/fire.svg" },
+    { id: "air-drop",         name: "Air Drop",         img: "icons/svg/wing.svg" },
+    { id: "air-assault",      name: "Air Assault",      img: "icons/svg/combat.svg" }
   );
 
   // --- Register Document Classes ---
