@@ -30,6 +30,7 @@ import TurnControlPanel from "./module/apps/turn-control.mjs";
 import StructureLayer from "./module/canvas/structure-layer.mjs";
 import StructureSettings from "./module/apps/structure-settings.mjs";
 import DeployPanel from "./module/apps/deploy-panel.mjs";
+import ReferenceTables from "./module/apps/reference-tables.mjs";
 
 /* ============================================ */
 /*  Foundry VTT Initialization                  */
@@ -1439,6 +1440,25 @@ Hooks.on("getSceneControlButtons", (controls) => {
     }
   };
 
+  const referenceTool = {
+    name: "referenceTables",
+    title: "Quick Reference",
+    icon: "fas fa-book",
+    visible: true,
+    toggle: true,
+    active: game.starmercs?.referenceTables?.rendered ?? false,
+    onChange: (event, active) => {
+      if (active) {
+        if (!game.starmercs.referenceTables) {
+          game.starmercs.referenceTables = new ReferenceTables();
+        }
+        game.starmercs.referenceTables.render(true);
+      } else {
+        game.starmercs.referenceTables?.close();
+      }
+    }
+  };
+
   if (isV13) {
     tool.order = Object.keys(tokenControls.tools).length;
     tokenControls.tools.targetingArrows = tool;
@@ -1460,6 +1480,8 @@ Hooks.on("getSceneControlButtons", (controls) => {
     tokenControls.tools.turnControl = turnControlTool;
     deployPanelTool.order = Object.keys(tokenControls.tools).length;
     tokenControls.tools.deployPanel = deployPanelTool;
+    referenceTool.order = Object.keys(tokenControls.tools).length;
+    tokenControls.tools.referenceTables = referenceTool;
   } else {
     tokenControls.tools.push(tool);
     tokenControls.tools.push(commsTool);
@@ -1471,5 +1493,6 @@ Hooks.on("getSceneControlButtons", (controls) => {
     tokenControls.tools.push(structureSettingsTool);
     tokenControls.tools.push(turnControlTool);
     tokenControls.tools.push(deployPanelTool);
+    tokenControls.tools.push(referenceTool);
   }
 });
