@@ -154,9 +154,10 @@ export default class TargetingArrowLayer extends PIXI.Container {
    * @param {{x: number, y: number}} to - Target token center
    * @param {number} color - Hex color for PIXI
    * @param {number} offset - Perpendicular pixel offset (for stacking)
+   * @param {number} [lineWidth] - Line width override (defaults to LINE_WIDTH)
    * @private
    */
-  _drawArrow(from, to, color, offset) {
+  _drawArrow(from, to, color, offset, lineWidth = TargetingArrowLayer.LINE_WIDTH) {
     const g = this.arrowGraphics;
     const dx = to.x - from.x;
     const dy = to.y - from.y;
@@ -183,7 +184,7 @@ export default class TargetingArrowLayer extends PIXI.Container {
     const lineEndY = endY - Math.sin(angle) * headLen;
 
     // Draw line
-    g.lineStyle(TargetingArrowLayer.LINE_WIDTH, color, TargetingArrowLayer.ARROW_ALPHA);
+    g.lineStyle(lineWidth, color, TargetingArrowLayer.ARROW_ALPHA);
     g.moveTo(startX, startY);
     g.lineTo(lineEndX, lineEndY);
 
@@ -231,18 +232,19 @@ export default class TargetingArrowLayer extends PIXI.Container {
 
       const waypoints = token.document.getFlag("star-mercs", "moveWaypoints");
 
+      const moveWidth = TargetingArrowLayer.MOVE_ARROW_WIDTH;
       if (waypoints && waypoints.length > 1) {
         // Draw arrows segment by segment through waypoints
-        let from = token.center;
+        let from = snapToHexCenter(token.center);
         for (const wp of waypoints) {
           const snapped = snapToHexCenter(wp);
-          this._drawArrow(from, snapped, TargetingArrowLayer.MOVE_ARROW_COLOR, 0);
+          this._drawArrow(from, snapped, TargetingArrowLayer.MOVE_ARROW_COLOR, 0, moveWidth);
           from = snapped;
         }
       } else {
         // Single destination — draw one arrow
         const snapped = snapToHexCenter(dest);
-        this._drawArrow(token.center, snapped, TargetingArrowLayer.MOVE_ARROW_COLOR, 0);
+        this._drawArrow(snapToHexCenter(token.center), snapped, TargetingArrowLayer.MOVE_ARROW_COLOR, 0, moveWidth);
       }
     }
   }
