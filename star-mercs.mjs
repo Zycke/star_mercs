@@ -189,6 +189,18 @@ Hooks.once("init", () => {
     }
   });
 
+  game.settings.register("star-mercs", "showLOSHighlight", {
+    name: "Show LOS Highlight",
+    hint: "Highlight all hexes within line of sight of the selected token.",
+    scope: "client",
+    config: false,
+    type: Boolean,
+    default: false,
+    onChange: () => {
+      game.starmercs?.detectionLayer?.drawDetection();
+    }
+  });
+
   // --- World Settings (GM only) ---
   game.settings.register("star-mercs", "teamAssignments", {
     name: "Team Assignments",
