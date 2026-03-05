@@ -234,15 +234,17 @@ export default class StarMercsActor extends Actor {
   }
 
   /**
-   * Consume 1 ammo of the weapon's ammo type. Returns true if successful.
+   * Consume ammo of the weapon's ammo type. Returns true if successful.
    * @param {Item} weapon - A weapon item.
+   * @param {number} [multiplier=1] - Ammo multiplier (e.g. 3 for Assault order).
    * @returns {Promise<boolean>}
    */
-  async _consumeAmmo(weapon) {
+  async _consumeAmmo(weapon, multiplier = 1) {
     const ammoType = this._getWeaponSupplyType(weapon);
     const supply = this.system.supply?.[ammoType];
     if (!supply || supply.current <= 0) return false;
-    await this.update({ [`system.supply.${ammoType}.current`]: supply.current - 1 });
+    const amount = Math.min(multiplier, supply.current);
+    await this.update({ [`system.supply.${ammoType}.current`]: supply.current - amount });
     return true;
   }
 
@@ -504,8 +506,10 @@ export default class StarMercsActor extends Actor {
       templateData
     );
 
-    // Consume 1 ammo immediately when weapon fires
-    await this._consumeAmmo(weapon);
+    // Consume ammo immediately when weapon fires (3x for Assault order)
+    const orderKey = this.system.currentOrder;
+    const ammoMod = (orderKey === "assault") ? 3 : 1;
+    await this._consumeAmmo(weapon, ammoMod);
 
     // Consume interception ammo from APS/ZPS units and update fire counts
     if (result.interception?.interceptors?.length > 0) {
@@ -1013,11 +1017,13 @@ export default class StarMercsActor extends Actor {
     // Consume ammo immediately for all valid attacks and track fired weapons
     const validResults = results.filter(r => r.valid);
     if (validResults.length > 0) {
-      // Consume 1 ammo per weapon fired (batch by ammo type for efficiency)
+      // Consume ammo per weapon fired (3x for Assault order)
+      const orderKey = this.system.currentOrder;
+      const ammoMod = (orderKey === "assault") ? 3 : 1;
       const ammoCounts = { projectile: 0, ordnance: 0, energy: 0 };
       for (const r of validResults) {
         const ammoType = this._getWeaponSupplyType(r.weapon);
-        ammoCounts[ammoType]++;
+        ammoCounts[ammoType] += ammoMod;
       }
       const supplyUpdate = {};
       for (const [type, count] of Object.entries(ammoCounts)) {

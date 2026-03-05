@@ -111,7 +111,7 @@ STARMERCS.orders = {
     allowsAttack: true,
     readinessCost: -2,
     supplyModifier: "3x",
-    description: "Attempt to displace an enemy unit. +1 damage dealt and received. -1 readiness per hex moved to target. Consumes extra fuel."
+    description: "Attempt to displace an enemy unit. +1 damage dealt and received. -1 readiness per hex moved to target. Consumes 3x ammunition and fuel."
   },
   overwatch: {
     label: "Overwatch",
@@ -130,16 +130,6 @@ STARMERCS.orders = {
     readinessCost: 3,
     supplyModifier: "0x",
     description: "Unit powers down and conserves resources. Recovers 3 readiness. Attackers gain +2 to hit and +2 damage. Vehicles do not consume baseline fuel."
-  },
-  fortify: {
-    label: "Fortify",
-    category: "special",
-    requiredTrait: "Engineer",
-    allowsMovement: false,
-    allowsAttack: false,
-    readinessCost: -1,
-    supplyModifier: "1x",
-    description: "Engineer unit constructs fortifications at its position."
   },
   construct: {
     label: "Construct",

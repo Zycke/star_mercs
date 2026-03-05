@@ -826,9 +826,9 @@ export default class StarMercsUnitSheet extends ActorSheet {
     // Redraw arrows to remove stale movement arrows
     game.starmercs?.targetingArrowLayer?.drawArrows();
 
-    // Clear construction/demolish flags (preserve constructionTarget for construct/fortify)
+    // Clear construction/demolish flags (preserve constructionTarget for construct)
     if (token?.document) {
-      if (selectedOrderKey !== "construct" && selectedOrderKey !== "fortify") {
+      if (selectedOrderKey !== "construct") {
         await token.document.unsetFlag("star-mercs", "constructionTarget");
       }
       await token.document.unsetFlag("star-mercs", "demolishTarget");
@@ -850,11 +850,6 @@ export default class StarMercsUnitSheet extends ActorSheet {
     // If construct order selected, open ConstructionPicker
     if (selectedOrderKey === "construct") {
       this._promptConstructionTarget();
-    }
-
-    // If fortify order selected, auto-set entrenchment construction target
-    if (selectedOrderKey === "fortify") {
-      this._autoSetFortifyTarget();
     }
 
     // If demolish order selected, prompt for demolish target
@@ -998,67 +993,6 @@ export default class StarMercsUnitSheet extends ActorSheet {
         ui.notifications.info("Construction order cancelled.");
       }
     ).render(true);
-  }
-
-  /**
-   * Auto-set entrenchment as the construction target for the Fortify order.
-   * @private
-   */
-  async _autoSetFortifyTarget() {
-    const myToken = this.actor.getActiveTokens()?.[0];
-    if (!myToken) {
-      ui.notifications.warn("Place this unit's token on the canvas first.");
-      return;
-    }
-
-    // Check for an in-progress fortification built by this token
-    const structures = canvas.scene?.getFlag("star-mercs", "structures") ?? [];
-    const inProgress = structures.find(
-      s => s.builderId === myToken.id && s.type === "fortification"
-         && s.turnsBuilt < s.turnsRequired
-    );
-    if (inProgress) {
-      await myToken.document.setFlag("star-mercs", "constructionTarget", {
-        type: "fortification",
-        targetHexKey: inProgress.hexKey,
-        subType: null
-      });
-      ui.notifications.info(
-        `Resuming fortification (${inProgress.turnsBuilt}/${inProgress.turnsRequired} turns)`
-      );
-      return;
-    }
-
-    const unitHex = snapToHexCenter(myToken.center);
-    const hexData = getHexData(unitHex);
-    const terrainConfig = hexData ? CONFIG.STARMERCS.terrain[hexData.type] ?? null : null;
-
-    // Check terrain restrictions
-    if (terrainConfig?.waterTerrain) {
-      ui.notifications.warn("Cannot fortify on water terrain.");
-      await this.actor.update({ "system.currentOrder": "" });
-      return;
-    }
-    if (terrainConfig?.noFortification) {
-      ui.notifications.warn("Cannot fortify on this terrain.");
-      await this.actor.update({ "system.currentOrder": "" });
-      return;
-    }
-
-    // Check for existing structure
-    const existing = getStructureAtHex(unitHex);
-    if (existing) {
-      ui.notifications.warn("This hex already has a structure.");
-      await this.actor.update({ "system.currentOrder": "" });
-      return;
-    }
-
-    await myToken.document.setFlag("star-mercs", "constructionTarget", {
-      type: "fortification",
-      targetHexKey: hexKey(unitHex),
-      subType: null
-    });
-    ui.notifications.info("Fortify target set: Fortification at current hex.");
   }
 
   /**

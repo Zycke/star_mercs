@@ -529,8 +529,8 @@ export default class StarMercsCombat extends Combat {
         }
       }
 
-      // 2d. Construction progress (construct / fortify orders)
-      if (token && order && (order.key === "construct" || order.key === "fortify")) {
+      // 2d. Construction progress (construct order)
+      if (token && order && order.key === "construct") {
         const movementUsed = token.getFlag("star-mercs", "movementUsed") ?? 0;
         if (movementUsed === 0) {
           const target = token.getFlag("star-mercs", "constructionTarget");

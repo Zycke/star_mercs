@@ -52,12 +52,13 @@ export default class ReferenceTables extends HandlebarsApplicationMixin(Applicat
   _buildUnitTraits() {
     return [
       { name: "Advanced Recon Equipment", type: "Active", value: "", description: "Select a visible enemy unit. Friendly attacks against that target gain +1 to hit." },
+      { name: "Air Drop", type: "Passive", value: "", description: "Unit can deploy via Air Drop from the deploy panel." },
       { name: "Amphibious", type: "Passive", value: "", description: "Can cross water at 2 MP per hex." },
       { name: "Armored[X]", type: "Passive", value: "X", description: "Reduce incoming damage by X." },
       { name: "Combined Arms", type: "Passive", value: "", description: "Attackers suffer -1 to hit and -1 damage. Does not apply to Indirect, Artillery, or Aircraft weapons." },
       { name: "Command", type: "Passive", value: "", description: "Friendly units within Comms range may re-roll failed Morale checks once per consolidation phase." },
       { name: "Deploy", type: "Passive", value: "", description: "Must spend 1 turn deploying before using weapons, abilities, or traits. Must pack up before moving." },
-      { name: "Engineer", type: "Passive", value: "", description: "Can use the Fortify, Construct, and Demolish special orders." },
+      { name: "Engineer", type: "Passive", value: "", description: "Can use the Construct and Demolish special orders." },
       { name: "Entrenched", type: "Conditional", value: "", description: "Unit is in defensive positions. Incoming damage reduced by 1 (min 1). Infantry auto-gain in urban terrain." },
       { name: "Flying[X]", type: "Passive", value: "X", description: "Unit flies with speed X. Airborne units can only be hit by Anti-Air weapons. Must move at least half speed each turn." },
       { name: "Fortified", type: "Conditional", value: "", description: "Built by an Engineer. Incoming damage reduced by 2 (min 1)." },
