@@ -232,6 +232,9 @@ export default class StarMercsUnitSheet extends ActorSheet {
     context.showDetectionRing = game.settings.get("star-mercs", "showDetectionRing");
     context.detectionRingTargetSig = game.settings.get("star-mercs", "detectionRingTargetSig");
 
+    // LOS highlight control (client setting)
+    context.showLOSHighlight = game.settings.get("star-mercs", "showLOSHighlight");
+
     // Advanced Recon Equipment: show targeting box if unit has the trait
     context.hasAdvancedRecon = this.actor.hasTrait("Advanced Recon Equipment");
     if (context.hasAdvancedRecon && activeToken) {
@@ -416,6 +419,11 @@ export default class StarMercsUnitSheet extends ActorSheet {
     });
     html.on("change", ".sm-sheet-ring-sig", (event) => {
       game.settings.set("star-mercs", "detectionRingTargetSig", Number(event.currentTarget.value));
+    });
+
+    // LOS highlight control
+    html.on("change", ".sm-sheet-los-toggle", (event) => {
+      game.settings.set("star-mercs", "showLOSHighlight", event.currentTarget.checked);
     });
 
     // Advanced Recon Equipment targeting

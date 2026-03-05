@@ -32,6 +32,8 @@ export default class DetectionLayer extends PIXI.Container {
   static RANGE_RING_WIDTH = 2;
   static BLIP_COLOR = 0xFF6600;
   static BLIP_FONT_SIZE = 24;
+  static LOS_HIGHLIGHT_COLOR = 0x44FF44;
+  static LOS_HIGHLIGHT_ALPHA = 0.12;
 
   /* ---------------------------------------- */
   /*  Public API                              */
@@ -55,6 +57,9 @@ export default class DetectionLayer extends PIXI.Container {
 
     // Draw detection range ring for the controlled token (any user)
     this._drawDetectionRangeRing();
+
+    // Draw LOS highlight for the controlled token
+    this._drawLOSHighlight();
   }
 
   /* ---------------------------------------- */
@@ -153,6 +158,70 @@ export default class DetectionLayer extends PIXI.Container {
     for (const hex of frontier) {
       const topLeft = { x: hex.x - shapeCX, y: hex.y - shapeCY };
       g.beginFill(DetectionLayer.RANGE_RING_COLOR, 0.05);
+      g.moveTo(topLeft.x + shape[0].x, topLeft.y + shape[0].y);
+      for (let i = 1; i < shape.length; i++) {
+        g.lineTo(topLeft.x + shape[i].x, topLeft.y + shape[i].y);
+      }
+      g.closePath();
+      g.endFill();
+    }
+  }
+
+  /* ---------------------------------------- */
+  /*  LOS Highlight                           */
+  /* ---------------------------------------- */
+
+  /**
+   * Draw a subtle fill on all hexes within line of sight of the controlled token.
+   * Uses BFS flood-fill, expanding only through hexes with clear LOS from the origin.
+   * @private
+   */
+  _drawLOSHighlight() {
+    if (!game.settings.get("star-mercs", "showLOSHighlight")) return;
+
+    const controlled = canvas.tokens.controlled;
+    if (!controlled?.length) return;
+
+    const token = controlled[0];
+    if (!token?.actor || token.actor.type !== "unit") return;
+
+    const g = this.rangeGraphics;
+    const shape = canvas.grid.getShape();
+    if (!shape || shape.length < 3) return;
+
+    const shapeCX = shape.reduce((sum, p) => sum + p.x, 0) / shape.length;
+    const shapeCY = shape.reduce((sum, p) => sum + p.y, 0) / shape.length;
+
+    const center = snapToHexCenter(token.center);
+    const maxRange = 30;
+    const visited = new Set();
+    visited.add(hexKey(center));
+    let frontier = [center];
+    const losHexes = [];
+
+    for (let d = 0; d < maxRange; d++) {
+      const nextFrontier = [];
+      for (const hex of frontier) {
+        const neighbors = getAdjacentHexCenters(hex);
+        for (const n of neighbors) {
+          const k = hexKey(n);
+          if (visited.has(k)) continue;
+          visited.add(k);
+          if (detection.checkLOS(center, n, token)) {
+            losHexes.push(n);
+            nextFrontier.push(n);
+          }
+        }
+      }
+      if (nextFrontier.length === 0) break;
+      frontier = nextFrontier;
+    }
+
+    // Draw filled hexes for all visible hexes
+    g.lineStyle(0);
+    for (const hex of losHexes) {
+      const topLeft = { x: hex.x - shapeCX, y: hex.y - shapeCY };
+      g.beginFill(DetectionLayer.LOS_HIGHLIGHT_COLOR, DetectionLayer.LOS_HIGHLIGHT_ALPHA);
       g.moveTo(topLeft.x + shape[0].x, topLeft.y + shape[0].y);
       for (let i = 1; i < shape.length; i++) {
         g.lineTo(topLeft.x + shape[i].x, topLeft.y + shape[i].y);
