@@ -14,7 +14,7 @@
  */
 
 import { getHexElevation, snapToHexCenter, getEffectiveElevation } from "./hex-utils.mjs";
-import { getTerrainCoverMod } from "./detection.mjs";
+import { getTerrainCoverMod, computeBestDetectionLevel } from "./detection.mjs";
 
 /**
  * Validate whether a weapon can target a specific unit based on attack type
@@ -145,6 +145,26 @@ export function calculateAccuracy(weapon, attacker, target = null) {
     }
   }
 
+  // Ambush: -2 to threshold (easier to hit) when attacker is completely hidden from defender's team
+  let ambushMod = 0;
+  if (target) {
+    const attackerToken = canvas?.tokens?.placeables.find(t => t.actor === attacker);
+    if (attackerToken) {
+      const defenderTeam = target.system.team ?? "a";
+      const detectionLevel = computeBestDetectionLevel(defenderTeam, attackerToken);
+      if (detectionLevel === "hidden") {
+        ambushMod = -2;
+      }
+    }
+  }
+
+  // Combined Arms: +1 to threshold (harder to hit) when target has Combined Arms trait
+  // Does not apply to indirect, artillery, or aircraft weapons
+  let combinedArmsMod = 0;
+  if (target?.hasTrait("Combined Arms") && !weapon.system.indirect && !weapon.system.artillery && !weapon.system.aircraft) {
+    combinedArmsMod = 1;
+  }
+
   // Advanced Recon Equipment: -1 to threshold (easier to hit) if target is designated
   let advReconMod = 0;
   if (target) {
@@ -161,9 +181,9 @@ export function calculateAccuracy(weapon, attacker, target = null) {
     }
   }
 
-  const effective = Math.max(2, Math.min(10, base - accurateMod + inaccurateMod + readinessMod + ewarMod + disorderedMod + standDownMod + orderAccuracyMod + elevationMod + areaVsInfantryMod + terrainCoverMod + advReconMod));
+  const effective = Math.max(2, Math.min(10, base - accurateMod + inaccurateMod + readinessMod + ewarMod + disorderedMod + standDownMod + orderAccuracyMod + elevationMod + areaVsInfantryMod + terrainCoverMod + advReconMod + ambushMod + combinedArmsMod));
 
-  return { effective, base, readinessMod, ewarMod, accurateMod, inaccurateMod, disorderedMod, standDownMod, orderAccuracyMod, elevationMod, areaVsInfantryMod, terrainCoverMod, advReconMod };
+  return { effective, base, readinessMod, ewarMod, accurateMod, inaccurateMod, disorderedMod, standDownMod, orderAccuracyMod, elevationMod, areaVsInfantryMod, terrainCoverMod, advReconMod, ambushMod, combinedArmsMod };
 }
 
 /**
@@ -281,6 +301,12 @@ export function calculateDamage(weapon, attacker, target, hitType) {
     damage = Math.floor(damage / 2);
     const diff = damage - before;
     modifiers.push({ label: "Hard vs Infantry (half)", value: diff });
+  }
+
+  // Target Combined Arms: -1 damage (does not apply to indirect, artillery, or aircraft weapons)
+  if (target.hasTrait("Combined Arms") && !weapon.system.indirect && !weapon.system.artillery && !weapon.system.aircraft) {
+    damage -= 1;
+    modifiers.push({ label: "Combined Arms", value: -1 });
   }
 
   // Target Armored[X] damage reduction
