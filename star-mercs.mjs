@@ -30,6 +30,7 @@ import TurnControlPanel from "./module/apps/turn-control.mjs";
 import StructureLayer from "./module/canvas/structure-layer.mjs";
 import StructureSettings from "./module/apps/structure-settings.mjs";
 import DeployPanel from "./module/apps/deploy-panel.mjs";
+import ReferenceTables from "./module/apps/reference-tables.mjs";
 
 /* ============================================ */
 /*  Foundry VTT Initialization                  */
@@ -63,7 +64,8 @@ Hooks.once("init", () => {
     { id: "landed",     name: "Landed",     img: "icons/svg/downgrade.svg" },
     { id: "meteoric-assault", name: "Meteoric Assault", img: "icons/svg/fire.svg" },
     { id: "air-drop",         name: "Air Drop",         img: "icons/svg/wing.svg" },
-    { id: "air-assault",      name: "Air Assault",      img: "icons/svg/combat.svg" }
+    { id: "air-assault",      name: "Air Assault",      img: "icons/svg/combat.svg" },
+    { id: "aboard-transport", name: "Aboard Transport", img: "icons/svg/chest.svg" }
   );
 
   // --- Register Document Classes ---
@@ -762,6 +764,23 @@ Hooks.on("updateToken", (tokenDoc, changes) => {
   }
 });
 
+/** Sync cargo token position when a transport moves. */
+Hooks.on("updateToken", async (tokenDoc, changes) => {
+  if (!("x" in changes) && !("y" in changes)) return;
+  const cargoTokenId = tokenDoc.getFlag("star-mercs", "cargoTokenId");
+  if (!cargoTokenId) return;
+
+  const cargoTokenDoc = canvas.scene?.tokens?.get(cargoTokenId);
+  if (cargoTokenDoc) {
+    const updateData = {};
+    if ("x" in changes) updateData.x = changes.x;
+    if ("y" in changes) updateData.y = changes.y;
+    if (Object.keys(updateData).length > 0) {
+      await cargoTokenDoc.update(updateData);
+    }
+  }
+});
+
 /** Sync "Breaking" status effect icon with the breaking token flag. */
 Hooks.on("updateToken", (tokenDoc, changes) => {
   if (foundry.utils.hasProperty(changes, "flags.star-mercs.breaking")) {
@@ -1264,6 +1283,19 @@ Hooks.on("refreshToken", (token) => {
   }
 });
 
+/** Make cargo tokens non-interactive while aboard a transport. */
+Hooks.on("refreshToken", (token) => {
+  if (!token.actor || token.actor.type !== "unit") return;
+  const transportTokenId = token.document.getFlag("star-mercs", "transportTokenId");
+  if (transportTokenId) {
+    // Cargo is aboard — reduce alpha and make non-interactive
+    if (token.mesh) token.mesh.alpha = 0.35;
+    token.eventMode = "none";
+    if (token.nameplate) token.nameplate.visible = false;
+    if (token.bars) token.bars.visible = false;
+  }
+});
+
 /** Redraw detection overlay on token movement. */
 Hooks.on("refreshToken", () => {
   game.starmercs?.detectionLayer?.drawDetection();
@@ -1439,6 +1471,25 @@ Hooks.on("getSceneControlButtons", (controls) => {
     }
   };
 
+  const referenceTool = {
+    name: "referenceTables",
+    title: "Quick Reference",
+    icon: "fas fa-book",
+    visible: true,
+    toggle: true,
+    active: game.starmercs?.referenceTables?.rendered ?? false,
+    onChange: (event, active) => {
+      if (active) {
+        if (!game.starmercs.referenceTables) {
+          game.starmercs.referenceTables = new ReferenceTables();
+        }
+        game.starmercs.referenceTables.render(true);
+      } else {
+        game.starmercs.referenceTables?.close();
+      }
+    }
+  };
+
   if (isV13) {
     tool.order = Object.keys(tokenControls.tools).length;
     tokenControls.tools.targetingArrows = tool;
@@ -1460,6 +1511,8 @@ Hooks.on("getSceneControlButtons", (controls) => {
     tokenControls.tools.turnControl = turnControlTool;
     deployPanelTool.order = Object.keys(tokenControls.tools).length;
     tokenControls.tools.deployPanel = deployPanelTool;
+    referenceTool.order = Object.keys(tokenControls.tools).length;
+    tokenControls.tools.referenceTables = referenceTool;
   } else {
     tokenControls.tools.push(tool);
     tokenControls.tools.push(commsTool);
@@ -1471,5 +1524,6 @@ Hooks.on("getSceneControlButtons", (controls) => {
     tokenControls.tools.push(structureSettingsTool);
     tokenControls.tools.push(turnControlTool);
     tokenControls.tools.push(deployPanelTool);
+    tokenControls.tools.push(referenceTool);
   }
 });

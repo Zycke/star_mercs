@@ -1,0 +1,75 @@
+<div class="star-mercs transport-picker-form">
+  <p class="notes">{{transportName}} — Select transport action:</p>
+
+  <div class="transport-actions">
+    {{!-- Load action --}}
+    <div class="transport-action {{#unless canLoad}}disabled{{/unless}}" data-action="load">
+      <div class="choice-header">
+        <i class="fas fa-arrow-down"></i>
+        <strong>Load</strong>
+      </div>
+      <div class="choice-description">Pick up an adjacent friendly Infantry unit.</div>
+      {{#unless canLoad}}
+      <div class="choice-unavailable"><i class="fas fa-ban"></i> {{loadReason}}</div>
+      {{/unless}}
+    </div>
+
+    {{!-- Unload action --}}
+    <div class="transport-action {{#unless canUnload}}disabled{{/unless}}" data-action="unload">
+      <div class="choice-header">
+        <i class="fas fa-arrow-up"></i>
+        <strong>Unload</strong>
+      </div>
+      <div class="choice-description">Drop current cargo to an adjacent empty hex.</div>
+      {{#unless canUnload}}
+      <div class="choice-unavailable"><i class="fas fa-ban"></i> {{unloadReason}}</div>
+      {{/unless}}
+    </div>
+  </div>
+
+  {{!-- Load target selection --}}
+  {{#if canLoad}}
+  <div class="sub-options" data-action="load" style="display:none;">
+    <div class="form-group">
+      <label>Select Infantry Unit</label>
+      <select name="loadTarget">
+        <option value="">-- Select --</option>
+        {{#each loadableUnits}}
+        <option value="{{tokenId}}">{{name}} (STR {{strength}})</option>
+        {{/each}}
+      </select>
+    </div>
+  </div>
+  {{/if}}
+
+  {{!-- Unload target hex selection --}}
+  {{#if canUnload}}
+  <div class="sub-options" data-action="unload" style="display:none;">
+    <div class="form-group">
+      <label>Select Destination Hex</label>
+      <select name="unloadTarget">
+        {{#if singleUnloadHex}}
+        <option value="{{singleUnloadHex}}">Adjacent hex</option>
+        {{else}}
+        <option value="">-- Select --</option>
+        {{#each unloadHexes}}
+        <option value="{{hexKey}}">Hex {{hexKey}}</option>
+        {{/each}}
+        {{/if}}
+      </select>
+    </div>
+    {{#if cargoName}}
+    <p class="notes">Unloading: <strong>{{cargoName}}</strong></p>
+    {{/if}}
+  </div>
+  {{/if}}
+
+  <div class="form-group transport-picker-buttons">
+    <button type="button" class="confirm-transport">
+      <i class="fas fa-check"></i> Confirm
+    </button>
+    <button type="button" class="cancel-transport">
+      <i class="fas fa-times"></i> Cancel
+    </button>
+  </div>
+</div>

@@ -1,0 +1,88 @@
+<div class="ref-tables-container">
+
+  {{!-- Tab bar --}}
+  <nav class="ref-tabs">
+    <button class="ref-tab-btn {{#if (eq activeTab 'unit-traits')}}active{{/if}}" data-tab="unit-traits">Unit Traits</button>
+    <button class="ref-tab-btn {{#if (eq activeTab 'weapon-traits')}}active{{/if}}" data-tab="weapon-traits">Weapon Traits</button>
+    <button class="ref-tab-btn {{#if (eq activeTab 'orders')}}active{{/if}}" data-tab="orders">Orders</button>
+  </nav>
+
+  {{!-- Unit Traits Table --}}
+  {{#if (eq activeTab "unit-traits")}}
+  <div class="ref-table-wrapper">
+    <table class="ref-table">
+      <thead>
+        <tr>
+          <th class="col-name">Trait</th>
+          <th class="col-type">Type</th>
+          <th class="col-desc">Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{#each unitTraits}}
+        <tr>
+          <td class="col-name"><strong>{{name}}</strong></td>
+          <td class="col-type">{{type}}</td>
+          <td class="col-desc">{{description}}</td>
+        </tr>
+        {{/each}}
+      </tbody>
+    </table>
+  </div>
+  {{/if}}
+
+  {{!-- Weapon Traits Table --}}
+  {{#if (eq activeTab "weapon-traits")}}
+  <div class="ref-table-wrapper">
+    <table class="ref-table">
+      <thead>
+        <tr>
+          <th class="col-name">Trait</th>
+          <th class="col-desc">Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{#each weaponTraits}}
+        <tr>
+          <td class="col-name"><strong>{{name}}</strong></td>
+          <td class="col-desc">{{description}}</td>
+        </tr>
+        {{/each}}
+      </tbody>
+    </table>
+  </div>
+  {{/if}}
+
+  {{!-- Orders Table --}}
+  {{#if (eq activeTab "orders")}}
+  <div class="ref-table-wrapper">
+    <table class="ref-table orders-table">
+      <thead>
+        <tr>
+          <th class="col-name">Order</th>
+          <th class="col-cat">Type</th>
+          <th class="col-flag">Move</th>
+          <th class="col-flag">Attack</th>
+          <th class="col-flag">RDY</th>
+          <th class="col-flag">Supply</th>
+          <th class="col-desc">Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{#each orders}}
+        <tr>
+          <td class="col-name"><strong>{{label}}</strong></td>
+          <td class="col-cat">{{category}}</td>
+          <td class="col-flag">{{move}}</td>
+          <td class="col-flag">{{attack}}</td>
+          <td class="col-flag">{{readiness}}</td>
+          <td class="col-flag">{{supply}}</td>
+          <td class="col-desc">{{description}}</td>
+        </tr>
+        {{/each}}
+      </tbody>
+    </table>
+  </div>
+  {{/if}}
+
+</div>

@@ -111,7 +111,7 @@ STARMERCS.orders = {
     allowsAttack: true,
     readinessCost: -2,
     supplyModifier: "3x",
-    description: "Attempt to displace an enemy unit. +1 damage dealt and received. -1 readiness per hex moved to target. Consumes extra fuel."
+    description: "Attempt to displace an enemy unit. +1 damage dealt and received. -1 readiness per hex moved to target. Consumes 3x ammunition and fuel."
   },
   overwatch: {
     label: "Overwatch",
@@ -130,16 +130,6 @@ STARMERCS.orders = {
     readinessCost: 3,
     supplyModifier: "0x",
     description: "Unit powers down and conserves resources. Recovers 3 readiness. Attackers gain +2 to hit and +2 damage. Vehicles do not consume baseline fuel."
-  },
-  fortify: {
-    label: "Fortify",
-    category: "special",
-    requiredTrait: "Engineer",
-    allowsMovement: false,
-    allowsAttack: false,
-    readinessCost: -1,
-    supplyModifier: "1x",
-    description: "Engineer unit constructs fortifications at its position."
   },
   construct: {
     label: "Construct",
@@ -211,6 +201,37 @@ STARMERCS.orders = {
     readinessCost: -1,
     supplyModifier: "1x",
     description: "Unit deploys into combat readiness, enabling abilities and weapons."
+  },
+  transport: {
+    label: "Transport",
+    category: "special",
+    requiredTrait: "Transport",
+    allowsMovement: false,
+    allowsAttack: false,
+    readinessCost: -1,
+    supplyModifier: "1x",
+    description: "Load or unload an adjacent Infantry unit. Unit must be landed. Costs one full turn."
+  },
+  air_assault: {
+    label: "Air Assault",
+    category: "special",
+    requiredTrait: "Transport",
+    allowsMovement: true,
+    allowsAttack: true,
+    readinessCost: -2,
+    supplyModifier: "2x",
+    description: "Transport flies to target hex carrying cargo. Cargo is unloaded and assaults the target. Transport may fire weapons. If assault fails, cargo retreats to adjacent hex or re-boards."
+  },
+  hot_disembark: {
+    label: "Hot Disembark",
+    category: "special",
+    requiredTrait: "Transport",
+    allowsMovement: true,
+    allowsAttack: true,
+    accuracyPenalty: 2,
+    readinessCost: -3,
+    supplyModifier: "1x",
+    description: "Transport flies to target hex and unloads cargo into adjacent empty hex. Transport fires at -2 accuracy, +1 MP fuel. Attackers suffer -1 to hit. Cargo takes -3 readiness, fires at -1 accuracy."
   }
 };
 
