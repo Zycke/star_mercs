@@ -277,7 +277,6 @@ STARMERCS.terrainTypes = {
  * infantryCover: Infantry gains Entrenched trait (Cover)
  * infantryHeavyCover: Infantry gains Armored-like heavy cover (2 damage reduction)
  * maxFireRange: max range for non-Indirect weapons firing from/into this hex (null = unlimited)
- * damageToNonFlying: extra damage taken by non-Flying/non-Hovering units
  * impassableVehicle: Vehicle units cannot enter unless road present
  * noFortification: Entrenchments/fortifications cannot be built
  * hasRoad: always treated as having a road (urban terrain)
@@ -298,7 +297,6 @@ STARMERCS.terrain = {
     infantryCover: true,
     infantryHeavyCover: false,
     maxFireRange: 1,
-    damageToNonFlying: 1,
     impassableVehicle: false,
     noFortification: false,
     hasRoad: false,
@@ -315,7 +313,6 @@ STARMERCS.terrain = {
     infantryCover: false,
     infantryHeavyCover: false,
     maxFireRange: null,
-    damageToNonFlying: 0,
     impassableVehicle: false,
     noFortification: false,
     hasRoad: false,
@@ -332,7 +329,6 @@ STARMERCS.terrain = {
     infantryCover: false,
     infantryHeavyCover: false,
     maxFireRange: null,
-    damageToNonFlying: 0,
     impassableVehicle: false,
     noFortification: false,
     hasRoad: false,
@@ -349,7 +345,6 @@ STARMERCS.terrain = {
     infantryCover: false,
     infantryHeavyCover: false,
     maxFireRange: null,
-    damageToNonFlying: 0,
     impassableVehicle: true,
     noFortification: false,
     hasRoad: false,
@@ -366,7 +361,6 @@ STARMERCS.terrain = {
     infantryCover: false,
     infantryHeavyCover: false,
     maxFireRange: null,
-    damageToNonFlying: 0,
     impassableVehicle: false,
     noFortification: true,
     hasRoad: false,
@@ -383,7 +377,6 @@ STARMERCS.terrain = {
     infantryCover: false,
     infantryHeavyCover: false,
     maxFireRange: null,
-    damageToNonFlying: 0,
     impassableVehicle: false,
     noFortification: false,
     hasRoad: false,
@@ -400,7 +393,6 @@ STARMERCS.terrain = {
     infantryCover: false,
     infantryHeavyCover: false,
     maxFireRange: null,
-    damageToNonFlying: 0,
     impassableVehicle: false,
     noFortification: false,
     hasRoad: false,
@@ -417,7 +409,6 @@ STARMERCS.terrain = {
     infantryCover: false,
     infantryHeavyCover: false,
     maxFireRange: null,
-    damageToNonFlying: 0,
     impassableVehicle: false,
     noFortification: false,
     hasRoad: false,
@@ -434,7 +425,6 @@ STARMERCS.terrain = {
     infantryCover: false,
     infantryHeavyCover: true,
     maxFireRange: 1,
-    damageToNonFlying: 0,
     impassableVehicle: false,
     noFortification: false,
     hasRoad: false,
@@ -451,7 +441,6 @@ STARMERCS.terrain = {
     infantryCover: true,
     infantryHeavyCover: false,
     maxFireRange: null,
-    damageToNonFlying: 0,
     impassableVehicle: false,
     noFortification: false,
     hasRoad: false,
