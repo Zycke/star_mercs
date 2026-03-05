@@ -1245,14 +1245,22 @@ Hooks.on("refreshToken", (token) => {
   if (level === "visible") {
     if (token.mesh) token.mesh.alpha = 1.0;
     token.visible = true;
+    // Show name for spotted enemy units, but never show bars
+    if (token.nameplate) token.nameplate.visible = true;
+    if (token.bars) token.bars.visible = false;
   } else if (level === "blip") {
     // Dim the token and let the detection layer draw a "?" marker
     if (token.mesh) token.mesh.alpha = 0.15;
     token.visible = true;
+    // Hide name and bars for blips
+    if (token.nameplate) token.nameplate.visible = false;
+    if (token.bars) token.bars.visible = false;
   } else {
     // hidden
     if (token.mesh) token.mesh.alpha = 0;
     token.visible = false;
+    if (token.nameplate) token.nameplate.visible = false;
+    if (token.bars) token.bars.visible = false;
   }
 });
 

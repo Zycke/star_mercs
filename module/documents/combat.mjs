@@ -2136,7 +2136,7 @@ export default class StarMercsCombat extends Combat {
         if (safePath.length > 0) {
           const safeHex = safePath[safePath.length - 1];
           const snapped = snapToHexCenter(safeHex);
-          const safePos = hexCenterToTokenPosition(snapped, mover.token);
+          const safePos = hexCenterToTokenPosition(snapped, canvasToken);
           await mover.token.update({ x: safePos.x, y: safePos.y }, { _starMercsAutoMove: true });
           const { totalCost: safeCost } = calculatePathCost(canvasToken.center, safePath, mover.actor);
           await mover.token.setFlag("star-mercs", "movementUsed", safeCost);
@@ -2204,7 +2204,7 @@ export default class StarMercsCombat extends Combat {
         // Animate through each waypoint with brief pauses
         for (const wp of moveWaypoints) {
           const wpSnapped = snapToHexCenter(wp);
-          const wpPos = hexCenterToTokenPosition(wpSnapped, mover.token);
+          const wpPos = hexCenterToTokenPosition(wpSnapped, canvasToken);
           await mover.token.update({ x: wpPos.x, y: wpPos.y }, { _starMercsAutoMove: true });
           await new Promise(r => setTimeout(r, 200));
         }
@@ -2212,7 +2212,7 @@ export default class StarMercsCombat extends Combat {
         // Single destination — move directly
         const finalHex = path[path.length - 1];
         const snapped = snapToHexCenter(finalHex);
-        const finalPos = hexCenterToTokenPosition(snapped, mover.token);
+        const finalPos = hexCenterToTokenPosition(snapped, canvasToken);
         await mover.token.update({ x: finalPos.x, y: finalPos.y }, { _starMercsAutoMove: true });
       }
       await mover.token.setFlag("star-mercs", "movementUsed", totalCost);

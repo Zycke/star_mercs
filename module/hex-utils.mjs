@@ -20,8 +20,10 @@ export function snapToHexCenter(point) {
  */
 export function hexCenterToTokenPosition(center, token) {
   const gridSize = canvas.grid.size || 100;
-  const tokenW = token.w ?? (token.document?.width ?? 1) * gridSize;
-  const tokenH = token.h ?? (token.document?.height ?? 1) * gridSize;
+  // Support Canvas Token (.w/.h), TokenDocument (.width/.height in grid units),
+  // or nested TokenDocument (token.document?.width).
+  const tokenW = token.w ?? ((token.document?.width ?? token.width ?? 1) * gridSize);
+  const tokenH = token.h ?? ((token.document?.height ?? token.height ?? 1) * gridSize);
   return { x: center.x - tokenW / 2, y: center.y - tokenH / 2 };
 }
 
