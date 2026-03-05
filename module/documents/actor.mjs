@@ -211,6 +211,181 @@ export default class StarMercsActor extends Actor {
   }
 
   /* ---------------------------------------- */
+  /*  Transport Helpers                       */
+  /* ---------------------------------------- */
+
+  /**
+   * Check if this transport unit currently has cargo aboard.
+   * @returns {boolean}
+   */
+  hasCargoAboard() {
+    const token = this.getActiveTokens()?.[0];
+    if (!token) return false;
+    return !!token.document.getFlag("star-mercs", "cargoActorId");
+  }
+
+  /**
+   * Get the actor of the cargo unit currently aboard this transport.
+   * @returns {StarMercsActor|null}
+   */
+  getCargoActor() {
+    const token = this.getActiveTokens()?.[0];
+    if (!token) return null;
+    const cargoActorId = token.document.getFlag("star-mercs", "cargoActorId");
+    if (!cargoActorId) return null;
+    return game.actors.get(cargoActorId) ?? null;
+  }
+
+  /**
+   * Get the token of the cargo unit currently aboard this transport.
+   * @returns {Token|null}
+   */
+  getCargoToken() {
+    const token = this.getActiveTokens()?.[0];
+    if (!token) return null;
+    const cargoTokenId = token.document.getFlag("star-mercs", "cargoTokenId");
+    if (!cargoTokenId) return null;
+    return canvas.tokens?.get(cargoTokenId) ?? null;
+  }
+
+  /**
+   * Check if this unit is currently aboard a transport.
+   * @returns {boolean}
+   */
+  isAboardTransport() {
+    const token = this.getActiveTokens()?.[0];
+    if (!token) return false;
+    return !!token.document.getFlag("star-mercs", "transportTokenId");
+  }
+
+  /**
+   * Get the transport token carrying this unit.
+   * @returns {Token|null}
+   */
+  getTransportToken() {
+    const token = this.getActiveTokens()?.[0];
+    if (!token) return null;
+    const transportTokenId = token.document.getFlag("star-mercs", "transportTokenId");
+    if (!transportTokenId) return null;
+    return canvas.tokens?.get(transportTokenId) ?? null;
+  }
+
+  /**
+   * Load a cargo unit onto this transport.
+   * @param {Token} cargoToken - The infantry token to load.
+   * @returns {Promise<boolean>} True if successfully loaded.
+   */
+  async loadCargo(cargoToken) {
+    const myToken = this.getActiveTokens()?.[0];
+    if (!myToken || !cargoToken) return false;
+
+    // Validate: must have Transport trait, must be landed, must not already have cargo
+    if (!this.hasTrait("Transport")) return false;
+    if (!this.getFlag("star-mercs", "landed")) return false;
+    if (this.hasCargoAboard()) return false;
+
+    // Validate cargo: must be Infantry, same team, not already aboard a transport
+    const cargoActor = cargoToken.actor;
+    if (!cargoActor || !cargoActor.hasTrait("Infantry")) return false;
+    if (cargoActor.system.team !== this.system.team) return false;
+    if (cargoActor.isAboardTransport()) return false;
+
+    // Set flags on transport
+    await myToken.document.setFlag("star-mercs", "cargoActorId", cargoActor.id);
+    await myToken.document.setFlag("star-mercs", "cargoTokenId", cargoToken.id);
+
+    // Set flag on cargo
+    await cargoToken.document.setFlag("star-mercs", "transportTokenId", myToken.id);
+
+    // Record transport's current strength for damage propagation
+    await myToken.document.setFlag("star-mercs", "preTransportStrength", this.system.strength.value);
+
+    // Move cargo token to transport's position (stacked)
+    await cargoToken.document.update({
+      x: myToken.document.x,
+      y: myToken.document.y
+    });
+
+    // Apply "Aboard Transport" status effect on cargo
+    const effect = cargoActor.effects.find(e => e.statuses?.has("aboard-transport"));
+    if (!effect) {
+      await cargoActor.createEmbeddedDocuments("ActiveEffect", [{
+        name: "Aboard Transport",
+        img: "icons/svg/chest.svg",
+        statuses: ["aboard-transport"]
+      }]);
+    }
+
+    // Clear cargo unit's current order
+    await cargoActor.update({ "system.currentOrder": "" });
+
+    return true;
+  }
+
+  /**
+   * Unload cargo from this transport to a target position.
+   * @param {{x: number, y: number}} targetPos - The canvas position to place the cargo.
+   * @returns {Promise<boolean>} True if successfully unloaded.
+   */
+  async unloadCargo(targetPos) {
+    const myToken = this.getActiveTokens()?.[0];
+    if (!myToken) return false;
+
+    const cargoToken = this.getCargoToken();
+    if (!cargoToken) return false;
+    const cargoActor = cargoToken.actor;
+
+    // Move cargo token to target position
+    await cargoToken.document.update({
+      x: targetPos.x,
+      y: targetPos.y
+    });
+
+    // Clear transport flags
+    await myToken.document.unsetFlag("star-mercs", "cargoActorId");
+    await myToken.document.unsetFlag("star-mercs", "cargoTokenId");
+    await myToken.document.unsetFlag("star-mercs", "preTransportStrength");
+
+    // Clear cargo flags
+    await cargoToken.document.unsetFlag("star-mercs", "transportTokenId");
+
+    // Remove "Aboard Transport" status effect
+    if (cargoActor) {
+      const effect = cargoActor.effects.find(e => e.statuses?.has("aboard-transport"));
+      if (effect) await effect.delete();
+    }
+
+    return true;
+  }
+
+  /**
+   * Force-destroy cargo when transport is destroyed.
+   * @returns {Promise<void>}
+   */
+  async destroyCargo() {
+    const cargoToken = this.getCargoToken();
+    if (!cargoToken) return;
+    const cargoActor = cargoToken.actor;
+    if (!cargoActor) return;
+
+    // Destroy cargo — set strength to 0
+    await cargoActor.update({ "system.strength.value": 0 });
+
+    // Clean up flags and status effects
+    const myToken = this.getActiveTokens()?.[0];
+    if (myToken) {
+      await myToken.document.unsetFlag("star-mercs", "cargoActorId");
+      await myToken.document.unsetFlag("star-mercs", "cargoTokenId");
+      await myToken.document.unsetFlag("star-mercs", "preTransportStrength");
+    }
+
+    await cargoToken.document.unsetFlag("star-mercs", "transportTokenId");
+
+    const effect = cargoActor.effects.find(e => e.statuses?.has("aboard-transport"));
+    if (effect) await effect.delete();
+  }
+
+  /* ---------------------------------------- */
   /*  Ammo Helpers                            */
   /* ---------------------------------------- */
 

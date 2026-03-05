@@ -111,6 +111,17 @@ export function calculateAccuracy(weapon, attacker, target = null) {
     orderAccuracyMod = orderConfig.accuracyPenalty;
   }
 
+  // Hot Disembark: cargo fires at -1 accuracy (Maneuver rules)
+  const attackerToken = canvas?.tokens?.placeables.find(t => t.actor === attacker);
+  if (attackerToken?.document?.getFlag("star-mercs", "hotDisembarked")) {
+    orderAccuracyMod = Math.max(orderAccuracyMod, 1);
+  }
+
+  // Hot Disembark evasive: target transport has -1 to hit from attackers
+  if (targetToken?.document?.getFlag("star-mercs", "hotDisembarkEvasive")) {
+    orderAccuracyMod += 1;
+  }
+
   // Area weapon vs Infantry: -1 to threshold (easier to hit)
   let areaVsInfantryMod = 0;
   if (weapon.system.area && target?.hasTrait("Infantry")) {

@@ -73,6 +73,7 @@ export default class ReferenceTables extends HandlebarsApplicationMixin(Applicat
       { name: "Satellite Uplink", type: "Passive", value: "", description: "Orbital satellite access. Aircraft weapons in comms chain may acquire any target. Auto-links to Command units." },
       { name: "Shock[X]", type: "Passive", value: "X", description: "When assaulting, if the defender lacks Shock, the defender suffers -X on their assault morale check." },
       { name: "Supply[X]", type: "Passive", value: "X", description: "Enables the Supply special order. May transfer supplies to friendly units within X hexes." },
+      { name: "Transport", type: "Passive", value: "", description: "Flying unit can load and carry one Infantry unit. Must land adjacent to load/unload." },
       { name: "Vehicle", type: "Passive", value: "", description: "Unit is comprised primarily of vehicles. Gains reduced terrain cover benefits." }
     ];
   }

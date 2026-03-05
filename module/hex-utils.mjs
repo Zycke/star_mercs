@@ -37,6 +37,21 @@ export function hexKey(center) {
 }
 
 /**
+ * Reverse a hex key string back into a center point.
+ * @param {string} key - A hex key in "x,y" format.
+ * @returns {{x: number, y: number}|null}
+ */
+export function hexCenterFromKey(key) {
+  if (!key || typeof key !== "string") return null;
+  const parts = key.split(",");
+  if (parts.length !== 2) return null;
+  const x = Number(parts[0]);
+  const y = Number(parts[1]);
+  if (Number.isNaN(x) || Number.isNaN(y)) return null;
+  return { x, y };
+}
+
+/**
  * Get all adjacent hex centers around a given point.
  * @param {{x: number, y: number}} center - A hex center point.
  * @returns {{x: number, y: number}[]}

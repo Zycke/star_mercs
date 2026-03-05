@@ -3,6 +3,7 @@ import { snapToHexCenter, hexKey, computeHexPath, calculatePathCost,
   getHexData, getHexElevation, getAdjacentHexCenters, getStructureAtHex, normalizeHexData } from "../hex-utils.mjs";
 import { checkLOS, getActiveSignature, getTerrainCoverMod } from "../detection.mjs";
 import ConstructionPicker from "../apps/construction-picker.mjs";
+import TransportPicker from "../apps/transport-picker.mjs";
 
 /**
  * Sheet class for Star Mercs Unit actors.
@@ -110,6 +111,9 @@ export default class StarMercsUnitSheet extends ActorSheet {
     const unitIsEngaged = activeToken && hUtils ? hUtils.isEngaged(activeToken) : false;
     context.isEngaged = unitIsEngaged;
 
+    // Check if unit is aboard a transport (cargo units cannot receive orders)
+    context.isAboardTransport = this.actor.isAboardTransport();
+
     // Orders that engaged units cannot take (movement orders except withdraw/assault)
     const engagedBlockedOrders = ["move", "forced_march", "fly"];
 
@@ -118,6 +122,8 @@ export default class StarMercsUnitSheet extends ActorSheet {
 
     context.availableOrders = Object.entries(allOrders)
       .filter(([key, data]) => {
+        // Cargo units aboard a transport cannot receive orders
+        if (context.isAboardTransport) return false;
         // Breaking/Broken units can only Hold or Withdraw
         if ((isBreaking || isBroken) && !breakingOrders.includes(key)) return false;
         // Engaged units cannot Maneuver or Forced March
@@ -856,6 +862,21 @@ export default class StarMercsUnitSheet extends ActorSheet {
     if (selectedOrderKey === "demolish") {
       this._promptDemolishTarget();
     }
+
+    // If transport order selected, open TransportPicker
+    if (selectedOrderKey === "transport") {
+      this._promptTransportAction();
+    }
+
+    // If air_assault order selected, prompt for target hex
+    if (selectedOrderKey === "air_assault") {
+      this._promptAirAssaultTarget();
+    }
+
+    // If hot_disembark order selected, prompt for target hex
+    if (selectedOrderKey === "hot_disembark") {
+      this._promptHotDisembarkTarget();
+    }
   }
 
   /**
@@ -1077,6 +1098,159 @@ export default class StarMercsUnitSheet extends ActorSheet {
       },
       default: "confirm"
     }).render(true);
+  }
+
+  /**
+   * Open the Transport Picker dialog for the Transport order.
+   * @private
+   */
+  async _promptTransportAction() {
+    const myToken = this.actor.getActiveTokens()?.[0];
+    if (!myToken) {
+      ui.notifications.warn("Place this unit's token on the canvas first.");
+      return;
+    }
+
+    // Must be landed
+    if (!this.actor.getFlag("star-mercs", "landed")) {
+      ui.notifications.warn("Transport must be landed to load or unload cargo.");
+      await this.actor.update({ "system.currentOrder": "" });
+      return;
+    }
+
+    const actor = this.actor;
+    new TransportPicker(
+      actor,
+      myToken,
+      async (selection) => {
+        // selection = { action: "load"|"unload", targetId: tokenId|hexKey }
+        await myToken.document.setFlag("star-mercs", "transportAction", selection.action);
+        await myToken.document.setFlag("star-mercs", "transportTargetId", selection.targetId);
+
+        if (selection.action === "load") {
+          const cargoToken = canvas.tokens.get(selection.targetId);
+          ui.notifications.info(`Transport: will load ${cargoToken?.name ?? "unit"}.`);
+        } else {
+          ui.notifications.info("Transport: will unload cargo at selected hex.");
+        }
+      },
+      async () => {
+        await actor.update({ "system.currentOrder": "" });
+        ui.notifications.info("Transport order cancelled.");
+      }
+    ).render(true);
+  }
+
+  /**
+   * Prompt for Air Assault target hex (must have cargo, enemy at target).
+   * @private
+   */
+  _promptAirAssaultTarget() {
+    const myToken = this.actor.getActiveTokens()?.[0];
+    if (!myToken) {
+      ui.notifications.warn("Place this unit's token on the canvas first.");
+      return;
+    }
+
+    if (!this.actor.hasCargoAboard()) {
+      ui.notifications.warn("Must have cargo aboard to perform Air Assault.");
+      this.actor.update({ "system.currentOrder": "" });
+      return;
+    }
+
+    const flySpeed = this.actor.getTraitValue("Flying") || (this.actor.system.movement ?? 4);
+    const team = this.actor.system.team ?? "a";
+    const validTargets = [];
+
+    for (const token of canvas.tokens.placeables) {
+      if (token === myToken) continue;
+      if (!token.actor || token.actor.type !== "unit") continue;
+      if ((token.actor.system.team ?? "a") === team) continue;
+      if (token.actor.system.strength.value <= 0) continue;
+      if (token.actor.isAboardTransport()) continue;
+
+      const distance = StarMercsActor.getHexDistance(myToken, token);
+      if (distance <= flySpeed) {
+        validTargets.push({ tokenId: token.id, name: token.name, distance });
+      }
+    }
+
+    if (validTargets.length === 0) {
+      ui.notifications.warn("No enemy units within flying range for Air Assault.");
+      this.actor.update({ "system.currentOrder": "" });
+      return;
+    }
+
+    const optionsHtml = validTargets.map(t =>
+      `<option value="${t.tokenId}">${t.name} (${t.distance} hex${t.distance > 1 ? "es" : ""})</option>`
+    ).join("");
+
+    const actor = this.actor;
+    new Dialog({
+      title: "Air Assault — Select Target",
+      content: `<form><div class="form-group">
+        <label>Select enemy unit to assault</label>
+        <select id="air-assault-target">${optionsHtml}</select>
+      </div>
+      <p class="notes">Cargo will be unloaded and assault the target hex.</p>
+      </form>`,
+      buttons: {
+        confirm: {
+          icon: '<i class="fas fa-fighter-jet"></i>',
+          label: "Confirm Air Assault",
+          callback: async (html) => {
+            const targetTokenId = html.find("#air-assault-target").val();
+            const token = actor.getActiveTokens()?.[0];
+            if (token?.document && targetTokenId) {
+              const targetToken = canvas.tokens.get(targetTokenId);
+              const targetHex = targetToken ? hexKey(snapToHexCenter(targetToken.center)) : null;
+              await token.document.setFlag("star-mercs", "airAssaultTargetHex", targetHex);
+              await token.document.setFlag("star-mercs", "airAssaultTargetTokenId", targetTokenId);
+              ui.notifications.info(`Air Assault target set: ${targetToken?.name ?? "enemy"}.`);
+            }
+          }
+        },
+        cancel: {
+          icon: '<i class="fas fa-times"></i>',
+          label: "Cancel",
+          callback: async () => {
+            await actor.update({ "system.currentOrder": "" });
+          }
+        }
+      },
+      default: "confirm"
+    }).render(true);
+  }
+
+  /**
+   * Prompt for Hot Disembark target hex (must have cargo).
+   * @private
+   */
+  _promptHotDisembarkTarget() {
+    const myToken = this.actor.getActiveTokens()?.[0];
+    if (!myToken) {
+      ui.notifications.warn("Place this unit's token on the canvas first.");
+      return;
+    }
+
+    if (!this.actor.hasCargoAboard()) {
+      ui.notifications.warn("Must have cargo aboard to perform Hot Disembark.");
+      this.actor.update({ "system.currentOrder": "" });
+      return;
+    }
+
+    const flySpeed = this.actor.getTraitValue("Flying") || (this.actor.system.movement ?? 4);
+    const actor = this.actor;
+
+    // For Hot Disembark, allow player to type/pick any hex within flying range.
+    // Use a simple dialog asking for a move destination (similar to Fly order).
+    // The actual hex selection will happen through the standard move destination flow.
+    ui.notifications.info("Hot Disembark: Set a move destination within flying range. Cargo will be unloaded to an adjacent hex on arrival.");
+
+    // Mark the order as hot_disembark — the move destination flow and
+    // consolidation phase handle the rest.
+    // No additional flag needed beyond the order itself; the movement
+    // destination (moveTarget) is set via the standard move path UI.
   }
 
   /**

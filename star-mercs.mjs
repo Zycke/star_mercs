@@ -64,7 +64,8 @@ Hooks.once("init", () => {
     { id: "landed",     name: "Landed",     img: "icons/svg/downgrade.svg" },
     { id: "meteoric-assault", name: "Meteoric Assault", img: "icons/svg/fire.svg" },
     { id: "air-drop",         name: "Air Drop",         img: "icons/svg/wing.svg" },
-    { id: "air-assault",      name: "Air Assault",      img: "icons/svg/combat.svg" }
+    { id: "air-assault",      name: "Air Assault",      img: "icons/svg/combat.svg" },
+    { id: "aboard-transport", name: "Aboard Transport", img: "icons/svg/chest.svg" }
   );
 
   // --- Register Document Classes ---
@@ -763,6 +764,23 @@ Hooks.on("updateToken", (tokenDoc, changes) => {
   }
 });
 
+/** Sync cargo token position when a transport moves. */
+Hooks.on("updateToken", async (tokenDoc, changes) => {
+  if (!("x" in changes) && !("y" in changes)) return;
+  const cargoTokenId = tokenDoc.getFlag("star-mercs", "cargoTokenId");
+  if (!cargoTokenId) return;
+
+  const cargoTokenDoc = canvas.scene?.tokens?.get(cargoTokenId);
+  if (cargoTokenDoc) {
+    const updateData = {};
+    if ("x" in changes) updateData.x = changes.x;
+    if ("y" in changes) updateData.y = changes.y;
+    if (Object.keys(updateData).length > 0) {
+      await cargoTokenDoc.update(updateData);
+    }
+  }
+});
+
 /** Sync "Breaking" status effect icon with the breaking token flag. */
 Hooks.on("updateToken", (tokenDoc, changes) => {
   if (foundry.utils.hasProperty(changes, "flags.star-mercs.breaking")) {
@@ -1260,6 +1278,19 @@ Hooks.on("refreshToken", (token) => {
     // hidden
     if (token.mesh) token.mesh.alpha = 0;
     token.visible = false;
+    if (token.nameplate) token.nameplate.visible = false;
+    if (token.bars) token.bars.visible = false;
+  }
+});
+
+/** Make cargo tokens non-interactive while aboard a transport. */
+Hooks.on("refreshToken", (token) => {
+  if (!token.actor || token.actor.type !== "unit") return;
+  const transportTokenId = token.document.getFlag("star-mercs", "transportTokenId");
+  if (transportTokenId) {
+    // Cargo is aboard — reduce alpha and make non-interactive
+    if (token.mesh) token.mesh.alpha = 0.35;
+    token.eventMode = "none";
     if (token.nameplate) token.nameplate.visible = false;
     if (token.bars) token.bars.visible = false;
   }

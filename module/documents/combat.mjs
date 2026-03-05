@@ -1,8 +1,8 @@
 import StarMercsActor from "./actor.mjs";
 import { esc } from "../helpers.mjs";
-import { snapToHexCenter, hexKey, hexCenterToTokenPosition, getAdjacentHexCenters,
-  getTokensAtHex, areAdjacent, getAdjacentEnemies, isEngaged, computeHexPath,
-  validatePath, findBestAdjacentHex, getLastSafeHex,
+import { snapToHexCenter, hexKey, hexCenterFromKey, hexCenterToTokenPosition,
+  getAdjacentHexCenters, getTokensAtHex, areAdjacent, getAdjacentEnemies, isEngaged,
+  computeHexPath, validatePath, findBestAdjacentHex, getLastSafeHex,
   calculatePathCost, normalizeHexData, getStructureAtHex } from "../hex-utils.mjs";
 import { getDetectionLevel, checkLOS } from "../detection.mjs";
 import StructureLayer from "../canvas/structure-layer.mjs";
@@ -467,6 +467,212 @@ export default class StarMercsCombat extends Combat {
         }
       }
 
+      // 1a-post. Cargo rout prevention: cargo aboard a transport cannot rout (readiness floor = 1)
+      if (actor.isAboardTransport() && actor.system.readiness.value <= 0 && actor.system.strength.value > 0) {
+        await actor.update({ "system.readiness.value": 1 });
+      }
+
+      // 1b. Transport cargo damage propagation
+      // If this unit is a transport with cargo, propagate proportional damage to cargo
+      if (token && actor.hasCargoAboard()) {
+        const preStrength = token.getFlag("star-mercs", "preTransportStrength");
+        if (preStrength && preStrength > 0) {
+          const currentStrength = actor.system.strength.value;
+          const pctLost = (preStrength - currentStrength) / preStrength;
+
+          if (currentStrength <= 0) {
+            // Transport destroyed — cargo is completely destroyed
+            await actor.destroyCargo();
+            sections.push(`<div class="consolidation-section damage">
+              <div class="consolidation-section-header"><i class="fas fa-skull-crossbones"></i> Cargo Destroyed</div>
+              <div class="status-update">Transport destroyed — cargo unit destroyed with it.</div>
+            </div>`);
+          } else if (pctLost > 0) {
+            // Proportional damage to cargo
+            const cargoActor = actor.getCargoActor();
+            if (cargoActor) {
+              const cargoDamage = Math.floor(cargoActor.system.strength.max * pctLost);
+              if (cargoDamage > 0) {
+                const newCargoStr = Math.max(0, cargoActor.system.strength.value - cargoDamage);
+                await cargoActor.update({ "system.strength.value": newCargoStr });
+                sections.push(`<div class="consolidation-section damage">
+                  <div class="consolidation-section-header"><i class="fas fa-box"></i> Cargo Damaged</div>
+                  <div class="status-update">${esc(cargoActor.name)}: -${cargoDamage} STR (${Math.round(pctLost * 100)}% transport damage)</div>
+                </div>`);
+              }
+            }
+          }
+
+          // Update preTransportStrength for next turn
+          if (currentStrength > 0) {
+            await token.setFlag("star-mercs", "preTransportStrength", currentStrength);
+          }
+        }
+      }
+
+      // 1c. Execute transport load/unload orders
+      if (token && actor.system.currentOrder === "transport") {
+        const transportAction = token.getFlag("star-mercs", "transportAction");
+        const transportTargetId = token.getFlag("star-mercs", "transportTargetId");
+
+        if (transportAction === "load" && transportTargetId) {
+          const cargoToken = canvas?.tokens?.get(transportTargetId);
+          if (cargoToken) {
+            const success = await actor.loadCargo(cargoToken);
+            if (success) {
+              sections.push(`<div class="consolidation-section supply">
+                <div class="consolidation-section-header"><i class="fas fa-arrow-down"></i> Cargo Loaded</div>
+                <div class="status-update">${esc(cargoToken.name)} loaded aboard ${esc(unitName)}.</div>
+              </div>`);
+            }
+          }
+        } else if (transportAction === "unload" && transportTargetId) {
+          // transportTargetId is a hex key — resolve to canvas coordinates
+          {
+            const targetCenter = hexCenterFromKey(transportTargetId);
+            if (targetCenter) {
+              const cargoActor = actor.getCargoActor();
+              const cargoName = cargoActor?.name ?? "cargo";
+              // Offset to top-left for token placement
+              const gridSize = canvas.grid.size ?? 100;
+              const targetPos = { x: targetCenter.x - gridSize / 2, y: targetCenter.y - gridSize / 2 };
+              const success = await actor.unloadCargo(targetPos);
+              if (success) {
+                sections.push(`<div class="consolidation-section supply">
+                  <div class="consolidation-section-header"><i class="fas fa-arrow-up"></i> Cargo Unloaded</div>
+                  <div class="status-update">${esc(cargoName)} unloaded from ${esc(unitName)}.</div>
+                </div>`);
+              }
+            }
+          }
+        }
+
+        // Clean up transport order flags
+        await token.unsetFlag("star-mercs", "transportAction");
+        await token.unsetFlag("star-mercs", "transportTargetId");
+      }
+
+      // 1d. Execute Air Assault order
+      if (token && actor.system.currentOrder === "air_assault") {
+        const targetHex = token.getFlag("star-mercs", "airAssaultTargetHex");
+        const targetTokenId = token.getFlag("star-mercs", "airAssaultTargetTokenId");
+
+        if (targetHex && actor.hasCargoAboard()) {
+          const targetCenter = hexCenterFromKey(targetHex);
+          if (targetCenter) {
+            // Land the transport adjacent to the target hex
+            await actor.land();
+
+            // Unload cargo into the target hex
+            const cargoActor = actor.getCargoActor();
+            const cargoName = cargoActor?.name ?? "cargo";
+            const gridSize = canvas.grid.size ?? 100;
+            const targetPos = { x: targetCenter.x - gridSize / 2, y: targetCenter.y - gridSize / 2 };
+            const success = await actor.unloadCargo(targetPos);
+
+            if (success && cargoActor) {
+              // Apply air-assault status effect for shock bonus
+              const airAssaultEffect = cargoActor.effects.find(e => e.statuses?.has("air-assault"));
+              if (!airAssaultEffect) {
+                await cargoActor.createEmbeddedDocuments("ActiveEffect", [{
+                  name: "Air Assault",
+                  img: "icons/svg/combat.svg",
+                  statuses: ["air-assault"]
+                }]);
+              }
+
+              // Set cargo's order to assault and store the assault target
+              await cargoActor.update({ "system.currentOrder": "assault" });
+              const cargoToken = cargoActor.getActiveTokens()?.[0];
+              if (cargoToken && targetTokenId) {
+                await cargoToken.document.setFlag("star-mercs", "assaultTarget", targetTokenId);
+              }
+
+              sections.push(`<div class="consolidation-section supply">
+                <div class="consolidation-section-header"><i class="fas fa-fighter-jet"></i> Air Assault</div>
+                <div class="status-update">${esc(cargoName)} deployed via Air Assault! Assaulting target hex.</div>
+              </div>`);
+            }
+          }
+        }
+
+        // Clean up air assault flags
+        await token.unsetFlag("star-mercs", "airAssaultTargetHex");
+        await token.unsetFlag("star-mercs", "airAssaultTargetTokenId");
+      }
+
+      // 1e. Execute Hot Disembark order
+      if (token && actor.system.currentOrder === "hot_disembark" && actor.hasCargoAboard()) {
+        // Transport should have already moved to destination via movement phase
+        // Now unload cargo to adjacent empty hex
+        const myCenter = snapToHexCenter(token.center ?? { x: token.x, y: token.y });
+        const adjacentCenters = getAdjacentHexCenters(myCenter);
+
+        // Find first adjacent empty hex
+        const occupiedKeys = new Set();
+        for (const t of canvas.tokens.placeables) {
+          if (!t.actor || t.actor.type !== "unit") continue;
+          if (t.actor.system.strength.value <= 0) continue;
+          const cargoTokenId = token.getFlag("star-mercs", "cargoTokenId");
+          if (t.id === cargoTokenId) continue;
+          occupiedKeys.add(hexKey(snapToHexCenter(t.center)));
+        }
+
+        const emptyAdj = adjacentCenters.find(adj => !occupiedKeys.has(hexKey(adj)));
+        if (emptyAdj) {
+          const cargoActor = actor.getCargoActor();
+          const cargoName = cargoActor?.name ?? "cargo";
+          const gridSize = canvas.grid.size ?? 100;
+          const targetPos = { x: emptyAdj.x - gridSize / 2, y: emptyAdj.y - gridSize / 2 };
+          const success = await actor.unloadCargo(targetPos);
+
+          if (success && cargoActor) {
+            // Apply readiness penalty to cargo (-3)
+            const cargoRdy = cargoActor.system.readiness.value;
+            await cargoActor.update({
+              "system.readiness.value": Math.max(0, cargoRdy - 3)
+            });
+
+            // Set hotDisembarked flag so cargo can fire at -1 accuracy
+            const cargoToken = cargoActor.getActiveTokens()?.[0];
+            if (cargoToken) {
+              await cargoToken.document.setFlag("star-mercs", "hotDisembarked", true);
+            }
+
+            sections.push(`<div class="consolidation-section supply">
+              <div class="consolidation-section-header"><i class="fas fa-parachute-box"></i> Hot Disembark</div>
+              <div class="status-update">${esc(cargoName)} hot-disembarked! -3 RDY, may fire at -1 accuracy.</div>
+            </div>`);
+          }
+        } else {
+          sections.push(`<div class="consolidation-section damage">
+            <div class="consolidation-section-header"><i class="fas fa-exclamation-triangle"></i> Hot Disembark Failed</div>
+            <div class="status-update">No adjacent empty hexes — cargo remains aboard.</div>
+          </div>`);
+        }
+
+        // Hot Disembark transport effects: extra fuel (+1 MP worth)
+        const fuelPerMP = actor.system.fuelPerMP ?? 0;
+        if (fuelPerMP > 0) {
+          const currentFuel = actor.system.supply?.fuel?.current ?? 0;
+          if (currentFuel > 0) {
+            await actor.update({
+              "system.supply.fuel.current": Math.max(0, currentFuel - fuelPerMP)
+            });
+            sections.push(`<div class="consolidation-section supply">
+              <div class="consolidation-section-header"><i class="fas fa-gas-pump"></i> Evasive Maneuver Fuel</div>
+              <div class="status-update">-${fuelPerMP} fuel (evasive maneuvers)</div>
+            </div>`);
+          }
+        }
+
+        // Set evasive flag on transport (attackers -1 to hit)
+        await token.setFlag("star-mercs", "hotDisembarkEvasive", true);
+
+        // Land the transport
+        await actor.land();
+      }
+
       // 2. Deduct readiness cost from the unit's current order
       // Airborne flying units cannot gain readiness (positive cost) from orders
       const order = this._getActorOrder(actor);
@@ -799,6 +1005,11 @@ export default class StarMercsCombat extends Combat {
       }
 
       // 4. Consume supply by category (ammo is consumed on fire, only fuel/basic here)
+      //    Skip supply consumption for cargo units aboard a transport
+      if (actor.isAboardTransport()) {
+        // Cargo aboard transport does not consume own supplies
+        // (transport handles fuel; cargo can't act)
+      } else {
       const supply = actor.system.supply;
       const supplyUpdate = {};
       const consumedParts = [];
@@ -870,6 +1081,8 @@ export default class StarMercsCombat extends Combat {
           <div class="status-update">${consumedParts.join(" | ")}</div>
         </div>`);
       }
+
+      } // end supply consumption (skipped for cargo aboard transport)
 
       // Clean up altitude change tracking flags
       if (token) {
@@ -2669,8 +2882,10 @@ export default class StarMercsCombat extends Combat {
         }
       }
 
-      // 7. Clear current order
-      await actor.update({ "system.currentOrder": "" });
+      // 7. Clear current order (but not for cargo units aboard transport)
+      if (!actor.isAboardTransport()) {
+        await actor.update({ "system.currentOrder": "" });
+      }
 
       // 8. Clear deployment status effects
       for (const effectId of ["meteoric-assault", "air-drop", "air-assault"]) {
@@ -2678,6 +2893,10 @@ export default class StarMercsCombat extends Combat {
           await actor.toggleStatusEffect(effectId, { active: false });
         }
       }
+
+      // 9. Clear transport per-turn flags
+      await token.unsetFlag("star-mercs", "hotDisembarked");
+      await token.unsetFlag("star-mercs", "hotDisembarkEvasive");
     }
 
     // Clear tactical step counter
