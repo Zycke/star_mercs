@@ -1438,11 +1438,16 @@ Hooks.on("refreshToken", (token) => {
   if (!token.effects?.children) return;
   for (const sprite of token.effects.children) {
     if (sprite === token.effects.overlay) continue;
-    if (sprite.scale) sprite.scale.set(0.5, 0.5);
+    if (sprite.scale) {
+      sprite.scale.set(sprite.scale.x * 0.5, sprite.scale.y * 0.5);
+    }
   }
   // Double the Dead overlay icon size
   if (token.effects.overlay?.scale) {
-    token.effects.overlay.scale.set(2.0, 2.0);
+    token.effects.overlay.scale.set(
+      token.effects.overlay.scale.x * 2.0,
+      token.effects.overlay.scale.y * 2.0
+    );
   }
 });
 
