@@ -1120,6 +1120,8 @@ export default class StarMercsCombat extends Combat {
               statuses: ["landed"]
             }]);
           }
+          // Remove airborne status on emergency landing
+          await actor.toggleStatusEffect("airborne", { active: false });
           sections.push(`<div class="consolidation-section supply">
             <div class="consolidation-section-header"><i class="fas fa-exclamation-triangle"></i> Emergency Landing — No Fuel!</div>
             <div class="status-update">Unit has been forced to land. Cannot take off until refueled.</div>

@@ -55,18 +55,26 @@ Hooks.once("init", () => {
   CONFIG.STARMERCS = STARMERCS;
 
   // --- Register Custom Status Effects ---
-  CONFIG.statusEffects.push(
-    { id: "fired",      name: "Fired",      img: "icons/svg/explosion.svg" },
-    { id: "breaking",   name: "Breaking",   img: "icons/svg/skull.svg" },
-    { id: "engaged",    name: "Engaged",    img: "icons/svg/sword.svg" },
-    { id: "entrenched", name: "Entrenched", img: "icons/svg/shield.svg" },
-    { id: "fortified",  name: "Fortified",  img: "icons/svg/castle.svg" },
-    { id: "landed",     name: "Landed",     img: "icons/svg/downgrade.svg" },
-    { id: "meteoric-assault", name: "Meteoric Assault", img: "icons/svg/fire.svg" },
-    { id: "air-drop",         name: "Air Drop",         img: "icons/svg/wing.svg" },
-    { id: "air-assault",      name: "Air Assault",      img: "icons/svg/combat.svg" },
-    { id: "aboard-transport", name: "Aboard Transport", img: "icons/svg/chest.svg" }
-  );
+  // Keep only the Foundry "dead" effect; remove all other defaults.
+  const deadEffect = CONFIG.statusEffects.find(e => e.id === "dead");
+  CONFIG.statusEffects = [
+    ...(deadEffect ? [deadEffect] : []),
+    { id: "fired",             name: "Fired",             img: "icons/svg/explosion.svg" },
+    { id: "breaking",          name: "Breaking",          img: "icons/svg/skull.svg" },
+    { id: "engaged",           name: "Engaged",           img: "icons/svg/sword.svg" },
+    { id: "entrenched",        name: "Entrenched",        img: "icons/svg/shield.svg" },
+    { id: "fortified",         name: "Fortified",         img: "icons/svg/castle.svg" },
+    { id: "landed",            name: "Landed",            img: "icons/svg/downgrade.svg" },
+    { id: "airborne",          name: "Airborne",          img: "icons/svg/upgrade.svg" },
+    { id: "low-ammo",          name: "Low Ammo",          img: "icons/svg/daze.svg" },
+    { id: "low-energy",        name: "Low Energy",        img: "icons/svg/lightning.svg" },
+    { id: "low-fuel",          name: "Low Fuel",          img: "icons/svg/hazard.svg" },
+    { id: "low-supplies",      name: "Low Supplies",      img: "icons/svg/tankard.svg" },
+    { id: "meteoric-assault",  name: "Meteoric Assault",  img: "icons/svg/fire.svg" },
+    { id: "air-drop",          name: "Air Drop",          img: "icons/svg/wing.svg" },
+    { id: "air-assault",       name: "Air Assault",       img: "icons/svg/combat.svg" },
+    { id: "aboard-transport",  name: "Aboard Transport",  img: "icons/svg/chest.svg" }
+  ];
 
   // --- Register Document Classes ---
   CONFIG.Actor.documentClass = documents.StarMercsActor;
@@ -758,6 +766,60 @@ Hooks.on("updateToken", (tokenDoc, changes, options) => {
   }
 });
 
+/* ============================================ */
+/*  Supply Status Effect Sync                   */
+/* ============================================ */
+
+/**
+ * Toggle a status effect on an actor if its current state doesn't match desired.
+ * @param {Actor} actor
+ * @param {string} effectId
+ * @param {boolean} shouldBeActive
+ */
+function _syncEffect(actor, effectId, shouldBeActive) {
+  const token = actor.getActiveTokens()?.[0]?.document;
+  if (!token) return;
+  const hasEffect = token.hasStatusEffect(effectId);
+  if (shouldBeActive && !hasEffect) {
+    actor.toggleStatusEffect(effectId, { active: true });
+  } else if (!shouldBeActive && hasEffect) {
+    actor.toggleStatusEffect(effectId, { active: false });
+  }
+}
+
+/**
+ * Sync low-supply status effects based on current supply levels.
+ * Each effect activates when supply falls below 50% capacity.
+ * @param {Actor} actor
+ */
+function syncSupplyStatusEffects(actor) {
+  if (!actor || actor.type !== "unit") return;
+  const supply = actor.system.supply;
+  if (!supply) return;
+
+  // Low Ammo: projectile OR ordnance below 50%
+  const projLow = supply.projectile.capacity > 0 &&
+    (supply.projectile.current / supply.projectile.capacity) < 0.5;
+  const ordLow = supply.ordnance.capacity > 0 &&
+    (supply.ordnance.current / supply.ordnance.capacity) < 0.5;
+  _syncEffect(actor, "low-ammo", projLow || ordLow);
+
+  // Low Energy: energy below 50%
+  const energyLow = supply.energy.capacity > 0 &&
+    (supply.energy.current / supply.energy.capacity) < 0.5;
+  _syncEffect(actor, "low-energy", energyLow);
+
+  // Low Fuel: fuel below 50%
+  const fuelLow = supply.fuel.capacity > 0 &&
+    (supply.fuel.current / supply.fuel.capacity) < 0.5;
+  _syncEffect(actor, "low-fuel", fuelLow);
+
+  // Low Supplies: basicSupplies below 50%
+  const suppliesLow = supply.basicSupplies.capacity > 0 &&
+    (supply.basicSupplies.current / supply.basicSupplies.capacity) < 0.5;
+  _syncEffect(actor, "low-supplies", suppliesLow);
+}
+
 /** Refresh engagement status effects on all tokens after any movement. */
 Hooks.on("updateToken", (tokenDoc, changes) => {
   if (!("x" in changes) && !("y" in changes)) return;
@@ -872,6 +934,8 @@ Hooks.on("createItem", async (item) => {
       const hexElev = token ? hexUtils.getHexElevation(hexUtils.snapToHexCenter(token.center)) : 0;
       await actor.setFlag("star-mercs", "altitude", hexElev);
       await actor.setFlag("star-mercs", "landed", false);
+      // Newly created flyers start airborne
+      await actor.toggleStatusEffect("airborne", { active: true });
     }
   }
 });
@@ -888,6 +952,7 @@ Hooks.on("deleteItem", async (item) => {
       try { await actor.unsetFlag("star-mercs", "altitude"); } catch (e) { /* flag may not exist */ }
       try { await actor.unsetFlag("star-mercs", "landed"); } catch (e) { /* flag may not exist */ }
       await actor.toggleStatusEffect("landed", { active: false });
+      await actor.toggleStatusEffect("airborne", { active: false });
     }
   }
 });
@@ -1227,6 +1292,16 @@ Hooks.once("ready", () => {
   game.starmercs.syncActorOwnership = syncActorOwnership;
   game.starmercs.syncAllOwnership = syncAllOwnership;
   game.starmercs.detection = detection;
+
+  // Sync supply and airborne status effects for all existing units on world load
+  for (const actor of game.actors) {
+    if (actor.type !== "unit") continue;
+    syncSupplyStatusEffects(actor);
+    if (actor.hasTrait("Flying")) {
+      const shouldBeAirborne = !actor.getFlag("star-mercs", "landed");
+      _syncEffect(actor, "airborne", shouldBeAirborne);
+    }
+  }
 });
 
 /** Sync ownership when a unit's team changes. */
@@ -1238,12 +1313,42 @@ Hooks.on("updateActor", (actor, changes) => {
   if (foundry.utils.hasProperty(changes, "flags.star-mercs")) {
     game.starmercs?.altitudeOverlayLayer?.drawAltitudeLabels();
   }
+  // Sync supply status effects when supply values change
+  if (foundry.utils.hasProperty(changes, "system.supply")) {
+    syncSupplyStatusEffects(actor);
+  }
+  // Apply "Dead" overlay when a unit is destroyed (strength reaches 0)
+  if (foundry.utils.hasProperty(changes, "system.strength")) {
+    if (actor.system.strength.value <= 0) {
+      const token = actor.getActiveTokens()?.[0]?.document;
+      if (token && !token.hasStatusEffect("dead")) {
+        actor.toggleStatusEffect("dead", { active: true, overlay: true });
+      }
+    }
+  }
 });
 
 /** Sync ownership when a new unit is created. */
 Hooks.on("createActor", (actor) => {
   if (actor.type === "unit") {
     syncActorOwnership(actor);
+  }
+});
+
+/* ============================================ */
+/*  Status Effect Icon Sizing                   */
+/* ============================================ */
+
+/** Half-size all status effect icons; double-size the Dead overlay. */
+Hooks.on("refreshToken", (token) => {
+  if (!token.effects?.children) return;
+  for (const sprite of token.effects.children) {
+    if (sprite === token.effects.overlay) continue;
+    if (sprite.scale) sprite.scale.set(0.5, 0.5);
+  }
+  // Double the Dead overlay icon size
+  if (token.effects.overlay?.scale) {
+    token.effects.overlay.scale.set(2.0, 2.0);
   }
 });
 
