@@ -116,14 +116,24 @@
           <span class="flight-badge landed">LANDED</span>
           <span class="flight-warning">Cannot fire weapons while landed</span>
         </div>
-        {{#if isPreparationPhase}}
-          {{#if isOwner}}
-            {{#if canTakeOff}}
-              <button type="button" class="flight-takeoff-btn">
-                <i class="fas fa-arrow-up"></i> Take Off
-              </button>
-            {{else}}
-              <span class="flight-note">No fuel — cannot take off</span>
+        {{#if isGM}}
+          {{#if canTakeOff}}
+            <button type="button" class="flight-takeoff-btn">
+              <i class="fas fa-arrow-up"></i> Take Off
+            </button>
+          {{else}}
+            <span class="flight-note">No fuel — cannot take off</span>
+          {{/if}}
+        {{else}}
+          {{#if isPreparationPhase}}
+            {{#if isOwner}}
+              {{#if canTakeOff}}
+                <button type="button" class="flight-takeoff-btn">
+                  <i class="fas fa-arrow-up"></i> Take Off
+                </button>
+              {{else}}
+                <span class="flight-note">No fuel — cannot take off</span>
+              {{/if}}
             {{/if}}
           {{/if}}
         {{/if}}
@@ -150,14 +160,24 @@
             <i class="fas fa-arrow-right"></i> Target ALT {{altitudeTargetValue}}
           </div>
         {{/if}}
-        {{#if isPreparationPhase}}
-          {{#if isOwner}}
-            {{#if canLandHere}}
-              <button type="button" class="flight-land-btn">
-                <i class="fas fa-arrow-down"></i> Land
-              </button>
-            {{else}}
-              <span class="flight-note">Must descend to terrain elevation ({{minAltitude}}) to land</span>
+        {{#if isGM}}
+          {{#if canLandHere}}
+            <button type="button" class="flight-land-btn">
+              <i class="fas fa-arrow-down"></i> Land
+            </button>
+          {{else}}
+            <span class="flight-note">Must descend to terrain elevation ({{minAltitude}}) to land</span>
+          {{/if}}
+        {{else}}
+          {{#if isPreparationPhase}}
+            {{#if isOwner}}
+              {{#if canLandHere}}
+                <button type="button" class="flight-land-btn">
+                  <i class="fas fa-arrow-down"></i> Land
+                </button>
+              {{else}}
+                <span class="flight-note">Must descend to terrain elevation ({{minAltitude}}) to land</span>
+              {{/if}}
             {{/if}}
           {{/if}}
         {{/if}}

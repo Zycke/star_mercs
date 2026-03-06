@@ -60,7 +60,7 @@ export default class ReferenceTables extends HandlebarsApplicationMixin(Applicat
       { name: "Deploy", type: "Passive", value: "", description: "Must spend 1 turn deploying before using weapons, abilities, or traits. Must pack up before moving." },
       { name: "Engineer", type: "Passive", value: "", description: "Can use the Construct and Demolish special orders." },
       { name: "Entrenched", type: "Conditional", value: "", description: "Unit is in defensive positions. Incoming damage reduced by 1 (min 1). Infantry auto-gain in urban terrain." },
-      { name: "Flying[X]", type: "Passive", value: "X", description: "Unit flies with speed X. Airborne units can only be hit by Anti-Air weapons. Must move at least half speed each turn." },
+      { name: "Flying", type: "Passive", value: "", description: "Unit can fly. Airborne units can only be targeted by Anti-Air weapons. Uses the unit's MP for flying movement." },
       { name: "Fortified", type: "Conditional", value: "", description: "Built by an Engineer. Incoming damage reduced by 2 (min 1)." },
       { name: "Heavy", type: "Passive", value: "", description: "Soft attacks can only hit on a natural 10." },
       { name: "Hover", type: "Passive", value: "", description: "Moves across any terrain including water. Terrain movement costs reduced by 1 (min 1). Can be hit by any weapon type." },

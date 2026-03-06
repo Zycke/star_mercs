@@ -1166,7 +1166,7 @@ export default class StarMercsUnitSheet extends ActorSheet {
       return;
     }
 
-    const flySpeed = this.actor.getTraitValue("Flying") || (this.actor.system.movement ?? 4);
+    const flySpeed = this.actor.system.movement ?? 4;
     const team = this.actor.system.team ?? "a";
     const validTargets = [];
 
@@ -1247,7 +1247,7 @@ export default class StarMercsUnitSheet extends ActorSheet {
       return;
     }
 
-    const flySpeed = this.actor.getTraitValue("Flying") || (this.actor.system.movement ?? 4);
+    const flySpeed = this.actor.system.movement ?? 4;
     const actor = this.actor;
 
     // For Hot Disembark, allow player to type/pick any hex within flying range.
