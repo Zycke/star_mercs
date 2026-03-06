@@ -143,6 +143,8 @@ export default class StarMercsActor extends Actor {
         }]);
       }
     }
+    // Remove "airborne" status effect
+    await this.toggleStatusEffect("airborne", { active: false });
   }
 
   /**
@@ -179,6 +181,8 @@ export default class StarMercsActor extends Actor {
     // Remove "landed" status effect
     const effect = this.effects.find(e => e.statuses?.has("landed"));
     if (effect) await effect.delete();
+    // Apply "airborne" status effect
+    await this.toggleStatusEffect("airborne", { active: true });
   }
 
   /**
