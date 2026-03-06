@@ -54,6 +54,10 @@ export function checkLOS(fromCenter, toCenter, fromToken = null, toToken = null)
   const toElev = toToken ? getEffectiveElevation(toToken) : getHexElevation(to);
   const maxEndpointElev = Math.max(fromElev, toElev);
 
+  // Max sight distance based on observer's effective elevation
+  const maxSight = CONFIG.STARMERCS.maxSightDistance?.[fromElev] ?? 160;
+  if (path.length > maxSight) return false;
+
   // Check intermediate hexes (exclude final destination).
   // path excludes start already; the last element IS the destination.
   let blocked = false;
