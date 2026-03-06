@@ -132,35 +132,18 @@ export function getActiveSignature(token) {
 
   const modifiers = [];
   let totalMod = 0;
-  const hexCenter = snapToHexCenter(token.center);
-  const terrainType = getHexTerrain(hexCenter);
-  const terrainLabel = CONFIG.STARMERCS?.terrainTypes?.[terrainType] ?? terrainType;
 
-  // Infantry terrain signature modifiers
-  if (actor.hasTrait("Infantry") && terrainType) {
-    let mod = 0;
-    switch (terrainType) {
-      case "forest": case "hill": case "swamp": mod = -1; break;
-      case "mountain": case "urbanLight": mod = -2; break;
-      case "urbanDense": mod = -3; break;
-    }
-    if (mod !== 0) {
-      totalMod += mod;
-      modifiers.push({ label: `Infantry in ${terrainLabel}`, value: mod });
-    }
-  }
-
-  // Vehicle terrain signature modifiers
-  if (actor.hasTrait("Vehicle") && terrainType) {
-    let mod = 0;
-    switch (terrainType) {
-      case "urbanLight": mod = -1; break;
-      case "urbanDense": mod = -2; break;
-    }
-    if (mod !== 0) {
-      totalMod += mod;
-      modifiers.push({ label: `Vehicle in ${terrainLabel}`, value: mod });
-    }
+  // Terrain concealment from status effects (synced on hex entry)
+  const doc = token.document;
+  if (doc?.hasStatusEffect("heavy-concealment")) {
+    totalMod += -3;
+    modifiers.push({ label: "Heavy Concealment", value: -3 });
+  } else if (doc?.hasStatusEffect("moderate-concealment")) {
+    totalMod += -2;
+    modifiers.push({ label: "Moderate Concealment", value: -2 });
+  } else if (doc?.hasStatusEffect("light-concealment")) {
+    totalMod += -1;
+    modifiers.push({ label: "Light Concealment", value: -1 });
   }
 
   // Deploy signature bonus (special deployment)
@@ -192,35 +175,15 @@ export function getTerrainCoverMod(targetToken) {
   // Airborne flying units get no terrain cover (exposed in the sky)
   if (isAirborne(targetToken)) return { mod: 0, modifiers: [] };
 
-  const hexCenter = snapToHexCenter(targetToken.center);
-  const terrainType = getHexTerrain(hexCenter);
-  const terrainLabel = CONFIG.STARMERCS?.terrainTypes?.[terrainType] ?? terrainType;
-  const modifiers = [];
-  let mod = 0;
-
-  if (actor.hasTrait("Infantry") && terrainType) {
-    switch (terrainType) {
-      case "forest": case "hill": case "swamp": case "mountain": case "urbanLight":
-        mod += 1;
-        modifiers.push({ label: `Infantry cover (${terrainLabel})`, value: 1 });
-        break;
-      case "urbanDense":
-        mod += 2;
-        modifiers.push({ label: `Infantry cover (${terrainLabel})`, value: 2 });
-        break;
-    }
+  // Read cover from status effects (synced on hex entry)
+  const doc = targetToken.document;
+  if (doc?.hasStatusEffect("heavy-cover")) {
+    return { mod: 2, modifiers: [{ label: "Heavy Cover", value: 2 }] };
   }
-
-  if (actor.hasTrait("Vehicle") && terrainType) {
-    switch (terrainType) {
-      case "urbanDense":
-        mod += 1;
-        modifiers.push({ label: `Vehicle cover (${terrainLabel})`, value: 1 });
-        break;
-    }
+  if (doc?.hasStatusEffect("cover")) {
+    return { mod: 1, modifiers: [{ label: "Cover", value: 1 }] };
   }
-
-  return { mod, modifiers };
+  return { mod: 0, modifiers: [] };
 }
 
 /**

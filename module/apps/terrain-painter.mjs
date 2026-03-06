@@ -72,6 +72,8 @@ export default class TerrainPainter extends FormApplication {
     terrainChoices["bridge"] = "Bridge (Water Only)";
     terrainChoices["removeBridge"] = "Remove Bridge";
     terrainChoices["removeObjective"] = "Remove Objective";
+    terrainChoices["objectiveOnly"] = "Objective Only";
+    terrainChoices["elevationOnly"] = "Elevation Only";
 
     return {
       terrainChoices,
@@ -362,6 +364,26 @@ export default class TerrainPainter extends FormApplication {
           const normalized = (typeof existing === "string")
             ? { type: existing, elevation: 0, objective: null }
             : { ...existing, objective: null };
+          this._pendingTerrainMap[key] = normalized;
+        }
+      } else if (this._selectedTerrain === "objectiveOnly") {
+        // Objective Only brush: set objective without changing terrain type/elevation/road
+        const existing = this._pendingTerrainMap[key];
+        if (existing) {
+          const objValue = (this._selectedObjective && this._selectedObjective !== "none")
+            ? this._selectedObjective : null;
+          const normalized = (typeof existing === "string")
+            ? { type: existing, elevation: 0, road: false, bridge: false, objective: objValue }
+            : { ...existing, objective: objValue };
+          this._pendingTerrainMap[key] = normalized;
+        }
+      } else if (this._selectedTerrain === "elevationOnly") {
+        // Elevation Only brush: change elevation without affecting terrain type or other properties
+        const existing = this._pendingTerrainMap[key];
+        if (existing) {
+          const normalized = (typeof existing === "string")
+            ? { type: existing, elevation: this._selectedElevation, road: false, bridge: false }
+            : { ...existing, elevation: this._selectedElevation };
           this._pendingTerrainMap[key] = normalized;
         }
       } else {
