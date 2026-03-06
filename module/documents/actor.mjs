@@ -1,6 +1,6 @@
 import { resolveAttack, validateAttack, calculateAccuracy, determineHitResult, calculateDamage, HIT_LABELS } from "../combat.mjs";
 import { skillCheck } from "../dice.mjs";
-import { computeBestDetectionLevel } from "../detection.mjs";
+import { computeBestDetectionLevel, checkLOS } from "../detection.mjs";
 import FiringBlipLayer from "../canvas/firing-blip-layer.mjs";
 import { esc } from "../helpers.mjs";
 
@@ -556,6 +556,31 @@ export default class StarMercsActor extends Actor {
       }
     }
 
+    // LOS check at fire time
+    if (attackerToken && targetToken) {
+      const hasDirectLOS = checkLOS(attackerToken.center, targetToken.center, attackerToken, targetToken);
+      if (!hasDirectLOS) {
+        if (weapon.system.indirect) {
+          const manager = game.starmercs?.commsLinkManager;
+          const canSeeViaChain = manager?.canSeeViaChainTerrain(attackerToken.id, targetToken.id) ?? false;
+          if (!canSeeViaChain) {
+            ui.notifications.warn(`${weapon.name} — no spotter in comms chain has LOS to target.`);
+            return null;
+          }
+        } else if (weapon.system.aircraft) {
+          const manager = game.starmercs?.commsLinkManager;
+          const canSeeForAirstrike = manager?.canSeeForAirstrikeTerrain(attackerToken.id, targetToken.id) ?? false;
+          if (!canSeeForAirstrike) {
+            ui.notifications.warn(`${weapon.name} — no spotter or Satellite Uplink in comms chain.`);
+            return null;
+          }
+        } else {
+          ui.notifications.warn(`${weapon.name} — no Line of Sight to target.`);
+          return null;
+        }
+      }
+    }
+
     const result = await resolveAttack(weapon, this, target);
     const attackTypeLabels = { soft: "Soft", hard: "Hard", antiAir: "Anti-Air", aps: "APS", zps: "ZPS" };
 
@@ -923,6 +948,32 @@ export default class StarMercsActor extends Actor {
                 + ` (${item.name})`
               );
               continue;
+            }
+          }
+          // LOS check at fire time
+          if (attackerToken) {
+            const hasDirectLOS = checkLOS(attackerToken.center, targetToken.center, attackerToken, targetToken);
+            if (!hasDirectLOS) {
+              if (item.system.indirect) {
+                // Indirect weapons can fire via comms chain spotter
+                const manager = game.starmercs?.commsLinkManager;
+                const canSeeViaChain = manager?.canSeeViaChainTerrain(attackerToken.id, targetToken.id) ?? false;
+                if (!canSeeViaChain) {
+                  ui.notifications.warn(`${item.name} — no spotter in comms chain has LOS to target.`);
+                  continue;
+                }
+              } else if (item.system.aircraft) {
+                // Aircraft weapons can fire via chain or satellite uplink
+                const manager = game.starmercs?.commsLinkManager;
+                const canSeeForAirstrike = manager?.canSeeForAirstrikeTerrain(attackerToken.id, targetToken.id) ?? false;
+                if (!canSeeForAirstrike) {
+                  ui.notifications.warn(`${item.name} — no spotter or Satellite Uplink in comms chain.`);
+                  continue;
+                }
+              } else {
+                ui.notifications.warn(`${item.name} — no Line of Sight to target.`);
+                continue;
+              }
             }
           }
           targetedWeapons.push({ weapon: item, target: targetToken.actor, targetToken });

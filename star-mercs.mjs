@@ -531,6 +531,7 @@ Hooks.on("canvasReady", () => {
   }
   const altitudeOverlayLayer = new AltitudeOverlayLayer();
   game.starmercs.altitudeOverlayLayer = altitudeOverlayLayer;
+  canvas.interface.sortableChildren = true;
   canvas.interface.addChild(altitudeOverlayLayer);
   altitudeOverlayLayer.drawAltitudeLabels();
 
@@ -1340,6 +1341,52 @@ Hooks.on("refreshToken", (token) => {
       child.position.x = child._smOrigX + xOffset;
     }
   }
+});
+
+/* ============================================ */
+/*  Token HUD Buttons                          */
+/* ============================================ */
+
+/** Add sensor ring and LOS highlight toggle buttons to the token HUD left column. */
+Hooks.on("renderTokenHUD", (app, html, data) => {
+  const token = app.object;
+  if (!token?.actor || token.actor.type !== "unit") return;
+  if (!token.actor.isOwner) return;
+
+  const col = html.querySelector(".col.left");
+  if (!col) return;
+
+  // Sensor Ring toggle
+  const ringActive = game.settings.get("star-mercs", "showDetectionRing");
+  const ringBtn = document.createElement("div");
+  ringBtn.classList.add("control-icon");
+  if (ringActive) ringBtn.classList.add("active");
+  ringBtn.dataset.action = "sensor-ring";
+  ringBtn.title = "Toggle Sensor Ring";
+  ringBtn.innerHTML = '<i class="fas fa-satellite-dish"></i>';
+  ringBtn.addEventListener("click", (ev) => {
+    ev.preventDefault();
+    const newVal = !game.settings.get("star-mercs", "showDetectionRing");
+    game.settings.set("star-mercs", "showDetectionRing", newVal);
+    ringBtn.classList.toggle("active", newVal);
+  });
+  col.appendChild(ringBtn);
+
+  // LOS Highlight toggle
+  const losActive = game.settings.get("star-mercs", "showLOSHighlight");
+  const losBtn = document.createElement("div");
+  losBtn.classList.add("control-icon");
+  if (losActive) losBtn.classList.add("active");
+  losBtn.dataset.action = "los-highlight";
+  losBtn.title = "Toggle LOS Highlight";
+  losBtn.innerHTML = '<i class="fas fa-eye"></i>';
+  losBtn.addEventListener("click", (ev) => {
+    ev.preventDefault();
+    const newVal = !game.settings.get("star-mercs", "showLOSHighlight");
+    game.settings.set("star-mercs", "showLOSHighlight", newVal);
+    losBtn.classList.toggle("active", newVal);
+  });
+  col.appendChild(losBtn);
 });
 
 /* ============================================ */
