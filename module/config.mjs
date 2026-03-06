@@ -448,6 +448,19 @@ STARMERCS.terrain = {
   }
 };
 
+/**
+ * Max sight distance (in hexes) based on observer's effective elevation.
+ * Flying units use their altitude. LOS can never exceed this range.
+ */
+STARMERCS.maxSightDistance = {
+  0: 5,
+  1: 10,
+  2: 20,
+  3: 40,
+  4: 80,
+  5: 160
+};
+
 /* ============================================ */
 /*  Constructable Structures                   */
 /* ============================================ */

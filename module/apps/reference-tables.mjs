@@ -40,12 +40,16 @@ export default class ReferenceTables extends HandlebarsApplicationMixin(Applicat
     const unitTraits = this._buildUnitTraits();
     const weaponTraits = this._buildWeaponTraits();
     const orders = this._buildOrders();
+    const terrainTypes = this._buildTerrain();
+    const sightTable = this._buildSightTable();
 
     return {
       activeTab: this._activeTab,
       unitTraits,
       weaponTraits,
-      orders
+      orders,
+      terrainTypes,
+      sightTable
     };
   }
 
@@ -102,6 +106,30 @@ export default class ReferenceTables extends HandlebarsApplicationMixin(Applicat
       supply: o.supplyModifier ?? "1x",
       requiredTrait: o.requiredTrait ?? "—",
       description: o.description
+    }));
+  }
+
+  _buildTerrain() {
+    const terrain = CONFIG.STARMERCS.terrain;
+    return Object.entries(terrain).map(([key, t]) => ({
+      key,
+      label: t.label,
+      movementCost: t.movementCost,
+      signatureMod: t.signatureMod !== 0 ? `${t.signatureMod > 0 ? "+" : ""}${t.signatureMod}` : "0",
+      infantryCover: t.infantryCover ? "Cover" : (t.infantryHeavyCover ? "Heavy" : "—"),
+      maxFireRange: t.maxFireRange !== null ? `${t.maxFireRange}` : "—",
+      blocksLOS: t.blocksLOS ? "Yes" : "No",
+      waterTerrain: t.waterTerrain ? "Yes" : "No",
+      impassableVehicle: t.impassableVehicle ? "Yes" : "No",
+      noFortification: t.noFortification ? "Yes" : "No"
+    }));
+  }
+
+  _buildSightTable() {
+    const table = CONFIG.STARMERCS.maxSightDistance;
+    return Object.entries(table).map(([elev, dist]) => ({
+      elevation: elev,
+      maxSight: dist
     }));
   }
 

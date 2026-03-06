@@ -5,6 +5,7 @@
     <button class="ref-tab-btn {{#if (eq activeTab 'unit-traits')}}active{{/if}}" data-tab="unit-traits">Unit Traits</button>
     <button class="ref-tab-btn {{#if (eq activeTab 'weapon-traits')}}active{{/if}}" data-tab="weapon-traits">Weapon Traits</button>
     <button class="ref-tab-btn {{#if (eq activeTab 'orders')}}active{{/if}}" data-tab="orders">Orders</button>
+    <button class="ref-tab-btn {{#if (eq activeTab 'terrain')}}active{{/if}}" data-tab="terrain">Terrain</button>
   </nav>
 
   {{!-- Unit Traits Table --}}
@@ -78,6 +79,62 @@
           <td class="col-flag">{{readiness}}</td>
           <td class="col-flag">{{supply}}</td>
           <td class="col-desc">{{description}}</td>
+        </tr>
+        {{/each}}
+      </tbody>
+    </table>
+  </div>
+  {{/if}}
+
+  {{!-- Terrain Table --}}
+  {{#if (eq activeTab "terrain")}}
+  <div class="ref-table-wrapper">
+    <h3>Terrain Types</h3>
+    <table class="ref-table terrain-table">
+      <thead>
+        <tr>
+          <th class="col-name">Terrain</th>
+          <th class="col-flag">Move</th>
+          <th class="col-flag">Sig Mod</th>
+          <th class="col-flag">Inf. Cover</th>
+          <th class="col-flag">Max Fire</th>
+          <th class="col-flag">Blocks LOS</th>
+          <th class="col-flag">Water</th>
+          <th class="col-flag">Veh. Impass.</th>
+          <th class="col-flag">No Fort.</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{#each terrainTypes}}
+        <tr>
+          <td class="col-name"><strong>{{label}}</strong></td>
+          <td class="col-flag">{{movementCost}}</td>
+          <td class="col-flag">{{signatureMod}}</td>
+          <td class="col-flag">{{infantryCover}}</td>
+          <td class="col-flag">{{maxFireRange}}</td>
+          <td class="col-flag">{{blocksLOS}}</td>
+          <td class="col-flag">{{waterTerrain}}</td>
+          <td class="col-flag">{{impassableVehicle}}</td>
+          <td class="col-flag">{{noFortification}}</td>
+        </tr>
+        {{/each}}
+      </tbody>
+    </table>
+
+    <h3 style="margin-top: 1em;">Max Sight Distance by Elevation</h3>
+    <p class="hint">LOS range cannot exceed this value regardless of terrain. Flying units use their altitude.</p>
+    <table class="ref-table sight-table">
+      <thead>
+        <tr>
+          <th class="col-flag">Elevation</th>
+          <th class="col-flag">Max Sight (hexes)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{#each sightTable}}
+        <tr>
+          <td class="col-flag">{{elevation}}</td>
+          <td class="col-flag">{{maxSight}}</td>
         </tr>
         {{/each}}
       </tbody>
