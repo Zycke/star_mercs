@@ -130,7 +130,19 @@
       {{else}}
         <div class="flight-status-row">
           <span class="flight-badge airborne">AIRBORNE</span>
-          <span class="altitude-display">ALT {{currentAltitude}}</span>
+          {{#if isGM}}
+            <div class="altitude-controls inline">
+              <button type="button" class="altitude-down-btn" {{#unless canDescend}}disabled{{/unless}}>
+                <i class="fas fa-chevron-down"></i>
+              </button>
+              <span class="altitude-display">ALT {{currentAltitude}}</span>
+              <button type="button" class="altitude-up-btn" {{#unless canClimb}}disabled{{/unless}}>
+                <i class="fas fa-chevron-up"></i>
+              </button>
+            </div>
+          {{else}}
+            <span class="altitude-display">ALT {{currentAltitude}}</span>
+          {{/if}}
           <span class="altitude-range">(terrain {{minAltitude}}, max {{maxAltitude}})</span>
         </div>
         {{#if altitudeTargetSet}}
@@ -289,22 +301,6 @@
         {{/each}}
       </select>
     </div>
-    {{#if isFlying}}
-      {{#unless isLanded}}
-        <div class="gm-override-row gm-altitude-row">
-          <label>Altitude Override</label>
-          <div class="altitude-controls">
-            <button type="button" class="altitude-down-btn" {{#unless canDescend}}disabled{{/unless}}>
-              <i class="fas fa-chevron-down"></i>
-            </button>
-            <span class="altitude-value">ALT {{currentAltitude}}</span>
-            <button type="button" class="altitude-up-btn" {{#unless canClimb}}disabled{{/unless}}>
-              <i class="fas fa-chevron-up"></i>
-            </button>
-          </div>
-        </div>
-      {{/unless}}
-    {{/if}}
   </div>
   {{/if}}
 

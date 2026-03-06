@@ -8,6 +8,8 @@ export default class AltitudeOverlayLayer extends PIXI.Container {
     super();
     /** @type {Map<string, PIXI.Text>} Token ID → PIXI.Text */
     this._labels = new Map();
+    // Ensure altitude labels render above tokens
+    this.zIndex = 1000;
   }
 
   /**

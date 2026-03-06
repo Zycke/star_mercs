@@ -2163,6 +2163,18 @@ select:focus,
   margin-top: 4px;
 }
 
+.altitude-controls.inline {
+  display: inline-flex;
+  margin-top: 0;
+  gap: 3px;
+}
+
+.altitude-controls.inline button {
+  width: 22px;
+  height: 22px;
+  font-size: 10px;
+}
+
 .altitude-controls button {
   width: 28px;
   height: 28px;
