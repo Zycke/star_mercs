@@ -117,7 +117,6 @@ export default class ReferenceTables extends HandlebarsApplicationMixin(Applicat
       movementCost: t.movementCost,
       signatureMod: t.signatureMod !== 0 ? `${t.signatureMod > 0 ? "+" : ""}${t.signatureMod}` : "0",
       infantryCover: t.infantryCover ? "Cover" : (t.infantryHeavyCover ? "Heavy" : "—"),
-      maxFireRange: t.maxFireRange !== null ? `${t.maxFireRange}` : "—",
       blocksLOS: t.blocksLOS ? "Yes" : "No",
       waterTerrain: t.waterTerrain ? "Yes" : "No",
       impassableVehicle: t.impassableVehicle ? "Yes" : "No",
