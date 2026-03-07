@@ -324,21 +324,22 @@ export function findBestAdjacentHex(targetToken, attackerToken) {
  * Handles both the legacy string format ("forest") and new object format
  * ({type: "forest", elevation: 0, road: false}).
  * @param {string|object} entry - Raw terrainMap value.
- * @returns {{type: string, elevation: number, road: boolean}}
+ * @returns {{type: string, elevation: number, road: boolean, bridge: boolean, objective: string|null}}
  */
 export function normalizeHexData(entry) {
   if (typeof entry === "string") {
-    return { type: entry, elevation: 0, road: false, objective: null };
+    return { type: entry, elevation: 0, road: false, bridge: false, objective: null };
   }
   if (entry && typeof entry === "object") {
     return {
       type: entry.type ?? "plain",
       elevation: entry.elevation ?? 0,
       road: entry.road ?? false,
+      bridge: entry.bridge ?? false,
       objective: entry.objective ?? null
     };
   }
-  return { type: "plain", elevation: 0, road: false, objective: null };
+  return { type: "plain", elevation: 0, road: false, bridge: false, objective: null };
 }
 
 /**

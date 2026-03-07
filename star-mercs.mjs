@@ -73,7 +73,12 @@ Hooks.once("init", () => {
     { id: "meteoric-assault",  name: "Meteoric Assault",  img: "icons/svg/fire.svg" },
     { id: "air-drop",          name: "Air Drop",          img: "icons/svg/wing.svg" },
     { id: "air-assault",       name: "Air Assault",       img: "icons/svg/combat.svg" },
-    { id: "aboard-transport",  name: "Aboard Transport",  img: "icons/svg/chest.svg" }
+    { id: "aboard-transport",  name: "Aboard Transport",  img: "icons/svg/chest.svg" },
+    { id: "cover",                 name: "Cover",                 img: "icons/svg/shield.svg" },
+    { id: "heavy-cover",           name: "Heavy Cover",           img: "icons/svg/shield.svg" },
+    { id: "light-concealment",     name: "Light Concealment",     img: "icons/svg/mystery-man.svg" },
+    { id: "moderate-concealment",  name: "Moderate Concealment",  img: "icons/svg/mystery-man.svg" },
+    { id: "heavy-concealment",     name: "Heavy Concealment",     img: "icons/svg/mystery-man.svg" }
   ];
 
   // --- Register Document Classes ---
@@ -762,6 +767,10 @@ Hooks.on("updateToken", (tokenDoc, changes, options) => {
           }
         }
       }
+
+      // Sync terrain cover and concealment status effects
+      syncTerrainCoverEffects(actor);
+      syncTerrainConcealmentEffects(actor);
     }
   }
 });
@@ -818,6 +827,89 @@ function syncSupplyStatusEffects(actor) {
   const suppliesLow = supply.basicSupplies.capacity > 0 &&
     (supply.basicSupplies.current / supply.basicSupplies.capacity) < 0.5;
   _syncEffect(actor, "low-supplies", suppliesLow);
+}
+
+/**
+ * Sync terrain cover status effects based on the unit's current hex.
+ * Cover (+1 to hit) or Heavy Cover (+2 to hit), mutually exclusive.
+ * @param {Actor} actor
+ */
+function syncTerrainCoverEffects(actor) {
+  if (!actor || actor.type !== "unit") return;
+  const token = actor.getActiveTokens()?.[0];
+  if (!token) return;
+
+  // Airborne units get no terrain cover
+  if (hexUtils.isAirborne(token)) {
+    _syncEffect(actor, "cover", false);
+    _syncEffect(actor, "heavy-cover", false);
+    return;
+  }
+
+  const hexCenter = hexUtils.snapToHexCenter(token.center);
+  const terrainType = hexUtils.getHexTerrain(hexCenter);
+  let coverLevel = 0; // 0 = none, 1 = cover, 2 = heavy cover
+
+  if (actor.hasTrait("Infantry") && terrainType) {
+    switch (terrainType) {
+      case "forest": case "hill": case "swamp": case "mountain": case "urbanLight":
+        coverLevel = 1; break;
+      case "urbanDense":
+        coverLevel = 2; break;
+    }
+  }
+  if (actor.hasTrait("Vehicle") && terrainType) {
+    switch (terrainType) {
+      case "urbanDense":
+        if (coverLevel < 1) coverLevel = 1; break;
+    }
+  }
+
+  _syncEffect(actor, "cover", coverLevel === 1);
+  _syncEffect(actor, "heavy-cover", coverLevel === 2);
+}
+
+/**
+ * Sync terrain concealment status effects based on the unit's current hex.
+ * Light (-1 sig), Moderate (-2 sig), or Heavy Concealment (-3 sig), mutually exclusive.
+ * @param {Actor} actor
+ */
+function syncTerrainConcealmentEffects(actor) {
+  if (!actor || actor.type !== "unit") return;
+  const token = actor.getActiveTokens()?.[0];
+  if (!token) return;
+
+  // Airborne units get no terrain concealment
+  if (hexUtils.isAirborne(token)) {
+    _syncEffect(actor, "light-concealment", false);
+    _syncEffect(actor, "moderate-concealment", false);
+    _syncEffect(actor, "heavy-concealment", false);
+    return;
+  }
+
+  const hexCenter = hexUtils.snapToHexCenter(token.center);
+  const terrainType = hexUtils.getHexTerrain(hexCenter);
+  let concealLevel = 0; // 0 = none, 1 = light, 2 = moderate, 3 = heavy
+
+  if (actor.hasTrait("Infantry") && terrainType) {
+    switch (terrainType) {
+      case "forest": case "hill": case "swamp": concealLevel = 1; break;
+      case "mountain": case "urbanLight": concealLevel = 2; break;
+      case "urbanDense": concealLevel = 3; break;
+    }
+  }
+  if (actor.hasTrait("Vehicle") && terrainType) {
+    switch (terrainType) {
+      case "urbanLight":
+        if (concealLevel < 1) concealLevel = 1; break;
+      case "urbanDense":
+        if (concealLevel < 2) concealLevel = 2; break;
+    }
+  }
+
+  _syncEffect(actor, "light-concealment", concealLevel === 1);
+  _syncEffect(actor, "moderate-concealment", concealLevel === 2);
+  _syncEffect(actor, "heavy-concealment", concealLevel === 3);
 }
 
 /** Refresh engagement status effects on all tokens after any movement. */
@@ -1293,10 +1385,12 @@ Hooks.once("ready", () => {
   game.starmercs.syncAllOwnership = syncAllOwnership;
   game.starmercs.detection = detection;
 
-  // Sync supply and airborne status effects for all existing units on world load
+  // Sync status effects for all existing units on world load
   for (const actor of game.actors) {
     if (actor.type !== "unit") continue;
     syncSupplyStatusEffects(actor);
+    syncTerrainCoverEffects(actor);
+    syncTerrainConcealmentEffects(actor);
     if (actor.hasTrait("Flying")) {
       const shouldBeAirborne = !actor.getFlag("star-mercs", "landed");
       _syncEffect(actor, "airborne", shouldBeAirborne);
@@ -1344,11 +1438,16 @@ Hooks.on("refreshToken", (token) => {
   if (!token.effects?.children) return;
   for (const sprite of token.effects.children) {
     if (sprite === token.effects.overlay) continue;
-    if (sprite.scale) sprite.scale.set(0.5, 0.5);
+    if (sprite.scale) {
+      sprite.scale.set(sprite.scale.x * 0.5, sprite.scale.y * 0.5);
+    }
   }
   // Double the Dead overlay icon size
   if (token.effects.overlay?.scale) {
-    token.effects.overlay.scale.set(2.0, 2.0);
+    token.effects.overlay.scale.set(
+      token.effects.overlay.scale.x * 2.0,
+      token.effects.overlay.scale.y * 2.0
+    );
   }
 });
 
