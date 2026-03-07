@@ -231,11 +231,6 @@ export default class DeployPanel extends HandlebarsApplicationMixin(ApplicationV
     }
 
     const team = this._viewedTeam ?? "a";
-    if (actor.system.team !== team) {
-      ui.notifications.warn(`This actor belongs to ${actor.system.team === "a" ? "Team A" : "Team B"}, not the currently viewed team.`);
-      return;
-    }
-
     await this._addToPool(actor.id, team);
   }
 

@@ -43,7 +43,7 @@ export default class StructureLayer extends PIXI.Container {
   static BG_ALPHA = 0.7;
   static BORDER_WIDTH = 2;
   static ICON_FONT_SIZE = 14;
-  static LABEL_FONT_SIZE = 8;
+  static LABEL_FONT_SIZE = 10;
   static LABEL_OFFSET_Y = 18;
   static HEALTH_BAR_WIDTH = 24;
   static HEALTH_BAR_HEIGHT = 3;
@@ -208,12 +208,16 @@ export default class StructureLayer extends PIXI.Container {
 
     // Icon text (FontAwesome unicode approximation — use label initial as fallback)
     const iconChar = this._getIconChar(structure.type);
+    const iconFontSize = structure.type === "headquarters"
+      ? StructureLayer.ICON_FONT_SIZE - 4    // smaller to fit 3 chars
+      : StructureLayer.ICON_FONT_SIZE;
     const iconText = new PIXI.Text(iconChar, {
       fontFamily: "Font Awesome 6 Free, Font Awesome 5 Free, FontAwesome, sans-serif",
       fontWeight: "900",
-      fontSize: StructureLayer.ICON_FONT_SIZE,
+      fontSize: iconFontSize,
       fill: 0xFFFFFF,
-      align: "center"
+      align: "center",
+      resolution: 2
     });
     iconText.anchor.set(0.5, 0.5);
     group.addChild(iconText);
@@ -232,12 +236,13 @@ export default class StructureLayer extends PIXI.Container {
     if (labelStr.length > 14) labelStr = labelStr.slice(0, 13) + "\u2026";
 
     const label = new PIXI.Text(labelStr, {
-      fontFamily: "Roboto, Segoe UI, sans-serif",
+      fontFamily: "Signika",
       fontSize: StructureLayer.LABEL_FONT_SIZE,
       fill: 0xFFFFFF,
       stroke: 0x000000,
-      strokeThickness: 2,
-      align: "center"
+      strokeThickness: 3,
+      align: "center",
+      resolution: 2
     });
     label.anchor.set(0.5, 0);
     label.position.set(0, StructureLayer.LABEL_OFFSET_Y);
@@ -254,12 +259,13 @@ export default class StructureLayer extends PIXI.Container {
     // Team indicator — visible to all users
     const teamStr = structure.team === "none" ? "Neutral" : `Team ${(structure.team ?? "none").toUpperCase()}`;
     const teamLabel = new PIXI.Text(teamStr, {
-      fontFamily: "Roboto, Segoe UI, sans-serif",
-      fontSize: 8,
+      fontFamily: "Signika",
+      fontSize: 10,
       fill: teamColor,
       stroke: 0x000000,
-      strokeThickness: 2,
-      align: "center"
+      strokeThickness: 3,
+      align: "center",
+      resolution: 2
     });
     teamLabel.anchor.set(0.5, 1);
     teamLabel.position.set(0, -StructureLayer.ICON_RADIUS - 2);
@@ -307,6 +313,7 @@ export default class StructureLayer extends PIXI.Container {
       case "bridge": return "\u2229";          // ∩ (arch shape)
       case "minefield": return "\u2739";       // ✹ (starburst)
       case "outpost": return "\u2302";         // ⌂ (house)
+      case "headquarters": return "\u2302\u2302\u2302"; // ⌂⌂⌂ (three buildings)
       case "fortification": return "\u2591";    // ░ (shield-like)
       default: return "?";
     }
@@ -451,8 +458,8 @@ export default class StructureLayer extends PIXI.Container {
       };
     }
 
-    // Outpost supply buttons — completed friendly outposts
-    if (structure.type === "outpost" && isComplete && (isGM || isFriendly)) {
+    // Outpost/HQ supply buttons — completed friendly outposts and headquarters
+    if ((structure.type === "outpost" || structure.type === "headquarters") && isComplete && (isGM || isFriendly)) {
       const autoLabel = structure.autoSupply === false ? "Enable Auto-Supply" : "Disable Auto-Supply";
       buttons.toggleSupply = {
         icon: '<i class="fas fa-toggle-on"></i>',
@@ -521,7 +528,7 @@ export default class StructureLayer extends PIXI.Container {
     const config = CONFIG.STARMERCS.structures[structure.type];
     if (!config) return;
     const merged = StructureLayer.getStructureConfig(structure.type);
-    const isOutpost = structure.type === "outpost";
+    const isOutpost = structure.type === "outpost" || structure.type === "headquarters";
     const supplyCats = ["projectile", "ordnance", "energy", "fuel", "materials", "parts", "basicSupplies"];
     const supplyLabels = {
       projectile: "Proj", ordnance: "Ord", energy: "Energy",
@@ -634,7 +641,7 @@ export default class StructureLayer extends PIXI.Container {
    * @private
    */
   _openOutpostSupplyTransfer(structure) {
-    if (structure.type !== "outpost" || !structure.supply) return;
+    if (!(structure.type === "outpost" || structure.type === "headquarters") || !structure.supply) return;
 
     const supplyCats = ["projectile", "ordnance", "energy", "fuel", "materials", "parts", "basicSupplies"];
     const supplyLabels = {
@@ -692,7 +699,8 @@ export default class StructureLayer extends PIXI.Container {
       ${catInputs}
     </form></div>`;
 
-    const displayName = structure.name ?? "Outpost";
+    const sConfig = CONFIG.STARMERCS.structures[structure.type];
+    const displayName = structure.name ?? sConfig?.label ?? "Structure";
     new Dialog({
       title: `Transfer Supply — ${esc(displayName)}`,
       content,
