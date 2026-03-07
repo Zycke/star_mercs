@@ -446,16 +446,19 @@ STARMERCS.terrain = {
 };
 
 /**
- * Max sight distance (in hexes) based on observer's effective elevation.
- * Flying units use their altitude. LOS can never exceed this range.
+ * Sight point cost per hex based on elevation difference (observer elevation − hex elevation).
+ * Each unit has a sightRange stat (default 5). As LOS travels across hexes, each hex
+ * costs sight points based on how far below the observer it sits.
+ * Hexes HIGHER than the observer block LOS completely (no cost — just blocks).
+ * Formula: cost = 1 / (2 ^ elevDiff)
  */
-STARMERCS.maxSightDistance = {
-  0: 5,
-  1: 10,
-  2: 20,
-  3: 40,
-  4: 80,
-  5: 160
+STARMERCS.sightPointCost = {
+  0: 1,
+  1: 0.5,
+  2: 0.25,
+  3: 0.125,
+  4: 0.0625,
+  5: 0.03125
 };
 
 /* ============================================ */

@@ -2,11 +2,43 @@
 
   {{!-- Tab bar --}}
   <nav class="ref-tabs">
+    <button class="ref-tab-btn {{#if (eq activeTab 'turn-structure')}}active{{/if}}" data-tab="turn-structure">Turn</button>
     <button class="ref-tab-btn {{#if (eq activeTab 'unit-traits')}}active{{/if}}" data-tab="unit-traits">Unit Traits</button>
     <button class="ref-tab-btn {{#if (eq activeTab 'weapon-traits')}}active{{/if}}" data-tab="weapon-traits">Weapon Traits</button>
     <button class="ref-tab-btn {{#if (eq activeTab 'orders')}}active{{/if}}" data-tab="orders">Orders</button>
     <button class="ref-tab-btn {{#if (eq activeTab 'terrain')}}active{{/if}}" data-tab="terrain">Terrain</button>
   </nav>
+
+  {{!-- Turn Structure --}}
+  {{#if (eq activeTab "turn-structure")}}
+  <div class="ref-table-wrapper">
+    <table class="ref-table turn-structure-table">
+      <thead>
+        <tr>
+          <th class="col-flag">#</th>
+          <th class="col-name">Phase</th>
+          <th class="col-desc">Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{#each turnStructure}}
+        <tr class="phase-row">
+          <td class="col-flag"><strong>{{order}}</strong></td>
+          <td class="col-name"><strong><i class="{{icon}}"></i> {{phase}}</strong></td>
+          <td class="col-desc">{{description}}</td>
+        </tr>
+        {{#each subPhases}}
+        <tr class="sub-phase-row">
+          <td class="col-flag"></td>
+          <td class="col-name sub-phase-name">{{name}}</td>
+          <td class="col-desc">{{description}}</td>
+        </tr>
+        {{/each}}
+        {{/each}}
+      </tbody>
+    </table>
+  </div>
+  {{/if}}
 
   {{!-- Unit Traits Table --}}
   {{#if (eq activeTab "unit-traits")}}
@@ -119,20 +151,20 @@
       </tbody>
     </table>
 
-    <h3 style="margin-top: 1em;">Max Sight Distance by Elevation</h3>
-    <p class="hint">LOS range cannot exceed this value regardless of terrain. Flying units use their altitude.</p>
+    <h3 style="margin-top: 1em;">Sight Point Cost by Elevation Difference</h3>
+    <p class="hint">Each unit has a sight range (default 5 points). Each hex along the LOS path costs sight points based on how far below the observer it is. Hexes higher than the observer block LOS completely.</p>
     <table class="ref-table sight-table">
       <thead>
         <tr>
-          <th class="col-flag">Elevation</th>
-          <th class="col-flag">Max Sight (hexes)</th>
+          <th class="col-flag">Elev. Diff.</th>
+          <th class="col-flag">Cost / Hex</th>
         </tr>
       </thead>
       <tbody>
         {{#each sightTable}}
         <tr>
-          <td class="col-flag">{{elevation}}</td>
-          <td class="col-flag">{{maxSight}}</td>
+          <td class="col-flag">{{elevDiff}}</td>
+          <td class="col-flag">{{cost}}</td>
         </tr>
         {{/each}}
       </tbody>

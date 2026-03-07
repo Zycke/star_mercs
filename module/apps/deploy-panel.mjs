@@ -4,14 +4,17 @@
  * Features:
  * - Shows units waiting in the deploy pool for the viewer's team
  * - GM can switch between teams and add units to the pool
- * - Right-click context menu for deployment options during Deploy phase
- * - Supports standard deployment (within HQ radius) and special deployment
- *   (Meteoric Assault, Air Assault, Air Drop)
+ * - Pool supports multiple instances of the same actor with custom names
+ * - Right-click context menu for deployment options:
+ *   - Standard deploy during Deploy phase
+ *   - Meteoric Assault / Air Drop designation during Orders phase
+ * - Designated units land automatically during the Tactical phase
  *
  * Toggled from the token controls menu. Singleton stored on game.starmercs.deployPanel.
  */
 import { getDeployableHexes, getSpecialDeployHexes, isValidDeployHex } from "../deploy-utils.mjs";
-import { snapToHexCenter, hexKey, hexCenterToTokenPosition } from "../hex-utils.mjs";
+import { snapToHexCenter, hexKey, hexCenterToTokenPosition,
+  getAdjacentHexCenters, getTokensAtHex } from "../hex-utils.mjs";
 
 const { HandlebarsApplicationMixin, ApplicationV2 } = foundry.applications.api;
 
@@ -62,6 +65,10 @@ export default class DeployPanel extends HandlebarsApplicationMixin(ApplicationV
 
     const combat = game.combat;
     const isDeployPhase = combat?.started && combat?.phase === "deploy";
+    const isOrdersPhase = combat?.started && combat?.phase === "orders";
+
+    // Get pending deploys from combat flags
+    const pendingDeploys = combat?.getFlag("star-mercs", "pendingDeploys") ?? [];
 
     // Resolve actor data for each pool entry
     const poolEntries = [];
@@ -74,13 +81,19 @@ export default class DeployPanel extends HandlebarsApplicationMixin(ApplicationV
       if (actor.hasTrait("Air Assault")) specialTraits.push("Air Assault");
       if (actor.hasTrait("Air Drop")) specialTraits.push("Air Drop");
 
+      // Check if this entry has a pending deployment
+      const pending = pendingDeploys.find(p => p.instanceId === entry.instanceId);
+
       poolEntries.push({
         actorId: entry.actorId,
-        name: actor.name,
+        instanceId: entry.instanceId,
+        name: entry.customName || actor.name,
         img: actor.img,
         ratingLabel: actor.system.rating?.charAt(0).toUpperCase() + actor.system.rating?.slice(1) ?? "Unknown",
         strength: actor.system.strength?.value ?? 0,
-        specialTraits: specialTraits.length > 0 ? specialTraits.join(", ") : null
+        specialTraits: specialTraits.length > 0 ? specialTraits.join(", ") : null,
+        isPending: !!pending,
+        pendingMode: pending?.mode ?? null
       });
     }
 
@@ -88,6 +101,7 @@ export default class DeployPanel extends HandlebarsApplicationMixin(ApplicationV
       isGM,
       viewedTeam: viewerTeam,
       isDeployPhase,
+      isOrdersPhase,
       poolEntries,
       canAdd: isGM,
       canRemove: isGM
@@ -117,8 +131,8 @@ export default class DeployPanel extends HandlebarsApplicationMixin(ApplicationV
     html.querySelectorAll(".remove-btn").forEach(btn => {
       btn.addEventListener("click", (event) => {
         event.stopPropagation();
-        const actorId = btn.closest(".deploy-entry").dataset.actorId;
-        this._onRemoveUnit(actorId);
+        const instanceId = btn.closest(".deploy-entry").dataset.instanceId;
+        this._onRemoveUnit(instanceId);
       });
     });
 
@@ -126,6 +140,13 @@ export default class DeployPanel extends HandlebarsApplicationMixin(ApplicationV
     html.querySelectorAll(".deploy-entry").forEach(el => {
       el.addEventListener("contextmenu", (event) => this._onEntryContextMenu(event));
     });
+
+    // Double-click to edit name (GM only)
+    if (game.user.isGM) {
+      html.querySelectorAll(".deploy-entry-name").forEach(el => {
+        el.addEventListener("dblclick", (event) => this._onEditName(event));
+      });
+    }
 
     // Drop zone: accept actor drops from sidebar
     const poolList = html.querySelector(".deploy-pool-list");
@@ -205,6 +226,7 @@ export default class DeployPanel extends HandlebarsApplicationMixin(ApplicationV
 
   /**
    * Add an actor to the deploy pool for a team.
+   * Multiple instances of the same actor are allowed — each gets a unique instanceId.
    * @param {string} actorId
    * @param {string} team
    */
@@ -212,29 +234,87 @@ export default class DeployPanel extends HandlebarsApplicationMixin(ApplicationV
     const pool = foundry.utils.deepClone(game.settings.get("star-mercs", "deployPool") ?? { a: [], b: [] });
     if (!pool[team]) pool[team] = [];
 
-    // Check for duplicates
-    if (pool[team].some(e => e.actorId === actorId)) {
-      ui.notifications.warn("This unit is already in the deploy pool.");
-      return;
-    }
+    const actor = game.actors.get(actorId);
+    const customName = actor?.name ?? "Unknown Unit";
 
-    pool[team].push({ actorId, addedBy: game.user.id });
+    pool[team].push({
+      actorId,
+      addedBy: game.user.id,
+      instanceId: foundry.utils.randomID(),
+      customName
+    });
     await game.settings.set("star-mercs", "deployPool", pool);
     this.render();
   }
 
   /**
-   * Remove an actor from the deploy pool.
-   * @param {string} actorId
+   * Remove an entry from the deploy pool by instanceId.
+   * @param {string} instanceId
    */
-  async _onRemoveUnit(actorId) {
+  async _onRemoveUnit(instanceId) {
     const pool = foundry.utils.deepClone(game.settings.get("star-mercs", "deployPool") ?? { a: [], b: [] });
     const team = this._viewedTeam ?? "a";
     if (!pool[team]) return;
 
-    pool[team] = pool[team].filter(e => e.actorId !== actorId);
+    pool[team] = pool[team].filter(e => e.instanceId !== instanceId);
     await game.settings.set("star-mercs", "deployPool", pool);
+
+    // Also remove any pending deploy for this instance
+    if (game.combat?.started) {
+      const pending = game.combat.getFlag("star-mercs", "pendingDeploys") ?? [];
+      const filtered = pending.filter(p => p.instanceId !== instanceId);
+      if (filtered.length !== pending.length) {
+        await game.combat.setFlag("star-mercs", "pendingDeploys", filtered);
+      }
+    }
+
     this.render();
+  }
+
+  /**
+   * Inline-edit a pool entry's custom name on double-click.
+   * @param {MouseEvent} event
+   */
+  _onEditName(event) {
+    const nameEl = event.currentTarget;
+    const entry = nameEl.closest(".deploy-entry");
+    const instanceId = entry.dataset.instanceId;
+    const currentName = nameEl.textContent;
+
+    const input = document.createElement("input");
+    input.type = "text";
+    input.value = currentName;
+    input.classList.add("deploy-name-edit");
+    nameEl.replaceWith(input);
+    input.focus();
+    input.select();
+
+    const save = async () => {
+      const newName = input.value.trim() || currentName;
+      await this._updatePoolEntryName(instanceId, newName);
+      this.render();
+    };
+
+    input.addEventListener("blur", save);
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); input.blur(); }
+      if (e.key === "Escape") { input.value = currentName; input.blur(); }
+    });
+  }
+
+  /**
+   * Update the customName of a pool entry.
+   * @param {string} instanceId
+   * @param {string} newName
+   */
+  async _updatePoolEntryName(instanceId, newName) {
+    const pool = foundry.utils.deepClone(game.settings.get("star-mercs", "deployPool") ?? { a: [], b: [] });
+    const team = this._viewedTeam ?? "a";
+    const entry = pool[team]?.find(e => e.instanceId === instanceId);
+    if (entry) {
+      entry.customName = newName;
+      await game.settings.set("star-mercs", "deployPool", pool);
+    }
   }
 
   /* ---------------------------------------- */
@@ -249,14 +329,22 @@ export default class DeployPanel extends HandlebarsApplicationMixin(ApplicationV
     event.preventDefault();
 
     const combat = game.combat;
-    if (!combat?.started || combat.phase !== "deploy") {
-      ui.notifications.info("Deployment is only available during the Deploy phase.");
+    const isDeployPhase = combat?.started && combat?.phase === "deploy";
+    const isOrdersPhase = combat?.started && combat?.phase === "orders";
+
+    if (!isDeployPhase && !isOrdersPhase) {
+      ui.notifications.info("Deployment is available during the Deploy or Orders phase.");
       return;
     }
 
+    const instanceId = event.currentTarget.dataset.instanceId;
     const actorId = event.currentTarget.dataset.actorId;
     const actor = game.actors.get(actorId);
     if (!actor) return;
+
+    // Check if this entry already has a pending deploy
+    const pendingDeploys = combat?.getFlag("star-mercs", "pendingDeploys") ?? [];
+    const isPending = pendingDeploys.some(p => p.instanceId === instanceId);
 
     // Check ownership
     if (!game.user.isGM && !actor.isOwner) {
@@ -265,31 +353,46 @@ export default class DeployPanel extends HandlebarsApplicationMixin(ApplicationV
     }
 
     // Build menu options
-    const menuItems = [
-      { label: "Deploy", icon: "fas fa-parachute-box", mode: "standard" }
-    ];
+    const menuItems = [];
 
-    if (actor.hasTrait("Meteoric Assault")) {
-      menuItems.push({ label: "Meteoric Assault", icon: "fas fa-meteor", mode: "meteoric_assault" });
-    }
-    if (actor.hasTrait("Air Assault")) {
-      menuItems.push({ label: "Air Assault", icon: "fas fa-helicopter", mode: "air_assault" });
-    }
-    if (actor.hasTrait("Air Drop")) {
-      menuItems.push({ label: "Air Drop", icon: "fas fa-parachute-box", mode: "air_drop" });
+    if (isPending) {
+      // Already designated — offer cancel
+      menuItems.push({ label: "Cancel Designation", icon: "fas fa-times", mode: "cancel_pending" });
+    } else if (isDeployPhase) {
+      // Deploy phase: standard deploy + air assault (immediate placement)
+      menuItems.push({ label: "Deploy", icon: "fas fa-parachute-box", mode: "standard" });
+      if (actor.hasTrait("Air Assault")) {
+        menuItems.push({ label: "Air Assault", icon: "fas fa-helicopter", mode: "air_assault" });
+      }
+    } else if (isOrdersPhase) {
+      // Orders phase: only meteoric assault and air drop designation
+      if (actor.hasTrait("Meteoric Assault")) {
+        menuItems.push({ label: "Meteoric Assault", icon: "fas fa-meteor", mode: "meteoric_assault" });
+      }
+      if (actor.hasTrait("Air Drop")) {
+        menuItems.push({ label: "Air Drop", icon: "fas fa-parachute-box", mode: "air_drop" });
+      }
     }
 
-    this._showContextMenu(event.clientX, event.clientY, actorId, menuItems);
+    if (menuItems.length === 0) {
+      if (isOrdersPhase) {
+        ui.notifications.info("This unit has no special deployment traits for the Orders phase.");
+      }
+      return;
+    }
+
+    this._showContextMenu(event.clientX, event.clientY, instanceId, actorId, menuItems);
   }
 
   /**
    * Render and position a context menu.
    * @param {number} x - Screen X
    * @param {number} y - Screen Y
+   * @param {string} instanceId
    * @param {string} actorId
    * @param {Array} menuItems
    */
-  _showContextMenu(x, y, actorId, menuItems) {
+  _showContextMenu(x, y, instanceId, actorId, menuItems) {
     // Remove any existing context menu
     document.querySelector(".deploy-context-menu")?.remove();
 
@@ -304,7 +407,11 @@ export default class DeployPanel extends HandlebarsApplicationMixin(ApplicationV
       el.innerHTML = `<i class="${item.icon}"></i> <span>${item.label}</span>`;
       el.addEventListener("click", () => {
         menu.remove();
-        this._startDeploy(actorId, item.mode);
+        if (item.mode === "cancel_pending") {
+          this._cancelPendingDeploy(instanceId);
+        } else {
+          this._startDeploy(instanceId, actorId, item.mode);
+        }
       });
       menu.appendChild(el);
     }
@@ -327,10 +434,11 @@ export default class DeployPanel extends HandlebarsApplicationMixin(ApplicationV
 
   /**
    * Begin the deploy placement flow.
+   * @param {string} instanceId - Pool entry instance ID
    * @param {string} actorId
    * @param {string} mode - "standard", "meteoric_assault", "air_assault", "air_drop"
    */
-  async _startDeploy(actorId, mode) {
+  async _startDeploy(instanceId, actorId, mode) {
     const team = this._viewedTeam ?? "a";
 
     // Calculate valid hexes
@@ -373,7 +481,12 @@ export default class DeployPanel extends HandlebarsApplicationMixin(ApplicationV
       this._deployClickHandler = null;
       this._deployCancelHandler = null;
 
-      await this._executeDeploy(actorId, snapped, team, mode);
+      // For orders-phase deployment, designate rather than place immediately
+      if (mode === "meteoric_assault" || mode === "air_drop") {
+        await this._designatePendingDeploy(instanceId, actorId, snapped, team, mode);
+      } else {
+        await this._executeDeploy(instanceId, actorId, snapped, team, mode);
+      }
     };
 
     // Register Escape cancel handler
@@ -393,15 +506,140 @@ export default class DeployPanel extends HandlebarsApplicationMixin(ApplicationV
   }
 
   /**
-   * Execute the deployment: create token, apply effects, remove from pool.
+   * Designate a pending deployment (for meteoric assault / air drop during orders phase).
+   * The unit is not placed yet — it will land during the appropriate tactical sub-step.
+   * @param {string} instanceId
    * @param {string} actorId
    * @param {{x: number, y: number}} hexCenter
    * @param {string} team
    * @param {string} mode
    */
-  async _executeDeploy(actorId, hexCenter, team, mode) {
+  async _designatePendingDeploy(instanceId, actorId, hexCenter, team, mode) {
+    const combat = game.combat;
+    if (!combat) return;
+
+    // Get the pool entry's custom name
+    const pool = game.settings.get("star-mercs", "deployPool") ?? { a: [], b: [] };
+    const entry = pool[team]?.find(e => e.instanceId === instanceId);
+    const customName = entry?.customName || game.actors.get(actorId)?.name || "Unknown";
+
+    const pendingEntry = {
+      instanceId,
+      actorId,
+      team,
+      mode,
+      hexKey: hexKey(hexCenter),
+      hexCenter: { x: hexCenter.x, y: hexCenter.y },
+      customName,
+      assaultTargetTokenId: null
+    };
+
+    // For meteoric assault, prompt for assault target selection
+    if (mode === "meteoric_assault") {
+      const targetId = await this._promptAssaultTarget(hexCenter, team, actorId);
+      if (targetId) {
+        pendingEntry.assaultTargetTokenId = targetId;
+      }
+    }
+
+    // Store pending deploy on combat
+    const pending = foundry.utils.deepClone(combat.getFlag("star-mercs", "pendingDeploys") ?? []);
+    pending.push(pendingEntry);
+    await combat.setFlag("star-mercs", "pendingDeploys", pending);
+
+    const modeLabel = mode === "meteoric_assault" ? "Meteoric Assault" : "Air Drop";
+    ui.notifications.info(`${customName} designated for ${modeLabel} deployment.`);
+
+    this.render();
+  }
+
+  /**
+   * Prompt the deploying player to select an adjacent hostile unit to assault.
+   * @param {{x: number, y: number}} hexCenter - The deployment hex
+   * @param {string} team - Deploying team
+   * @param {string} actorId - The deploying actor (for movement rule checks)
+   * @returns {Promise<string|null>} The selected target token ID, or null
+   */
+  async _promptAssaultTarget(hexCenter, team, actorId) {
+    const adjacentHexes = getAdjacentHexCenters(hexCenter);
+    const hostileTokens = [];
+
+    for (const adjHex of adjacentHexes) {
+      const tokensHere = getTokensAtHex(adjHex);
+      for (const token of tokensHere) {
+        if (!token.actor || token.actor.type !== "unit") continue;
+        if (token.actor.system.team === team) continue;
+        if ((token.actor.system.strength?.value ?? 0) <= 0) continue;
+        hostileTokens.push(token);
+      }
+    }
+
+    if (hostileTokens.length === 0) {
+      ui.notifications.info("No adjacent hostile units to assault. Unit will land without an assault target.");
+      return null;
+    }
+
+    // Build dropdown options
+    const options = hostileTokens.map(t =>
+      `<option value="${t.document.id}">${t.document.name} (STR ${t.actor.system.strength?.value ?? 0})</option>`
+    ).join("");
+
+    const content = `<form><div class="form-group">
+      <label>Select Assault Target</label>
+      <select name="targetId">
+        <option value="">— No Target —</option>
+        ${options}
+      </select>
+    </div></form>`;
+
+    const result = await Dialog.wait({
+      title: "Meteoric Assault Target",
+      content,
+      buttons: {
+        confirm: { label: "Confirm", icon: '<i class="fas fa-crosshairs"></i>', callback: (html) => {
+          const el = html.querySelector ? html.querySelector("[name=targetId]") : html[0].querySelector("[name=targetId]");
+          return el?.value || null;
+        }},
+        cancel: { label: "Skip" }
+      },
+      default: "confirm"
+    });
+
+    return result || null;
+  }
+
+  /**
+   * Cancel a pending deployment designation.
+   * @param {string} instanceId
+   */
+  async _cancelPendingDeploy(instanceId) {
+    const combat = game.combat;
+    if (!combat) return;
+
+    const pending = foundry.utils.deepClone(combat.getFlag("star-mercs", "pendingDeploys") ?? []);
+    const filtered = pending.filter(p => p.instanceId !== instanceId);
+    await combat.setFlag("star-mercs", "pendingDeploys", filtered);
+
+    ui.notifications.info("Deployment designation cancelled.");
+    this.render();
+  }
+
+  /**
+   * Execute the deployment: create token, apply effects, remove from pool.
+   * @param {string} instanceId
+   * @param {string} actorId
+   * @param {{x: number, y: number}} hexCenter
+   * @param {string} team
+   * @param {string} mode
+   */
+  async _executeDeploy(instanceId, actorId, hexCenter, team, mode) {
     const actor = game.actors.get(actorId);
     if (!actor) return;
+
+    // Get the custom name from the pool entry
+    const pool = game.settings.get("star-mercs", "deployPool") ?? { a: [], b: [] };
+    const poolEntry = pool[team]?.find(e => e.instanceId === instanceId);
+    const customName = poolEntry?.customName || actor.name;
 
     // Create token from prototype
     const protoToken = actor.prototypeToken;
@@ -415,6 +653,8 @@ export default class DeployPanel extends HandlebarsApplicationMixin(ApplicationV
 
     const tokenData = foundry.utils.mergeObject(protoToken.toObject(), {
       actorId: actor.id,
+      actorLink: false,
+      name: customName,
       x: tokenPosition.x,
       y: tokenPosition.y
     });
@@ -434,16 +674,18 @@ export default class DeployPanel extends HandlebarsApplicationMixin(ApplicationV
       }
 
       // Apply deploy effects
-      await this._applyDeployEffects(actor, tokenDoc, mode);
+      await this._applyDeployEffects(tokenDoc, mode);
 
       // Remove from pool
-      await this._removeFromPool(actorId, team);
+      await this._removeFromPool(instanceId, team);
     } else {
       // Non-GM: relay via socket
       game.socket.emit("system.star-mercs", {
         action: "deploy",
         op: "place",
         actorId,
+        instanceId,
+        customName,
         sceneId: canvas.scene.id,
         x: tokenPosition.x,
         y: tokenPosition.y,
@@ -457,12 +699,14 @@ export default class DeployPanel extends HandlebarsApplicationMixin(ApplicationV
 
   /**
    * Apply mode-specific temporary effects to a deployed unit.
-   * Effects are stored as actor flags and cleared during consolidation.
-   * @param {Actor} actor
+   * Uses the token's synthetic actor for unlinked tokens.
    * @param {TokenDocument} tokenDoc
    * @param {string} mode
    */
-  async _applyDeployEffects(actor, tokenDoc, mode) {
+  async _applyDeployEffects(tokenDoc, mode) {
+    const actor = tokenDoc.actor;
+    if (!actor) return;
+
     if (mode === "meteoric_assault") {
       await actor.toggleStatusEffect("meteoric-assault", { active: true });
     } else if (mode === "air_drop") {
@@ -473,14 +717,14 @@ export default class DeployPanel extends HandlebarsApplicationMixin(ApplicationV
   }
 
   /**
-   * Remove an actor from the deploy pool (after successful deployment).
-   * @param {string} actorId
+   * Remove a pool entry by instanceId (after successful deployment).
+   * @param {string} instanceId
    * @param {string} team
    */
-  async _removeFromPool(actorId, team) {
+  async _removeFromPool(instanceId, team) {
     const pool = foundry.utils.deepClone(game.settings.get("star-mercs", "deployPool") ?? { a: [], b: [] });
     if (!pool[team]) return;
-    pool[team] = pool[team].filter(e => e.actorId !== actorId);
+    pool[team] = pool[team].filter(e => e.instanceId !== instanceId);
     await game.settings.set("star-mercs", "deployPool", pool);
   }
 

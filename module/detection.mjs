@@ -10,9 +10,14 @@
  *   "blip"    — beyond detection range but within 2x (partial contact)
  *   "hidden"  — beyond 2x detection range (invisible)
  *
- * Line of sight is blocked by terrain with blocksLOS: true and by
- * elevation differences (intermediate hex at least as high as both endpoints).
- * Units at higher elevation can see over lower-elevation hexes.
+ * Line of sight uses a sight-point system:
+ * - Each unit has a sightRange stat (default 5 sight points).
+ * - Each hex along the LOS path costs sight points based on elevation difference
+ *   between the observer and the intermediate hex.
+ * - Hexes higher than the observer block LOS completely.
+ * - The first blocking hex encountered is still within LOS itself,
+ *   but everything beyond it is blocked.
+ * - Terrain with blocksLOS: true also blocks (if hex elevation >= both endpoints).
  */
 
 import { snapToHexCenter, hexKey, computeHexPath,
@@ -21,21 +26,27 @@ import { snapToHexCenter, hexKey, computeHexPath,
 import StarMercsActor from "./documents/actor.mjs";
 
 /**
+ * Get the sight-point cost for a hex given the observer's elevation.
+ * @param {number} observerElev - Observer's effective elevation.
+ * @param {number} hexElev - The intermediate hex's elevation.
+ * @returns {number} Sight point cost, or Infinity if the hex blocks LOS.
+ */
+function getSightCost(observerElev, hexElev) {
+  if (hexElev > observerElev) return Infinity; // Higher hex blocks completely
+  const diff = observerElev - hexElev;
+  return CONFIG.STARMERCS.sightPointCost?.[diff] ?? (1 / Math.pow(2, diff));
+}
+
+/**
  * Check hex-based line of sight between two hex positions.
  *
- * LOS blocking rules (elevation-aware):
- * 1. Units at higher elevation can see OVER hexes at lower elevation,
- *    even if those hexes have terrain that normally blocks LOS.
- * 2. An intermediate hex only blocks LOS if its elevation is >= BOTH
- *    the observer's elevation AND the target's elevation.
- * 3. When blocking applies: terrain with blocksLOS: true blocks vision,
- *    and elevation strictly higher than both endpoints blocks vision.
- * 4. The first blocking hex encountered is still within LOS itself,
- *    but everything beyond it is blocked.
+ * Uses the sight-point system: each intermediate hex costs sight points
+ * based on the elevation difference from the observer. If the accumulated
+ * cost exceeds the observer's sightRange, LOS is blocked.
  *
  * @param {{x: number, y: number}} fromCenter - Observer hex center.
  * @param {{x: number, y: number}} toCenter - Target hex center.
- * @param {Token|null} [fromToken=null] - Observer token (for flying altitude).
+ * @param {Token|null} [fromToken=null] - Observer token (for flying altitude & sightRange).
  * @param {Token|null} [toToken=null] - Target token (for flying altitude).
  * @returns {boolean} True if LOS is clear.
  */
@@ -54,46 +65,59 @@ export function checkLOS(fromCenter, toCenter, fromToken = null, toToken = null)
   const toElev = toToken ? getEffectiveElevation(toToken) : getHexElevation(to);
   const maxEndpointElev = Math.max(fromElev, toElev);
 
-  // Max sight distance based on observer's effective elevation
-  const maxSight = CONFIG.STARMERCS.maxSightDistance?.[fromElev] ?? 160;
-  if (path.length > maxSight) return false;
+  // Observer's sight range (in sight points)
+  const sightRange = fromToken?.actor?.system?.sightRange ?? 5;
 
-  // Check intermediate hexes (exclude final destination).
-  // path excludes start already; the last element IS the destination.
+  // Accumulate sight-point cost along the path
+  let accumulatedCost = 0;
   let blocked = false;
 
-  for (let i = 0; i < path.length - 1; i++) {
+  // path excludes start; last element IS the destination.
+  for (let i = 0; i < path.length; i++) {
     const hex = path[i];
+    const isIntermediate = i < path.length - 1;
 
-    // If a previous hex already blocked LOS, everything beyond is out of sight
+    // If a previous hex blocked LOS, everything beyond is out of sight
     if (blocked) return false;
 
     const elev = getHexElevation(hex);
 
-    // If the intermediate hex is lower than either endpoint, both endpoints
-    // can see over it — skip all blocking checks for this hex
-    if (elev < maxEndpointElev) continue;
-
-    // Hex is at least as high as both endpoints — check for blocking
-    const config = getHexTerrainConfig(hex);
-
-    // Terrain-based LOS blocking
-    if (config?.blocksLOS) {
-      blocked = true;
-      continue; // This hex itself is still "within LOS" but blocks beyond
+    // Accumulate sight-point cost
+    const cost = getSightCost(fromElev, elev);
+    if (cost === Infinity) {
+      // Hex is higher than observer — blocks LOS completely
+      if (isIntermediate) {
+        blocked = true;
+        continue;
+      } else {
+        // Target hex itself is higher — still blocks if we already used all points
+        // But target hex is the destination, so we allow seeing it
+        // (the blocker rule applies to intermediate hexes only)
+      }
+    } else {
+      accumulatedCost += cost;
+      if (accumulatedCost > sightRange) return false;
     }
 
-    // Elevation-based LOS blocking: hex strictly higher than both endpoints
-    if (elev > maxEndpointElev) {
-      blocked = true;
-      continue;
+    // For intermediate hexes, check terrain/elevation blocking
+    if (isIntermediate) {
+      // Hex at or above both endpoints — check for terrain-based LOS blocking
+      if (elev >= maxEndpointElev) {
+        const config = getHexTerrainConfig(hex);
+        if (config?.blocksLOS) {
+          blocked = true;
+          continue;
+        }
+        // Elevation strictly higher than both endpoints blocks
+        if (elev > maxEndpointElev) {
+          blocked = true;
+          continue;
+        }
+      }
     }
   }
 
-  // If blocked was set by the second-to-last intermediate hex,
-  // the destination is still past the blocker
   if (blocked) return false;
-
   return true;
 }
 

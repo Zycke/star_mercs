@@ -42,6 +42,7 @@ export default class ReferenceTables extends HandlebarsApplicationMixin(Applicat
     const orders = this._buildOrders();
     const terrainTypes = this._buildTerrain();
     const sightTable = this._buildSightTable();
+    const turnStructure = this._buildTurnStructure();
 
     return {
       activeTab: this._activeTab,
@@ -49,7 +50,8 @@ export default class ReferenceTables extends HandlebarsApplicationMixin(Applicat
       weaponTraits,
       orders,
       terrainTypes,
-      sightTable
+      sightTable,
+      turnStructure
     };
   }
 
@@ -125,11 +127,57 @@ export default class ReferenceTables extends HandlebarsApplicationMixin(Applicat
   }
 
   _buildSightTable() {
-    const table = CONFIG.STARMERCS.maxSightDistance;
-    return Object.entries(table).map(([elev, dist]) => ({
-      elevation: elev,
-      maxSight: dist
+    const table = CONFIG.STARMERCS.sightPointCost;
+    if (!table) return [];
+    return Object.entries(table).map(([diff, cost]) => ({
+      elevDiff: diff,
+      cost: cost
     }));
+  }
+
+  _buildTurnStructure() {
+    return [
+      {
+        order: 1, phase: "Deploy", icon: "fas fa-parachute-box",
+        description: "Place units from the deploy pool onto the map within valid deployment zones. Skipped after round 1 if no units remain in the pool.",
+        subPhases: []
+      },
+      {
+        order: 2, phase: "Preparation", icon: "fas fa-cogs",
+        description: "Automatic phase. Readiness recovery, supply checks, and other start-of-round bookkeeping are processed.",
+        subPhases: []
+      },
+      {
+        order: 3, phase: "Orders", icon: "fas fa-clipboard-list",
+        description: "Each player assigns an order to every unit they control. Orders determine what actions the unit can take during the Tactical phase.",
+        subPhases: [
+          { name: "Order Assignment", description: "Select a standard or special order for each unit. Available orders depend on unit traits, supply, and engagement status." },
+          { name: "Meteoric Assault Designation", description: "Units with the Meteoric Assault trait may designate a target hex and an adjacent hostile unit to assault upon landing." },
+          { name: "Air Drop Designation", description: "Units with the Air Drop trait may designate a target hex for deployment." }
+        ]
+      },
+      {
+        order: 4, phase: "Tactical", icon: "fas fa-crosshairs",
+        description: "The main combat phase. Actions are resolved in strict sub-phase order. Each sub-phase is announced and resolved before proceeding.",
+        subPhases: [
+          { name: "Withdraw Morale Checks", description: "Units with Withdraw orders make morale checks. Failure may result in rout." },
+          { name: "Artillery Fire", description: "Units with Artillery weapons fire. Artillery can use indirect fire if a spotter with Comms provides a target." },
+          { name: "Air Strikes", description: "Units with Aircraft weapons fire during this step." },
+          { name: "Meteoric Assault Landing", description: "Units designated for Meteoric Assault land on the battlefield. They may fire in Weapons Fire and assault in the Assault step. Skipped if no units are landing." },
+          { name: "Weapons Fire", description: "All non-Artillery, non-Aircraft units with attack-capable orders fire their weapons." },
+          { name: "Assault (Adjacent)", description: "Units with Assault orders that are adjacent to their target resolve close combat." },
+          { name: "Unit Movement", description: "Units with movement-capable orders move along their designated paths." },
+          { name: "Assault (Move & Attack)", description: "Units with Assault orders that needed to move to reach their target resolve combat after moving." },
+          { name: "Air Drop Landing", description: "Units designated for Air Drop land on the battlefield. They may fire as maneuvering units. Skipped if no units are landing." },
+          { name: "Maneuvering Unit Fire", description: "Units that moved during the Movement step (Maneuver order) may fire at reduced effectiveness." }
+        ]
+      },
+      {
+        order: 5, phase: "Consolidation", icon: "fas fa-medkit",
+        description: "End-of-round resolution. Pending damage is applied, supply is consumed, morale is checked, and readiness costs are deducted.",
+        subPhases: []
+      }
+    ];
   }
 
   /* ---------------------------------------- */

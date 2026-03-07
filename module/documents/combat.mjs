@@ -23,14 +23,16 @@ export default class StarMercsCombat extends Combat {
 
   /** Tactical sub-step definitions, executed in order during the tactical phase. */
   static TACTICAL_STEPS = [
-    { key: "withdraw_morale",  label: "Withdraw Morale Checks" },
-    { key: "artillery",        label: "Artillery Fire" },
-    { key: "airstrikes",       label: "Air Strikes" },
-    { key: "weapons_fire",     label: "Weapons Fire" },
-    { key: "assault_adjacent", label: "Assault (Adjacent)" },
-    { key: "movement",         label: "Unit Movement" },
-    { key: "assault_move",     label: "Assault (Move & Attack)" },
-    { key: "maneuver_fire",    label: "Maneuvering Unit Fire" }
+    { key: "withdraw_morale",   label: "Withdraw Morale Checks" },
+    { key: "artillery",         label: "Artillery Fire" },
+    { key: "airstrikes",        label: "Air Strikes" },
+    { key: "meteoric_landing",  label: "Meteoric Assault Landing" },
+    { key: "weapons_fire",      label: "Weapons Fire" },
+    { key: "assault_adjacent",  label: "Assault (Adjacent)" },
+    { key: "movement",          label: "Unit Movement" },
+    { key: "assault_move",      label: "Assault (Move & Attack)" },
+    { key: "air_drop_landing",  label: "Air Drop Landing" },
+    { key: "maneuver_fire",     label: "Maneuvering Unit Fire" }
   ];
 
   /** Per-phase permission rules. */
@@ -163,8 +165,27 @@ export default class StarMercsCombat extends Combat {
     return this;
   }
 
-  /** @override — New round resets to deploy phase. */
+  /** @override — New round resets to deploy phase, or skips it if pool is empty. */
   async nextRound() {
+    // Check if deploy pool has any entries
+    const pool = game.settings.get("star-mercs", "deployPool") ?? { a: [], b: [] };
+    const poolHasEntries = (pool.a?.length > 0) || (pool.b?.length > 0);
+
+    // After round 1, skip deploy phase if pool is empty
+    const nextRoundNum = this.round + 1;
+    if (nextRoundNum > 1 && !poolHasEntries) {
+      await this.update({
+        "flags.star-mercs.phase": "preparation",
+        "flags.star-mercs.phaseIndex": 1
+      });
+      const result = await super.nextRound();
+      // Run preparation effects
+      await this._runPreparationEffects();
+      this._announcePhase();
+      this._refreshEngagementStatus();
+      return result;
+    }
+
     await this.update({
       "flags.star-mercs.phase": "deploy",
       "flags.star-mercs.phaseIndex": 0
@@ -1889,6 +1910,12 @@ export default class StarMercsCombat extends Combat {
       case "maneuver_fire":
         await this._runManeuverFire();
         break;
+      case "meteoric_landing":
+        if (await this._runPendingLanding("meteoric_assault")) return;
+        break;
+      case "air_drop_landing":
+        if (await this._runPendingLanding("air_drop")) return;
+        break;
     }
 
     // Post "Next Step" button if more steps remain
@@ -1897,6 +1924,118 @@ export default class StarMercsCombat extends Combat {
     } else {
       await this._postStepComplete();
     }
+  }
+
+  /**
+   * Execute pending landings for a given deployment mode.
+   * If no pending deploys match, auto-advances to the next tactical step.
+   * @param {string} mode - "meteoric_assault" or "air_drop"
+   * @returns {boolean} True if auto-advanced (caller should return early).
+   * @private
+   */
+  async _runPendingLanding(mode) {
+    const pending = this.getFlag("star-mercs", "pendingDeploys") ?? [];
+    const matching = pending.filter(p => p.mode === mode);
+
+    // Auto-skip if no units are landing
+    if (matching.length === 0) {
+      const stepIndex = this.getFlag("star-mercs", "tacticalStep") ?? 0;
+      const nextStep = stepIndex + 1;
+      if (nextStep < StarMercsCombat.TACTICAL_STEPS.length) {
+        await this.setFlag("star-mercs", "tacticalStep", nextStep);
+        await this._executeTacticalStep(nextStep);
+      } else {
+        await this._runConsolidationEffects();
+        await this.update({
+          "flags.star-mercs.phase": "consolidation",
+          "flags.star-mercs.phaseIndex": 4
+        });
+        this._announcePhase();
+      }
+      return true;
+    }
+
+    const modeLabel = mode === "meteoric_assault" ? "Meteoric Assault" : "Air Drop";
+    const statusId = mode === "meteoric_assault" ? "meteoric-assault" : "air-drop";
+    const landedNames = [];
+
+    for (const entry of matching) {
+      const actor = game.actors.get(entry.actorId);
+      if (!actor) continue;
+
+      const hexCenter = entry.hexCenter;
+      if (!hexCenter) continue;
+
+      // Create token from prototype
+      const protoToken = actor.prototypeToken;
+      const gridSize = canvas.grid.size || 100;
+      const tokenW = (protoToken.width ?? 1) * gridSize;
+      const tokenH = (protoToken.height ?? 1) * gridSize;
+      const tokenPosition = {
+        x: hexCenter.x - tokenW / 2,
+        y: hexCenter.y - tokenH / 2
+      };
+
+      const tokenData = foundry.utils.mergeObject(protoToken.toObject(), {
+        actorId: actor.id,
+        actorLink: false,
+        name: entry.customName || actor.name,
+        x: tokenPosition.x,
+        y: tokenPosition.y
+      });
+
+      const created = await canvas.scene.createEmbeddedDocuments("Token", [tokenData]);
+      const tokenDoc = created[0];
+      if (!tokenDoc) continue;
+
+      // Add combatant
+      await this.createEmbeddedDocuments("Combatant", [{
+        actorId: actor.id,
+        tokenId: tokenDoc.id,
+        sceneId: canvas.scene.id
+      }]);
+
+      // Apply status effect
+      const tokenActor = tokenDoc.actor;
+      if (tokenActor) {
+        await tokenActor.toggleStatusEffect(statusId, { active: true });
+      }
+
+      // For meteoric assault, set assault target if designated
+      if (mode === "meteoric_assault" && entry.assaultTargetTokenId) {
+        await tokenDoc.setFlag("star-mercs", "assaultTarget", entry.assaultTargetTokenId);
+      }
+
+      // Remove from deploy pool
+      const pool = foundry.utils.deepClone(game.settings.get("star-mercs", "deployPool") ?? { a: [], b: [] });
+      const team = entry.team;
+      if (pool[team]) {
+        pool[team] = pool[team].filter(e => e.instanceId !== entry.instanceId);
+        await game.settings.set("star-mercs", "deployPool", pool);
+      }
+
+      landedNames.push(entry.customName || actor.name);
+    }
+
+    // Remove processed entries from pending
+    const remaining = pending.filter(p => p.mode !== mode);
+    await this.setFlag("star-mercs", "pendingDeploys", remaining);
+
+    // Announce landing
+    if (landedNames.length > 0) {
+      await ChatMessage.create({
+        content: `<div class="star-mercs chat-card tactical-step">
+          <h4><i class="fas fa-${mode === "meteoric_assault" ? "meteor" : "parachute-box"}"></i> ${modeLabel} Landing</h4>
+          <p>${landedNames.map(n => `<strong>${n}</strong>`).join(", ")} ${landedNames.length === 1 ? "lands" : "land"} via ${modeLabel}!</p>
+        </div>`,
+        speaker: { alias: "Star Mercs" }
+      });
+    }
+
+    // Re-render deploy panel
+    game.starmercs?.deployPanel?.render();
+
+    return false;
   }
 
   /**

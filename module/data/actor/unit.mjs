@@ -76,6 +76,8 @@ export default class UnitData extends foundry.abstract.TypeDataModel {
       sensors: new NumberField({ required: true, integer: true, min: 0, initial: 2, label: "STARMERCS.Sensors" }),
       // Signature can be negative (stealth units)
       signature: new NumberField({ required: true, integer: true, initial: 2, label: "STARMERCS.Signature" }),
+      // Sight range in sight points (determines max LOS distance, modified by terrain elevation)
+      sightRange: new NumberField({ required: true, integer: false, min: 1, initial: 5, label: "STARMERCS.SightRange" }),
 
       // --- Electronic Warfare ---
       ewar: new NumberField({ required: true, integer: true, min: 0, initial: 0, label: "STARMERCS.EWAR" }),
