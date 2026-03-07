@@ -1,4 +1,4 @@
-import { snapToHexCenter, hexKey, getAdjacentHexCenters, getEffectiveElevation } from "../hex-utils.mjs";
+import { snapToHexCenter, hexKey, getAdjacentHexCenters } from "../hex-utils.mjs";
 import * as detection from "../detection.mjs";
 
 /**
@@ -193,8 +193,9 @@ export default class DetectionLayer extends PIXI.Container {
     const shapeCY = shape.reduce((sum, p) => sum + p.y, 0) / shape.length;
 
     const center = snapToHexCenter(token.center);
-    const observerElev = getEffectiveElevation(token);
-    const maxRange = CONFIG.STARMERCS.maxSightDistance?.[observerElev] ?? 30;
+    const sightRange = token.actor?.system?.sightRange ?? 5;
+    // Max BFS depth: sightRange / minimum possible cost (0.03125) = sightRange * 32
+    const maxRange = Math.ceil(sightRange * 32);
     const visited = new Set();
     visited.add(hexKey(center));
     let frontier = [center];

@@ -3253,6 +3253,32 @@ select:focus,
   background: #c55;
 }
 
+.deploy-panel .deploy-entry.pending {
+  background: rgba(255, 136, 0, 0.1);
+  border-left: 3px solid #f80;
+}
+
+.deploy-panel .deploy-entry-pending {
+  font-size: 9px;
+  color: #f80;
+  font-weight: bold;
+}
+
+.deploy-panel .deploy-entry-name {
+  cursor: text;
+}
+
+.deploy-panel .deploy-name-edit {
+  font-weight: bold;
+  font-size: 12px;
+  background: var(--sm-bg-dark, #1a1a2e);
+  color: #fff;
+  border: 1px solid var(--sm-accent, #4a90d9);
+  border-radius: 2px;
+  padding: 1px 4px;
+  width: 100%;
+}
+
 .deploy-panel .add-unit-btn {
   width: 100%;
   margin-top: 6px;
@@ -3450,4 +3476,21 @@ select:focus,
 
 .reference-tables .ref-table .col-desc {
   color: var(--sm-text-dim, #ccd);
+}
+
+/* Turn Structure sub-phase rows */
+.reference-tables .turn-structure-table .phase-row {
+  background: rgba(74, 144, 217, 0.06);
+}
+.reference-tables .turn-structure-table .sub-phase-row {
+  background: rgba(255, 255, 255, 0.02);
+}
+.reference-tables .turn-structure-table .sub-phase-name {
+  padding-left: 20px;
+  font-size: 11px;
+  color: var(--sm-text-dim, #aab);
+}
+.reference-tables .turn-structure-table .sub-phase-name::before {
+  content: "\2514\00a0";
+  color: #555;
 }
