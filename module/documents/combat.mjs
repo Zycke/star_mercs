@@ -1995,10 +1995,14 @@ export default class StarMercsCombat extends Combat {
         sceneId: canvas.scene.id
       }]);
 
-      // Apply status effect
+      // Apply status effect and update synthetic actor name
       const tokenActor = tokenDoc.actor;
       if (tokenActor) {
         await tokenActor.toggleStatusEffect(statusId, { active: true });
+        const unitName = entry.customName || actor.name;
+        if (unitName !== actor.name) {
+          await tokenActor.update({ name: unitName });
+        }
       }
 
       // For meteoric assault, set assault target if designated

@@ -1433,21 +1433,28 @@ Hooks.on("createActor", (actor) => {
 /*  Status Effect Icon Sizing                   */
 /* ============================================ */
 
-/** Half-size all status effect icons; double-size the Dead overlay. */
+/**
+ * Set absolute sizes for status effect icons (idempotent).
+ * Uses width/height instead of scale to avoid exponential shrinkage
+ * from repeated refreshToken calls.
+ */
 Hooks.on("refreshToken", (token) => {
   if (!token.effects?.children) return;
+
+  const gridSize = canvas.grid?.size || 100;
+  const iconSize = Math.round(gridSize * 0.2);
+
   for (const sprite of token.effects.children) {
     if (sprite === token.effects.overlay) continue;
-    if (sprite.scale) {
-      sprite.scale.set(sprite.scale.x * 0.5, sprite.scale.y * 0.5);
+    if (sprite.texture?.valid) {
+      sprite.width = iconSize;
+      sprite.height = iconSize;
     }
   }
-  // Double the Dead overlay icon size
-  if (token.effects.overlay?.scale) {
-    token.effects.overlay.scale.set(
-      token.effects.overlay.scale.x * 2.0,
-      token.effects.overlay.scale.y * 2.0
-    );
+  // Dead overlay: full grid-cell size
+  if (token.effects.overlay?.texture?.valid) {
+    token.effects.overlay.width = gridSize;
+    token.effects.overlay.height = gridSize;
   }
 });
 
