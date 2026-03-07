@@ -2923,14 +2923,15 @@ select:focus,
 }
 
 .star-mercs.sm-dialog input[type="number"] {
-  width: 52px;
+  width: 44px;
+  height: 26px;
   text-align: center;
   background: var(--sm-bg-input);
   color: var(--sm-text);
   border: 1px solid var(--sm-border);
   border-radius: var(--sm-radius);
-  padding: 4px;
-  font-size: 12px;
+  padding: 2px 4px;
+  font-size: 11px;
 }
 
 .star-mercs.sm-dialog input[type="text"] {
@@ -2994,11 +2995,28 @@ select:focus,
 }
 
 .star-mercs.sm-dialog .sm-supply-grid .form-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   margin-bottom: 0;
 }
 
+.star-mercs.sm-dialog .sm-supply-grid .form-group > label {
+  min-width: 48px;
+  font-size: 10px;
+}
+
 .star-mercs.sm-dialog .sm-supply-grid input[type="number"] {
-  width: 42px;
+  width: 40px;
+  height: 24px;
+  padding: 2px;
+  font-size: 11px;
+  text-align: center;
+}
+
+.star-mercs.sm-dialog .sm-supply-grid .hint {
+  font-size: 10px;
+  flex: 0 0 auto;
 }
 
 /* Parent dialog window theming when containing sm-dialog */
@@ -3011,6 +3029,8 @@ select:focus,
   background: var(--sm-bg-dark);
   border-top: 1px solid var(--sm-border);
   padding: 6px 8px;
+  display: flex;
+  gap: 6px;
 }
 
 .dialog:has(.sm-dialog) .dialog-buttons button {
@@ -3023,6 +3043,12 @@ select:focus,
   padding: 5px 10px;
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s;
+  flex: 1 1 0;
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
 }
 
 .dialog:has(.sm-dialog) .dialog-buttons button:hover {
