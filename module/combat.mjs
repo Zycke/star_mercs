@@ -111,8 +111,11 @@ export function calculateAccuracy(weapon, attacker, target = null) {
     orderAccuracyMod = orderConfig.accuracyPenalty;
   }
 
-  // Hot Disembark: cargo fires at -1 accuracy (Maneuver rules)
+  // Resolve canvas tokens for attacker and target (used by multiple modifiers)
   const attackerToken = canvas?.tokens?.placeables.find(t => t.actor === attacker);
+  const targetToken = target ? canvas?.tokens?.placeables.find(t => t.actor === target) : null;
+
+  // Hot Disembark: cargo fires at -1 accuracy (Maneuver rules)
   if (attackerToken?.document?.getFlag("star-mercs", "hotDisembarked")) {
     orderAccuracyMod = Math.max(orderAccuracyMod, 1);
   }
@@ -131,15 +134,11 @@ export function calculateAccuracy(weapon, attacker, target = null) {
   // Elevation bonus: -1 to threshold (easier to hit) when firing from higher elevation
   // Uses effective elevation (accounts for flying unit altitude)
   let elevationMod = 0;
-  if (target) {
-    const attackerToken = canvas?.tokens?.placeables.find(t => t.actor === attacker);
-    const targetTokenElev = canvas?.tokens?.placeables.find(t => t.actor === target);
-    if (attackerToken && targetTokenElev) {
-      const attackerElev = getEffectiveElevation(attackerToken);
-      const targetElev = getEffectiveElevation(targetTokenElev);
-      if (attackerElev > targetElev) {
-        elevationMod = -1;
-      }
+  if (attackerToken && targetToken) {
+    const attackerElev = getEffectiveElevation(attackerToken);
+    const targetElev = getEffectiveElevation(targetToken);
+    if (attackerElev > targetElev) {
+      elevationMod = -1;
     }
   }
 
@@ -148,24 +147,18 @@ export function calculateAccuracy(weapon, attacker, target = null) {
   let terrainCoverMod = 0;
   const isAssault = attacker.system.currentOrder === "assault";
   const isTargetAssault = target?.system?.currentOrder === "assault";
-  if (target && !isAssault && !isTargetAssault) {
-    const targetTokenCover = canvas?.tokens?.placeables.find(t => t.actor === target);
-    if (targetTokenCover) {
-      const cover = getTerrainCoverMod(targetTokenCover);
-      terrainCoverMod = cover.mod;
-    }
+  if (targetToken && !isAssault && !isTargetAssault) {
+    const cover = getTerrainCoverMod(targetToken);
+    terrainCoverMod = cover.mod;
   }
 
   // Ambush: -2 to threshold (easier to hit) when attacker is completely hidden from defender's team
   let ambushMod = 0;
-  if (target) {
-    const attackerToken = canvas?.tokens?.placeables.find(t => t.actor === attacker);
-    if (attackerToken) {
-      const defenderTeam = target.system.team ?? "a";
-      const detectionLevel = computeBestDetectionLevel(defenderTeam, attackerToken);
-      if (detectionLevel === "hidden") {
-        ambushMod = -2;
-      }
+  if (target && attackerToken) {
+    const defenderTeam = target.system.team ?? "a";
+    const detectionLevel = computeBestDetectionLevel(defenderTeam, attackerToken);
+    if (detectionLevel === "hidden") {
+      ambushMod = -2;
     }
   }
 

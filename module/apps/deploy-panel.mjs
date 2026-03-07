@@ -63,6 +63,21 @@ export default class DeployPanel extends HandlebarsApplicationMixin(ApplicationV
     const deployPool = game.settings.get("star-mercs", "deployPool") ?? { a: [], b: [] };
     const teamPool = deployPool[viewerTeam] ?? [];
 
+    // Auto-migrate old pool entries that lack instanceId
+    let needsMigration = false;
+    for (const entry of teamPool) {
+      if (!entry.instanceId) {
+        entry.instanceId = foundry.utils.randomID();
+        entry.customName = entry.customName || null;
+        needsMigration = true;
+      }
+    }
+    if (needsMigration) {
+      const updatedPool = foundry.utils.deepClone(deployPool);
+      updatedPool[viewerTeam] = teamPool;
+      await game.settings.set("star-mercs", "deployPool", updatedPool);
+    }
+
     const combat = game.combat;
     const isDeployPhase = combat?.started && combat?.phase === "deploy";
     const isOrdersPhase = combat?.started && combat?.phase === "orders";
@@ -675,6 +690,11 @@ export default class DeployPanel extends HandlebarsApplicationMixin(ApplicationV
 
       // Apply deploy effects
       await this._applyDeployEffects(tokenDoc, mode);
+
+      // Update synthetic actor name to match custom name (unlinked token)
+      if (tokenDoc.actor && customName !== actor.name) {
+        await tokenDoc.actor.update({ name: customName });
+      }
 
       // Remove from pool
       await this._removeFromPool(instanceId, team);
