@@ -7,6 +7,7 @@
     <button class="ref-tab-btn {{#if (eq activeTab 'weapon-traits')}}active{{/if}}" data-tab="weapon-traits">Weapon Traits</button>
     <button class="ref-tab-btn {{#if (eq activeTab 'orders')}}active{{/if}}" data-tab="orders">Orders</button>
     <button class="ref-tab-btn {{#if (eq activeTab 'terrain')}}active{{/if}}" data-tab="terrain">Terrain</button>
+    <button class="ref-tab-btn {{#if (eq activeTab 'structures')}}active{{/if}}" data-tab="structures">Structures</button>
   </nav>
 
   {{!-- Turn Structure --}}
@@ -165,6 +166,42 @@
         <tr>
           <td class="col-flag">{{elevDiff}}</td>
           <td class="col-flag">{{cost}}</td>
+        </tr>
+        {{/each}}
+      </tbody>
+    </table>
+  </div>
+  {{/if}}
+
+  {{!-- Structures Table --}}
+  {{#if (eq activeTab "structures")}}
+  <div class="ref-table-wrapper">
+    <table class="ref-table structures-table">
+      <thead>
+        <tr>
+          <th class="col-name">Structure</th>
+          <th class="col-flag">STR</th>
+          <th class="col-flag">Build</th>
+          <th class="col-flag">Mat/Turn</th>
+          <th class="col-flag">Capture</th>
+          <th class="col-flag">Fortified</th>
+          <th class="col-flag">Supply</th>
+          <th class="col-flag">Comms</th>
+          <th class="col-desc">Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{#each structures}}
+        <tr>
+          <td class="col-name"><strong>{{label}}</strong></td>
+          <td class="col-flag">{{strength}}</td>
+          <td class="col-flag">{{buildTime}}</td>
+          <td class="col-flag">{{matCost}}</td>
+          <td class="col-flag">{{capturable}}</td>
+          <td class="col-flag">{{fortified}}</td>
+          <td class="col-flag">{{supplyRange}}</td>
+          <td class="col-flag">{{commsRange}}</td>
+          <td class="col-desc">{{description}}</td>
         </tr>
         {{/each}}
       </tbody>

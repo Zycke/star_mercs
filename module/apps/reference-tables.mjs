@@ -43,6 +43,7 @@ export default class ReferenceTables extends HandlebarsApplicationMixin(Applicat
     const terrainTypes = this._buildTerrain();
     const sightTable = this._buildSightTable();
     const turnStructure = this._buildTurnStructure();
+    const structures = this._buildStructures();
 
     return {
       activeTab: this._activeTab,
@@ -51,7 +52,8 @@ export default class ReferenceTables extends HandlebarsApplicationMixin(Applicat
       orders,
       terrainTypes,
       sightTable,
-      turnStructure
+      turnStructure,
+      structures
     };
   }
 
@@ -178,6 +180,22 @@ export default class ReferenceTables extends HandlebarsApplicationMixin(Applicat
         subPhases: []
       }
     ];
+  }
+
+  _buildStructures() {
+    const structs = CONFIG.STARMERCS.structures;
+    if (!structs) return [];
+    return Object.entries(structs).map(([key, s]) => ({
+      label: s.label,
+      strength: s.maxStrength,
+      buildTime: s.turnsRequired === 0 ? "Pre-placed" : `${s.turnsRequired} turn${s.turnsRequired > 1 ? "s" : ""}`,
+      matCost: s.materialsPerTurn > 0 ? s.materialsPerTurn : "—",
+      capturable: s.canCapture ? "Yes" : "No",
+      fortified: s.grantsFortified ? "Yes" : "No",
+      supplyRange: s.defaultSupplyRange ?? "—",
+      commsRange: s.defaultCommsRange ?? "—",
+      description: s.description
+    }));
   }
 
   /* ---------------------------------------- */
