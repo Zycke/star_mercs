@@ -37,6 +37,14 @@ export function validateAttack(weapon, target, attacker = null) {
     return { valid: false, reason: `${attacker.name} is landed — must take off to fire weapons.`, softVsHeavy: false };
   }
 
+  // Packed Deploy-trait units cannot fire weapons
+  if (attacker?.hasTrait("Deploy")) {
+    const dState = attacker.getFlag("star-mercs", "deployState") ?? "packed";
+    if (dState === "packed" || dState === "packing") {
+      return { valid: false, reason: `${attacker.name} is packed — must deploy before firing.`, softVsHeavy: false };
+    }
+  }
+
   const isFlying = target.hasTrait("Flying");
   const isHovering = target.hasTrait("Hover");
   const isHeavy = target.hasTrait("Heavy");

@@ -149,6 +149,18 @@ export default class StarMercsUnitSheet extends ActorSheet {
 
     context.hasNoSupply = hasNoSupply;
 
+    // Deploy state info for the template
+    context.deployState = this.actor.deployState;
+    context.deployTimer = this.actor.deployTimer;
+    context.isDeployTransitioning = this.actor.isDeployTransitioning;
+    context.deployLocked = false;
+
+    // Deploy/Pack lock: unit mid-transition can only keep Deploy/Pack order
+    if (this.actor.isDeployTransitioning) {
+      context.availableOrders = context.availableOrders.filter(o => o.key === "deploy");
+      context.deployLocked = true;
+    }
+
     // Currently selected order key and its config data (add resolved labelText)
     context.currentOrderKey = this.actor.system.currentOrder || "";
     const rawOrderData = allOrders[context.currentOrderKey] || null;
@@ -884,6 +896,19 @@ export default class StarMercsUnitSheet extends ActorSheet {
     // If hot_disembark order selected, prompt for target hex
     if (selectedOrderKey === "hot_disembark") {
       this._promptHotDisembarkTarget();
+    }
+
+    // If deploy order selected, initialize deploy/pack transition
+    if (selectedOrderKey === "deploy" && this.actor.hasTrait("Deploy")) {
+      const currentState = this.actor.deployState;
+      const turnsNeeded = this.actor.getTraitValue("Deploy") || 1;
+      if (currentState === "packed" || currentState === "packing") {
+        await this.actor.setFlag("star-mercs", "deployState", "deploying");
+        await this.actor.setFlag("star-mercs", "deployTimer", turnsNeeded);
+      } else if (currentState === "deployed" || currentState === "deploying") {
+        await this.actor.setFlag("star-mercs", "deployState", "packing");
+        await this.actor.setFlag("star-mercs", "deployTimer", turnsNeeded);
+      }
     }
   }
 

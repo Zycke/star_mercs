@@ -2234,6 +2234,35 @@ select:focus,
 }
 
 /* ============================= */
+/*  Deploy State (Deploy trait)  */
+/* ============================= */
+
+.deploy-state-block {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  font-size: 11px;
+  padding: 4px 6px;
+  background: rgba(100, 100, 150, 0.1);
+  border-radius: 3px;
+}
+
+.deploy-state-label {
+  font-weight: 600;
+  color: var(--sm-accent, #c9a227);
+}
+
+.deploy-timer {
+  color: var(--sm-text-muted, #999);
+}
+
+.deploy-locked-notice {
+  color: var(--sm-danger-light, #ff6655);
+  font-style: italic;
+}
+
+/* ============================= */
 /*  Turn Control Panel           */
 /* ============================= */
 
