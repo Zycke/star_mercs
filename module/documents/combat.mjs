@@ -246,6 +246,17 @@ export default class StarMercsCombat extends Combat {
       };
     }
 
+    // Deploy-trait units: deployed or deploying cannot move
+    if (actor?.type === "unit" && actor.hasTrait("Deploy")) {
+      const dState = actor.deployState;
+      if (dState === "deployed" || dState === "deploying") {
+        return {
+          allowed: false,
+          reason: "Deployed units cannot move. Must pack up first."
+        };
+      }
+    }
+
     // Tactical phase: check the unit's current order
     if (this.phase === "tactical" && actor?.type === "unit") {
       const order = this._getActorOrder(actor);
@@ -286,6 +297,17 @@ export default class StarMercsCombat extends Combat {
         allowed: false,
         reason: `Attacks are not allowed during the ${this.phaseLabel} phase.`
       };
+    }
+
+    // Deploy-trait units: packed or packing cannot fire
+    if (actor?.type === "unit" && actor.hasTrait("Deploy")) {
+      const dState = actor.deployState;
+      if (dState === "packed" || dState === "packing") {
+        return {
+          allowed: false,
+          reason: "Packed units cannot fire. Must deploy first."
+        };
+      }
     }
 
     // Tactical phase: check the unit's current order
@@ -752,6 +774,36 @@ export default class StarMercsCombat extends Combat {
                 <div class="consolidation-section-header"><i class="fas fa-shield-alt"></i> Fortified (${esc(sConfig.label)})</div>
               </div>`);
             }
+          }
+        }
+      }
+
+      // 2c. Deploy/Pack timer: decrement and finalize transitions
+      if (actor.hasTrait("Deploy")) {
+        const dState = actor.getFlag("star-mercs", "deployState");
+        const dTimer = actor.getFlag("star-mercs", "deployTimer") ?? 0;
+
+        if ((dState === "deploying" || dState === "packing") && dTimer > 0) {
+          const newTimer = dTimer - 1;
+          if (newTimer <= 0) {
+            // Transition complete
+            const newState = dState === "deploying" ? "deployed" : "packed";
+            await actor.setFlag("star-mercs", "deployState", newState);
+            await actor.setFlag("star-mercs", "deployTimer", 0);
+            // Swap status effects
+            const removeEffect = newState === "deployed" ? "packed" : "deployed";
+            await actor.toggleStatusEffect(removeEffect, { active: false });
+            await actor.toggleStatusEffect(newState, { active: true });
+            const dLabel = newState === "deployed" ? "Deployment complete" : "Packing complete";
+            sections.push(`<div class="consolidation-section deploy-state">
+              <div class="consolidation-section-header"><i class="fas fa-cog"></i> ${dLabel}</div>
+            </div>`);
+          } else {
+            await actor.setFlag("star-mercs", "deployTimer", newTimer);
+            const verb = dState === "deploying" ? "Deploying" : "Packing";
+            sections.push(`<div class="consolidation-section deploy-state">
+              <div class="consolidation-section-header"><i class="fas fa-hourglass-half"></i> ${verb}: ${newTimer} turn${newTimer > 1 ? "s" : ""} remaining</div>
+            </div>`);
           }
         }
       }
@@ -3027,8 +3079,8 @@ export default class StarMercsCombat extends Combat {
         }
       }
 
-      // 7. Clear current order (but not for cargo units aboard transport)
-      if (!actor.isAboardTransport()) {
+      // 7. Clear current order (but not for cargo or mid-deploy/pack units)
+      if (!actor.isAboardTransport() && !actor.isDeployTransitioning) {
         await actor.update({ "system.currentOrder": "" });
       }
 

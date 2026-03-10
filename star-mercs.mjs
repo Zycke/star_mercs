@@ -78,7 +78,9 @@ Hooks.once("init", () => {
     { id: "heavy-cover",           name: "Heavy Cover",           img: "icons/svg/shield.svg" },
     { id: "light-concealment",     name: "Light Concealment",     img: "icons/svg/mystery-man.svg" },
     { id: "moderate-concealment",  name: "Moderate Concealment",  img: "icons/svg/mystery-man.svg" },
-    { id: "heavy-concealment",     name: "Heavy Concealment",     img: "icons/svg/mystery-man.svg" }
+    { id: "heavy-concealment",     name: "Heavy Concealment",     img: "icons/svg/mystery-man.svg" },
+    { id: "packed",                name: "Packed",                img: "icons/svg/barrel.svg" },
+    { id: "deployed",              name: "Deployed",              img: "icons/svg/target.svg" }
   ];
 
   // --- Register Document Classes ---

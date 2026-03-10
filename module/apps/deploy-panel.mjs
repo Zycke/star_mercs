@@ -729,6 +729,13 @@ export default class DeployPanel extends HandlebarsApplicationMixin(ApplicationV
     } else if (mode === "air_assault") {
       await actor.toggleStatusEffect("air-assault", { active: true });
     }
+
+    // Deploy-trait units start packed
+    if (actor.hasTrait("Deploy")) {
+      await actor.setFlag("star-mercs", "deployState", "packed");
+      await actor.setFlag("star-mercs", "deployTimer", 0);
+      await actor.toggleStatusEffect("packed", { active: true });
+    }
   }
 
   /**

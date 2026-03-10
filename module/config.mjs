@@ -193,14 +193,14 @@ STARMERCS.orders = {
     description: "Unit focuses on supply distribution to nearby friendlies."
   },
   deploy: {
-    label: "Deploy",
+    label: "Deploy/Pack",
     category: "special",
     requiredTrait: "Deploy",
     allowsMovement: false,
     allowsAttack: false,
     readinessCost: -1,
     supplyModifier: "1x",
-    description: "Unit deploys into combat readiness, enabling abilities and weapons."
+    description: "Toggle between packed and deployed states. Takes Deploy[X] turns to complete."
   },
   transport: {
     label: "Transport",

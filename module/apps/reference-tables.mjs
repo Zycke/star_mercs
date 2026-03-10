@@ -65,7 +65,7 @@ export default class ReferenceTables extends HandlebarsApplicationMixin(Applicat
       { name: "Armored[X]", type: "Passive", value: "X", description: "Reduce incoming damage by X." },
       { name: "Combined Arms", type: "Passive", value: "", description: "Attackers suffer -1 to hit and -1 damage. Does not apply to Indirect, Artillery, or Aircraft weapons." },
       { name: "Command", type: "Passive", value: "", description: "Friendly units within Comms range may re-roll failed Morale checks once per consolidation phase." },
-      { name: "Deploy", type: "Passive", value: "", description: "Must spend 1 turn deploying before using weapons, abilities, or traits. Must pack up before moving." },
+      { name: "Deploy[X]", type: "Passive", value: "X", description: "Unit starts Packed (cannot fire). Must take Deploy/Pack order to transition. Takes X turns to deploy or pack. Deployed units cannot move." },
       { name: "Engineer", type: "Passive", value: "", description: "Can use the Construct and Demolish special orders." },
       { name: "Entrenched", type: "Conditional", value: "", description: "Unit is in defensive positions. Incoming damage reduced by 1 (min 1). Infantry auto-gain in urban terrain." },
       { name: "Flying", type: "Passive", value: "", description: "Unit can fly. Airborne units can only be targeted by Anti-Air weapons. Uses the unit's MP for flying movement." },

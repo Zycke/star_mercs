@@ -95,6 +95,24 @@
       {{/if}}
     </div>
 
+    {{!-- Deploy State (Deploy-trait units only) --}}
+    {{#if deployState}}
+      <div class="status-block deploy-state-block">
+        <span class="deploy-state-label">
+          {{#if (eq deployState "packed")}}<i class="fas fa-box"></i> Packed{{/if}}
+          {{#if (eq deployState "deployed")}}<i class="fas fa-bullseye"></i> Deployed{{/if}}
+          {{#if (eq deployState "deploying")}}<i class="fas fa-cog fa-spin"></i> Deploying...{{/if}}
+          {{#if (eq deployState "packing")}}<i class="fas fa-cog fa-spin"></i> Packing...{{/if}}
+        </span>
+        {{#if isDeployTransitioning}}
+          <span class="deploy-timer"><i class="fas fa-hourglass-half"></i> {{deployTimer}} turn{{#if (gt deployTimer 1)}}s{{/if}} remaining</span>
+        {{/if}}
+        {{#if deployLocked}}
+          <span class="deploy-locked-notice"><i class="fas fa-lock"></i> Order locked</span>
+        {{/if}}
+      </div>
+    {{/if}}
+
     {{!-- Movement Points (shown during active combat) --}}
     {{#if combatActive}}
       <div class="status-block mp-block">

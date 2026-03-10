@@ -88,6 +88,27 @@ export default class StarMercsActor extends Actor {
     return this.hasTrait("Flying") && !this.getFlag("star-mercs", "landed");
   }
 
+  /* ---------------------------------------- */
+  /*  Deploy State                            */
+  /* ---------------------------------------- */
+
+  /** Get the current deploy state. Defaults to "packed" for Deploy-trait units. */
+  get deployState() {
+    if (!this.hasTrait("Deploy")) return null;
+    return this.getFlag("star-mercs", "deployState") ?? "packed";
+  }
+
+  /** Whether this unit is in a transitional deploy state (deploying or packing). */
+  get isDeployTransitioning() {
+    const state = this.deployState;
+    return state === "deploying" || state === "packing";
+  }
+
+  /** Remaining turns for deploy/pack transition. */
+  get deployTimer() {
+    return this.getFlag("star-mercs", "deployTimer") ?? 0;
+  }
+
   /** Current altitude for flying units (0–5). */
   get altitude() {
     return this.getFlag("star-mercs", "altitude") ?? 0;
