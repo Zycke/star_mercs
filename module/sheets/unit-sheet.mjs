@@ -677,7 +677,10 @@ export default class StarMercsUnitSheet extends ActorSheet {
 
     const currentAlt = this.actor.getFlag("star-mercs", "altitude") ?? 0;
     const hexElev = getHexElevation(snapToHexCenter(myToken.center));
-    const fuelAvailable = this.actor.system.supply?.fuel?.current ?? 0;
+    const consumableType = this.actor.system.movementConsumable ?? "fuel";
+    const consumableKey = consumableType === "none" ? "fuel" : consumableType;
+    const consumableLabel = consumableKey === "energy" ? "energy" : "fuel";
+    const fuelAvailable = this.actor.system.supply?.[consumableKey]?.current ?? 0;
     const maxAlt = 5;
 
     // Build altitude options
@@ -686,7 +689,7 @@ export default class StarMercsUnitSheet extends ActorSheet {
       if (alt === currentAlt) continue;
       const fuelCost = Math.abs(alt - currentAlt);
       const valid = fuelCost <= fuelAvailable;
-      options.push(`<option value="${alt}" ${!valid ? "disabled" : ""}>${alt} (${fuelCost} fuel${!valid ? " — insufficient" : ""})</option>`);
+      options.push(`<option value="${alt}" ${!valid ? "disabled" : ""}>${alt} (${fuelCost} ${consumableLabel}${!valid ? " — insufficient" : ""})</option>`);
     }
 
     if (options.length === 0) {
@@ -698,7 +701,7 @@ export default class StarMercsUnitSheet extends ActorSheet {
     const actor = this.actor;
     const dialogContent = `
       <form class="altitude-target-form">
-        <p>Current Altitude: <strong>${currentAlt}</strong> | Fuel: <strong>${fuelAvailable}</strong></p>
+        <p>Current Altitude: <strong>${currentAlt}</strong> | ${consumableLabel.charAt(0).toUpperCase() + consumableLabel.slice(1)}: <strong>${fuelAvailable}</strong></p>
         <div class="form-group">
           <label>Target Altitude</label>
           <select id="altitude-target">${options.join("")}</select>
@@ -1430,7 +1433,10 @@ export default class StarMercsUnitSheet extends ActorSheet {
       if (orderKey === "fly") {
         const currentAlt = actor.getFlag("star-mercs", "altitude") ?? 0;
         const destHexElev = getHexElevation(snapToHexCenter(finalDest));
-        const fuelAvailable = actor.system.supply?.fuel?.current ?? 0;
+        const flyConsumableType = actor.system.movementConsumable ?? "fuel";
+        const flyConsumableKey = flyConsumableType === "none" ? "fuel" : flyConsumableType;
+        const flyConsumableLabel = flyConsumableKey === "energy" ? "energy" : "fuel";
+        const fuelAvailable = actor.system.supply?.[flyConsumableKey]?.current ?? 0;
         const fuelPerMP = actor.system.fuelPerMP ?? 0;
         const moveFuel = totalCost * fuelPerMP;
         const maxAlt = 5;
@@ -1441,13 +1447,13 @@ export default class StarMercsUnitSheet extends ActorSheet {
           const altFuel = Math.abs(alt - currentAlt);
           const totalFuel = moveFuel + altFuel;
           const valid = totalFuel <= fuelAvailable;
-          const label = alt === currentAlt ? `${alt} (no change)` : `${alt} (+${altFuel} fuel for altitude)`;
-          altOptions.push(`<option value="${alt}" ${alt === currentAlt ? "selected" : ""} ${!valid ? "disabled" : ""}>${label}${!valid ? " — insufficient fuel" : ""}</option>`);
+          const label = alt === currentAlt ? `${alt} (no change)` : `${alt} (+${altFuel} ${flyConsumableLabel} for altitude)`;
+          altOptions.push(`<option value="${alt}" ${alt === currentAlt ? "selected" : ""} ${!valid ? "disabled" : ""}>${label}${!valid ? ` — insufficient ${flyConsumableLabel}` : ""}</option>`);
         }
 
         const altContent = `
           <form class="fly-altitude-form">
-            <p>Path: ${totalCost} MP (${moveFuel} fuel) | Current Altitude: <strong>${currentAlt}</strong> | Fuel: <strong>${fuelAvailable}</strong></p>
+            <p>Path: ${totalCost} MP (${moveFuel} ${flyConsumableLabel}) | Current Altitude: <strong>${currentAlt}</strong> | ${flyConsumableLabel.charAt(0).toUpperCase() + flyConsumableLabel.slice(1)}: <strong>${fuelAvailable}</strong></p>
             <div class="form-group">
               <label>Altitude at Destination</label>
               <select id="fly-altitude-target">${altOptions.join("")}</select>
