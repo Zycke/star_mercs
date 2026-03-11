@@ -1095,88 +1095,61 @@ export default class StarMercsCombat extends Combat {
       // 4b. Movement consumable: MP spent × fuelPerMP + altitude change + assault surcharge + Vehicle baseline
       //     Landed flying units consume nothing. Airborne flying units have a minimum of 1/turn.
       //     consumableType determines which supply pool is used (fuel, energy, or none).
-      //     Vehicle baseline always uses fuel regardless of consumableType.
+      //     Vehicle baseline uses the unit's consumable type. Stand-down skips all consumption.
       {
         const mpSpent = token ? (token.getFlag("star-mercs", "movementUsed") ?? 0) : 0;
         const fuelPerMP = actor.system.fuelPerMP ?? 0;
         const orderKey = actor.system.currentOrder;
         const consumableType = actor.system.movementConsumable ?? "fuel";
+        const consumableKey = consumableType === "none" ? "fuel" : consumableType;
+        const consumableLabel = consumableKey === "energy" ? "Energy" : "Fuel";
         const isLandedFlying = actor.hasTrait("Flying") && actor.getFlag("star-mercs", "landed");
         const isAirborneFlying = actor.hasTrait("Flying") && !actor.getFlag("star-mercs", "landed");
 
         // Landed flying units spend no consumable at all
-        if (isLandedFlying) {
-          // No consumable used — unit is powered down on the ground
+        // Stand-down order: vehicles consume nothing
+        if (isLandedFlying || orderKey === "stand_down") {
+          // No consumable used
         } else {
-          // Vehicle trait baseline: 1 fuel/turn unless Stand Down order (always from fuel pool)
-          const vehicleBaseline = (actor.hasTrait("Vehicle") && orderKey !== "stand_down") ? 1 : 0;
+          // Vehicle trait baseline: 1 per turn from the unit's consumable type
+          const vehicleBaseline = actor.hasTrait("Vehicle") ? 1 : 0;
 
-          if (vehicleBaseline > 0 && supply.fuel.current > 0) {
-            const used = Math.min(vehicleBaseline, supply.fuel.current);
-            supplyUpdate["system.supply.fuel.current"] = supply.fuel.current - used;
-            consumedParts.push(`Fuel: -${used} (vehicle baseline)`);
-          }
-
-          // Movement consumable (skip if type is "none")
+          // Movement consumable (skip if type is "none", but vehicle baseline still applies)
+          let moveCost = 0;
           if (consumableType !== "none") {
-            const consumableKey = consumableType; // "fuel" or "energy"
-            const consumableLabel = consumableType === "energy" ? "Energy" : "Fuel";
-
             // Base movement (MP spent × per MP) + assault surcharge
-            let moveCost = mpSpent * fuelPerMP;
+            moveCost = mpSpent * fuelPerMP;
             if (orderKey === "assault" && fuelPerMP > 0) {
               moveCost += fuelPerMP;
             }
 
             // Apply supply modifier to movement/assault cost
-            const modifiedMoveCost = moveCost * supplyMod;
+            moveCost = moveCost * supplyMod;
 
             // Altitude change (1 per level changed)
             const altChanged = token ? (token.getFlag("star-mercs", "altitudeChanged") ?? 0) : 0;
-            const altCost = altChanged * supplyMod;
+            moveCost += altChanged * supplyMod;
+          }
 
-            let totalCost = modifiedMoveCost + altCost;
+          let totalCost = moveCost + vehicleBaseline;
 
-            // Airborne flying units always consume at least 1 per turn (hovering)
-            if (isAirborneFlying && totalCost < 1) {
-              totalCost = 1;
-            }
+          // Airborne flying units always consume at least 1 per turn (hovering)
+          if (isAirborneFlying && totalCost < 1) {
+            totalCost = 1;
+          }
 
-            if (totalCost > 0 && supply[consumableKey].current > 0) {
-              // If vehicle baseline already deducted from fuel, adjust available fuel
-              const alreadyDeducted = (consumableKey === "fuel" && supplyUpdate["system.supply.fuel.current"] != null)
-                ? supply.fuel.current - supplyUpdate["system.supply.fuel.current"]
-                : 0;
-              const available = supply[consumableKey].current - alreadyDeducted;
-              const used = Math.min(totalCost, available);
-              if (used > 0) {
-                const prevDeducted = supplyUpdate[`system.supply.${consumableKey}.current`] != null
-                  ? supplyUpdate[`system.supply.${consumableKey}.current`]
-                  : supply[consumableKey].current;
-                supplyUpdate[`system.supply.${consumableKey}.current`] = prevDeducted - used;
-                const details = [];
-                if (mpSpent > 0) details.push(`${mpSpent} MP × ${fuelPerMP}`);
-                if (orderKey === "assault" && fuelPerMP > 0) details.push(`+${fuelPerMP} assault`);
-                if (altChanged > 0) details.push(`+${altChanged} altitude`);
-                if (supplyMod > 1) details.push(`×${supplyMod} supply mod`);
-                if (isAirborneFlying && modifiedMoveCost + altCost < 1) details.push("min 1 airborne");
-                consumedParts.push(`${consumableLabel}: -${used} (${details.join(", ")})`);
-              }
-            }
-          } else {
-            // consumableType "none": airborne flying still needs minimum from fuel
-            if (isAirborneFlying && supply.fuel.current > 0) {
-              const alreadyDeducted = supplyUpdate["system.supply.fuel.current"] != null
-                ? supply.fuel.current - supplyUpdate["system.supply.fuel.current"]
-                : 0;
-              const available = supply.fuel.current - alreadyDeducted;
-              if (available > 0) {
-                const used = Math.min(1, available);
-                const prevVal = supplyUpdate["system.supply.fuel.current"] ?? supply.fuel.current;
-                supplyUpdate["system.supply.fuel.current"] = prevVal - used;
-                consumedParts.push(`Fuel: -${used} (min 1 airborne)`);
-              }
-            }
+          if (totalCost > 0 && supply[consumableKey].current > 0) {
+            const used = Math.min(totalCost, supply[consumableKey].current);
+            supplyUpdate[`system.supply.${consumableKey}.current`] = supply[consumableKey].current - used;
+            const details = [];
+            if (mpSpent > 0 && consumableType !== "none") details.push(`${mpSpent} MP × ${fuelPerMP}`);
+            if (orderKey === "assault" && fuelPerMP > 0 && consumableType !== "none") details.push(`+${fuelPerMP} assault`);
+            const altChanged = token ? (token.getFlag("star-mercs", "altitudeChanged") ?? 0) : 0;
+            if (altChanged > 0 && consumableType !== "none") details.push(`+${altChanged} altitude`);
+            if (supplyMod > 1 && consumableType !== "none") details.push(`×${supplyMod} supply mod`);
+            if (vehicleBaseline > 0) details.push("+1 vehicle baseline");
+            if (isAirborneFlying && moveCost + vehicleBaseline < 1) details.push("min 1 airborne");
+            consumedParts.push(`${consumableLabel}: -${used} (${details.join(", ")})`);
           }
         }
       }
