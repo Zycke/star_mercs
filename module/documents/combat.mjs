@@ -1154,8 +1154,8 @@ export default class StarMercsCombat extends Combat {
         }
       }
 
-      // 4c. Basic supplies: 1 per unit per turn
-      if (supply.basicSupplies.current > 0) {
+      // 4c. Basic supplies: 1 per unit per turn (Drone units skip this)
+      if (!actor.hasTrait("Drone") && supply.basicSupplies.current > 0) {
         supplyUpdate["system.supply.basicSupplies.current"] = Math.max(0, supply.basicSupplies.current - 1);
         consumedParts.push("Basic: -1");
       }
