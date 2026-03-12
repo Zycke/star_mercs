@@ -176,9 +176,11 @@ export default class StarMercsActor extends Actor {
   canTakeOff() {
     if (!this.hasTrait("Flying")) return false;
     if (!(this.getFlag("star-mercs", "landed") ?? false)) return false;
-    // Cannot take off without fuel
-    const fuel = this.system.supply?.fuel?.current ?? 0;
-    if (fuel <= 0) return false;
+    // Cannot take off without movement consumable (or fuel if "none")
+    const consumableType = this.system.movementConsumable ?? "fuel";
+    const consumableKey = consumableType === "none" ? "fuel" : consumableType;
+    const available = this.system.supply?.[consumableKey]?.current ?? 0;
+    if (available <= 0) return false;
     return true;
   }
 

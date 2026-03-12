@@ -72,6 +72,14 @@ export default class UnitData extends foundry.abstract.TypeDataModel {
       // Fuel consumed per movement point spent
       fuelPerMP: new NumberField({ required: true, integer: true, min: 0, initial: 1 }),
 
+      // Which supply category powers movement (fuel, energy, or none)
+      movementConsumable: new StringField({
+        required: true,
+        initial: "fuel",
+        choices: { fuel: "Fuel", energy: "Energy", none: "None" },
+        label: "STARMERCS.MovementConsumable"
+      }),
+
       // --- Detection ---
       sensors: new NumberField({ required: true, integer: true, min: 0, initial: 2, label: "STARMERCS.Sensors" }),
       // Signature can be negative (stealth units)

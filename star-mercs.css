@@ -734,6 +734,23 @@
   text-align: center;
 }
 
+.star-mercs .movement-cost-config {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--sm-text-dim);
+}
+.star-mercs .movement-cost-config select {
+  padding: 2px 4px;
+  font-size: 11px;
+}
+.star-mercs .movement-cost-config input[type="number"] {
+  width: 40px;
+  text-align: center;
+}
+
 .star-mercs .placeholder-note {
   font-size: 10px;
   color: var(--sm-text-dim);

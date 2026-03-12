@@ -66,10 +66,18 @@
         <input type="number" name="system.supply.fuel.capacity"
                value="{{system.supply.fuel.capacity}}" min="0"/>
       </div>
-      <div class="fuel-per-hex">
+      <div class="movement-cost-config">
+        <label>Move Cost:</label>
+        <select name="system.movementConsumable">
+          <option value="fuel" {{#if (eq system.movementConsumable "fuel")}}selected{{/if}}>Fuel</option>
+          <option value="energy" {{#if (eq system.movementConsumable "energy")}}selected{{/if}}>Energy</option>
+          <option value="none" {{#if (eq system.movementConsumable "none")}}selected{{/if}}>None</option>
+        </select>
+        {{#unless (eq system.movementConsumable "none")}}
         <label>Per MP:</label>
         <input type="number" name="system.fuelPerMP"
                value="{{system.fuelPerMP}}" min="0"/>
+        {{/unless}}
       </div>
     </div>
 
