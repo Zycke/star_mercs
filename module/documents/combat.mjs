@@ -2802,10 +2802,15 @@ export default class StarMercsCombat extends Combat {
 
     // Fire each eligible weapon
     let firedCount = 0;
+    const newFired = [...firedWeapons];
     for (const weapon of inRangeWeapons) {
       await actor.rollAttack(weapon, targetActor);
+      newFired.push(weapon.id);
       firedCount++;
     }
+
+    // Track fired weapons so they don't fire again at subsequent targets
+    await overwatchToken.document.setFlag("star-mercs", "firedWeapons", newFired);
 
     // Post summary chat card
     const owTeam = actor.system.team ?? "a";
