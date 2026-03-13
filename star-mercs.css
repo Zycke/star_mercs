@@ -1897,8 +1897,6 @@
 /*  Chat Action Buttons                     */
 /* ---------------------------------------- */
 
-.star-mercs.chat-card .overwatch-fire-btn,
-.star-mercs.chat-card .overwatch-skip-btn,
 .star-mercs.chat-card .maneuver-fire-btn,
 .star-mercs.chat-card .next-tactical-step-btn {
   background: var(--sm-primary);
@@ -1913,27 +1911,15 @@
   margin-top: 6px;
 }
 
-.star-mercs.chat-card .overwatch-fire-btn:hover,
 .star-mercs.chat-card .maneuver-fire-btn:hover,
 .star-mercs.chat-card .next-tactical-step-btn:hover {
   background: var(--sm-primary-light);
 }
 
-.star-mercs.chat-card .overwatch-fire-btn:disabled,
-.star-mercs.chat-card .overwatch-skip-btn:disabled,
 .star-mercs.chat-card .maneuver-fire-btn:disabled,
 .star-mercs.chat-card .next-tactical-step-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-}
-
-.star-mercs.chat-card .overwatch-skip-btn {
-  background: var(--sm-bg-light);
-  border-color: var(--sm-border);
-}
-
-.star-mercs.chat-card .overwatch-skip-btn:hover {
-  background: var(--sm-bg-medium);
 }
 
 /* ---------------------------------------- */

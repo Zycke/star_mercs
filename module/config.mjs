@@ -120,7 +120,7 @@ STARMERCS.orders = {
     allowsAttack: true,
     readinessCost: -1,
     supplyModifier: "1x",
-    description: "Engage any enemy that moves within weapon range."
+    description: "Automatically engages enemies entering weapon range. Configure range and weapon selection modes."
   },
   stand_down: {
     label: "Stand Down",

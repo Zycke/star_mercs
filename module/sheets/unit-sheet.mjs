@@ -913,6 +913,79 @@ export default class StarMercsUnitSheet extends ActorSheet {
         await this.actor.setFlag("star-mercs", "deployTimer", turnsNeeded);
       }
     }
+
+    // If overwatch order selected, prompt for overwatch settings and clear weapon targets
+    if (selectedOrderKey === "overwatch") {
+      this._promptOverwatchSettings();
+    }
+  }
+
+  /**
+   * Prompt the user to configure overwatch settings (range mode, weapon mode).
+   * Clears all weapon targets since overwatch units fire reactively only.
+   * @private
+   */
+  _promptOverwatchSettings() {
+    const token = this.actor.getActiveTokens()?.[0];
+    const currentRange = token?.document?.getFlag("star-mercs", "overwatchRange") ?? "max";
+    const currentWeapons = token?.document?.getFlag("star-mercs", "overwatchWeapons") ?? "all";
+
+    const content = `
+      <form class="overwatch-settings-form">
+        <div class="form-group">
+          <label>Range Mode</label>
+          <select id="overwatch-range">
+            <option value="max" ${currentRange === "max" ? "selected" : ""}>Fire at Max Range</option>
+            <option value="min" ${currentRange === "min" ? "selected" : ""}>Fire at Min Range</option>
+          </select>
+          <p class="notes">Max: fire when any weapon can reach. Min: fire when shortest-range weapon can reach.</p>
+        </div>
+        <div class="form-group">
+          <label>Weapon Selection</label>
+          <select id="overwatch-weapons">
+            <option value="all" ${currentWeapons === "all" ? "selected" : ""}>Fire All Weapons</option>
+            <option value="appropriate" ${currentWeapons === "appropriate" ? "selected" : ""}>Fire Appropriate Weapons</option>
+          </select>
+          <p class="notes">Appropriate: Infantry\u2192Soft, Heavy\u2192Hard, Vehicle\u2192Soft+Hard, Flying\u2192Anti-Air.</p>
+        </div>
+      </form>
+    `;
+
+    const actor = this.actor;
+    new Dialog({
+      title: "Overwatch Settings",
+      content,
+      buttons: {
+        confirm: {
+          icon: '<i class="fas fa-eye"></i>',
+          label: "Confirm",
+          callback: async (html) => {
+            const rangeMode = html.find("#overwatch-range").val();
+            const weaponMode = html.find("#overwatch-weapons").val();
+            const tkn = actor.getActiveTokens()?.[0];
+            if (tkn?.document) {
+              await tkn.document.setFlag("star-mercs", "overwatchRange", rangeMode);
+              await tkn.document.setFlag("star-mercs", "overwatchWeapons", weaponMode);
+            }
+            // Clear all weapon targets — overwatch fires reactively only
+            for (const weapon of actor.items.filter(i => i.type === "weapon" && i.system.targetId)) {
+              await weapon.update({ "system.targetId": "" });
+            }
+            game.starmercs?.targetingArrowLayer?.drawArrows();
+            ui.notifications.info(`Overwatch set: ${rangeMode === "max" ? "Max Range" : "Min Range"}, ${weaponMode === "all" ? "All Weapons" : "Appropriate Weapons"}`);
+          }
+        },
+        cancel: {
+          icon: '<i class="fas fa-times"></i>',
+          label: "Cancel",
+          callback: async () => {
+            // Revert order if cancelled
+            await actor.update({ "system.currentOrder": "" });
+          }
+        }
+      },
+      default: "confirm"
+    }).render(true);
   }
 
   /**

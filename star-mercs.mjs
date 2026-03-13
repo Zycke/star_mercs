@@ -1212,54 +1212,6 @@ Hooks.on("renderChatMessageHTML", (message, html) => {
     });
   });
 
-  // Overwatch fire button
-  html.querySelectorAll(".overwatch-fire-btn").forEach(btn => {
-    btn.addEventListener("click", async (event) => {
-      event.preventDefault();
-      const attackerDocId = btn.dataset.attackerId;
-      const targetDocId = btn.dataset.targetId;
-
-      const attackerToken = canvas.tokens.placeables.find(t => t.document.id === attackerDocId);
-      const targetToken = canvas.tokens.placeables.find(t => t.document.id === targetDocId);
-      if (!attackerToken?.actor || !targetToken?.actor) return;
-
-      // Landed flying units cannot fire
-      if (attackerToken.actor.hasTrait("Flying") && attackerToken.actor.getFlag("star-mercs", "landed")) {
-        ui.notifications.warn(`${attackerToken.actor.name} is landed — must take off to fire weapons.`);
-        return;
-      }
-
-      btn.disabled = true;
-      btn.textContent = "Firing...";
-      html.querySelectorAll(".overwatch-skip-btn").forEach(el => el.disabled = true);
-
-      // Fire all in-range weapons at the target
-      for (const weapon of attackerToken.actor.items) {
-        if (weapon.type !== "weapon") continue;
-        if (!weapon.system.range) continue;
-        const dist = documents.StarMercsActor.getHexDistance(attackerToken, targetToken);
-        if (dist <= weapon.system.range) {
-          await attackerToken.actor.rollAttack(weapon, targetToken.actor);
-        }
-      }
-
-      btn.textContent = "Fired!";
-    });
-  });
-
-  // Overwatch skip button
-  html.querySelectorAll(".overwatch-skip-btn").forEach(btn => {
-    btn.addEventListener("click", (event) => {
-      event.preventDefault();
-      btn.disabled = true;
-      btn.textContent = "Held";
-      html.querySelectorAll(".overwatch-fire-btn").forEach(el => {
-        el.disabled = true;
-        el.textContent = "Passed";
-      });
-    });
-  });
-
   // Maneuver fire: fire only weapons that have assigned targets
   html.querySelectorAll(".maneuver-fire-btn").forEach(btn => {
     btn.addEventListener("click", async (event) => {

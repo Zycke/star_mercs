@@ -2232,9 +2232,9 @@ export default class StarMercsCombat extends Combat {
       const order = this._getActorOrder(actor);
       if (order && !order.system.allowsAttack) continue;
 
-      // Maneuver/Fly units fire in the maneuver_fire step (after movement)
+      // Maneuver/Fly units fire in the maneuver_fire step; Overwatch fires reactively during movement
       const curOrder = actor.system.currentOrder;
-      if (curOrder === "move" || curOrder === "fly") continue;
+      if (curOrder === "move" || curOrder === "fly" || curOrder === "overwatch") continue;
 
       const weapons = actor.items.filter(
         i => i.type === "weapon" && i.system.targetId
@@ -2575,7 +2575,7 @@ export default class StarMercsCombat extends Combat {
       for (const step of path) {
         const overwatchTriggers = this._checkOverwatchTriggers(canvasToken, step);
         for (const owToken of overwatchTriggers) {
-          await this._postOverwatchCard(owToken, canvasToken, step);
+          await this._executeOverwatchFire(owToken, canvasToken);
         }
 
         // Minefield trigger check at each step
@@ -2632,7 +2632,7 @@ export default class StarMercsCombat extends Combat {
           const wpSnapped = snapToHexCenter(wp);
           const wpPos = hexCenterToTokenPosition(wpSnapped, canvasToken);
           await mover.token.update({ x: wpPos.x, y: wpPos.y }, { _starMercsAutoMove: true });
-          await new Promise(r => setTimeout(r, 200));
+          await new Promise(r => setTimeout(r, 800));
         }
       } else {
         // Single destination — move directly
@@ -2679,6 +2679,47 @@ export default class StarMercsCombat extends Combat {
    * @returns {Token[]} Array of overwatch tokens that can fire.
    * @private
    */
+  /**
+   * Get the list of eligible overwatch weapons for a given attacker and target.
+   * Filters by weapon mode (all/appropriate), target traits, and already-fired status.
+   * @param {StarMercsActor} actor - The overwatch unit's actor.
+   * @param {StarMercsActor} targetActor - The target being fired upon.
+   * @param {string} weaponMode - "all" or "appropriate"
+   * @param {string[]} firedWeapons - Array of weapon IDs already fired this phase.
+   * @returns {Item[]} Array of eligible weapon items.
+   * @private
+   */
+  _getEligibleOverwatchWeapons(actor, targetActor, weaponMode, firedWeapons) {
+    const targetIsFlying = targetActor.hasTrait("Flying") && !targetActor.getFlag("star-mercs", "landed") && !targetActor.hasTrait("Hover");
+    const targetIsInfantry = targetActor.hasTrait("Infantry");
+    const targetIsHeavy = targetActor.hasTrait("Heavy");
+    const targetIsVehicle = targetActor.hasTrait("Vehicle");
+
+    return actor.items.filter(w => {
+      if (w.type !== "weapon") return false;
+      if (firedWeapons.includes(w.id)) return false;
+      const at = w.system.attackType;
+      // Skip defensive systems
+      if (at === "aps" || at === "zps") return false;
+      // Skip artillery and aircraft weapons
+      if (w.system.artillery || w.system.aircraft) return false;
+      // Anti-air can only hit flying targets
+      if (at === "antiAir" && !targetIsFlying) return false;
+      // Non-anti-air cannot hit flying targets
+      if (at !== "antiAir" && targetIsFlying) return false;
+
+      if (weaponMode === "appropriate") {
+        if (targetIsFlying) return at === "antiAir";
+        if (targetIsInfantry) return at === "soft";
+        if (targetIsHeavy) return at === "hard";
+        if (targetIsVehicle) return at === "soft" || at === "hard";
+        // Default: fire all eligible
+        return true;
+      }
+      return true;
+    });
+  }
+
   _checkOverwatchTriggers(movingToken, stepPosition) {
     const triggers = [];
     const movingTeam = movingToken.actor?.system?.team ?? "a";
@@ -2688,11 +2729,12 @@ export default class StarMercsCombat extends Combat {
       if (!token.actor || token.actor.type !== "unit") continue;
       if (token.actor.system.strength.value <= 0) continue;
       if (token.actor.system.currentOrder !== "overwatch") continue;
+      // Landed flying units cannot fire
+      if (token.actor.hasTrait("Flying") && token.actor.getFlag("star-mercs", "landed")) continue;
 
       const owTeam = token.actor.system.team ?? "a";
       if (owTeam === movingTeam) continue;
 
-      // Check if any weapon is in range of the step position
       const owCenter = snapToHexCenter(token.center);
       const stepSnapped = snapToHexCenter(stepPosition);
       const dx = owCenter.x - stepSnapped.x;
@@ -2701,56 +2743,78 @@ export default class StarMercsCombat extends Combat {
       const gridSize = canvas.grid.size || 100;
       const hexDist = Math.round(pixelDist / gridSize);
 
-      const hasWeaponInRange = token.actor.items.some(
-        w => w.type === "weapon" && w.system.range >= hexDist
-      );
+      // Get overwatch settings
+      const rangeMode = token.document.getFlag("star-mercs", "overwatchRange") ?? "max";
+      const weaponMode = token.document.getFlag("star-mercs", "overwatchWeapons") ?? "all";
+      const firedWeapons = token.document.getFlag("star-mercs", "firedWeapons") ?? [];
 
-      if (hasWeaponInRange) {
-        // Detection gate: compute at step position (token hasn't moved yet,
-        // so getDetectionLevel would use its starting position — wrong).
-        if (hexDist > 1) {
-          const hasLOS = checkLOS(owCenter, stepSnapped);
-          if (!hasLOS) continue;
-          const sensors = token.actor.system.sensors ?? 0;
-          const baseSig = movingToken.actor.system.signature ?? 0;
-          const detRange = sensors + baseSig;
-          if (detRange <= 0 || hexDist > detRange) continue;
-        }
-        // hexDist ≤ 1: adjacent units always detect each other
-        triggers.push(token);
+      // Get eligible weapons for this target
+      const eligible = this._getEligibleOverwatchWeapons(token.actor, movingToken.actor, weaponMode, firedWeapons);
+      if (eligible.length === 0) continue;
+
+      // Range check based on mode
+      let inRange = false;
+      if (rangeMode === "max") {
+        inRange = eligible.some(w => w.system.range >= hexDist);
+      } else {
+        // "min": fire only when shortest-range eligible weapon can reach
+        const minRange = Math.min(...eligible.map(w => w.system.range));
+        inRange = minRange >= hexDist;
       }
+      if (!inRange) continue;
+
+      // Detection gate
+      if (hexDist > 1) {
+        const hasLOS = checkLOS(owCenter, stepSnapped);
+        if (!hasLOS) continue;
+        const sensors = token.actor.system.sensors ?? 0;
+        const baseSig = movingToken.actor.system.signature ?? 0;
+        const detRange = sensors + baseSig;
+        if (detRange <= 0 || hexDist > detRange) continue;
+      }
+      // hexDist ≤ 1: adjacent units always detect each other
+      triggers.push(token);
     }
     return triggers;
   }
 
   /**
-   * Post an overwatch trigger chat card with Fire/Hold buttons.
-   * @param {Token} overwatchToken - The overwatch unit.
-   * @param {Token} movingToken - The unit triggering overwatch.
-   * @param {{x: number, y: number}} triggerPosition - Where the trigger occurred.
+   * Execute automatic overwatch fire from an overwatch unit against a moving target.
+   * @param {Token} overwatchToken - The overwatch unit's canvas token.
+   * @param {Token} movingToken - The moving enemy unit's canvas token.
    * @private
    */
-  async _postOverwatchCard(overwatchToken, movingToken, triggerPosition) {
-    const html = `<div class="star-mercs chat-card overwatch-trigger">
-      <div class="summary-header"><i class="fas fa-eye"></i> Overwatch Triggered!</div>
-      <div class="status-update"><strong>${esc(overwatchToken.name)}</strong> spots
-        <strong>${esc(movingToken.name)}</strong> entering weapon range.</div>
-      <div class="overwatch-actions">
-        <button class="overwatch-fire-btn"
-          data-attacker-id="${overwatchToken.document.id}"
-          data-target-id="${movingToken.document.id}"
-          data-combat-id="${this.id}">
-          <i class="fas fa-crosshairs"></i> Fire Overwatch
-        </button>
-        <button class="overwatch-skip-btn">
-          <i class="fas fa-hand-paper"></i> Hold Fire
-        </button>
-      </div>
-    </div>`;
+  async _executeOverwatchFire(overwatchToken, movingToken) {
+    const actor = overwatchToken.actor;
+    const targetActor = movingToken.actor;
+    if (!actor || !targetActor) return;
 
-    const owTeam = overwatchToken.actor?.system?.team ?? "a";
+    const weaponMode = overwatchToken.document.getFlag("star-mercs", "overwatchWeapons") ?? "all";
+    const firedWeapons = overwatchToken.document.getFlag("star-mercs", "firedWeapons") ?? [];
+
+    // Get hex distance
+    const hexDist = StarMercsActor.getHexDistance(overwatchToken, movingToken);
+
+    // Get eligible weapons that are also in range
+    const eligible = this._getEligibleOverwatchWeapons(actor, targetActor, weaponMode, firedWeapons);
+    const inRangeWeapons = eligible.filter(w => w.system.range >= hexDist);
+    if (inRangeWeapons.length === 0) return;
+
+    // Fire each eligible weapon
+    let firedCount = 0;
+    for (const weapon of inRangeWeapons) {
+      await actor.rollAttack(weapon, targetActor);
+      firedCount++;
+    }
+
+    // Post summary chat card
+    const owTeam = actor.system.team ?? "a";
     await ChatMessage.create({
-      content: html,
+      content: `<div class="star-mercs chat-card overwatch-trigger">
+        <div class="summary-header"><i class="fas fa-eye"></i> Overwatch Fire!</div>
+        <div class="status-update"><strong>${esc(actor.name)}</strong> fires at
+          <strong>${esc(targetActor.name)}</strong> — ${firedCount} weapon${firedCount !== 1 ? "s" : ""} engaged.</div>
+      </div>`,
       speaker: { alias: "Star Mercs" },
       whisper: StarMercsCombat.getTeamWhisperIds(owTeam)
     });
