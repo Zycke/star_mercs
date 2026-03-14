@@ -485,9 +485,8 @@ export default class StructureLayer extends PIXI.Container {
       title: `${displayName} — Inspect`,
       content,
       buttons,
-      default: "close",
-      resizable: true
-    }).render(true);
+      default: "close"
+    }, { resizable: true }).render(true);
   }
 
   /**
@@ -504,7 +503,6 @@ export default class StructureLayer extends PIXI.Container {
         <label>Name</label>
         <input type="text" name="name" value="${esc(currentName)}" placeholder="${esc(config?.label ?? "")}" maxlength="24" autofocus />
       </div></form></div>`,
-      resizable: true,
       buttons: {
         save: {
           icon: '<i class="fas fa-check"></i>',
@@ -518,7 +516,7 @@ export default class StructureLayer extends PIXI.Container {
         cancel: { icon: '<i class="fas fa-times"></i>', label: "Cancel" }
       },
       default: "save"
-    }).render(true);
+    }, { resizable: true }).render(true);
   }
 
   /**
@@ -571,12 +569,15 @@ export default class StructureLayer extends PIXI.Container {
         </div>
       </div>
       ${supplyHtml}
+      ${isOutpost ? `<hr><div class="form-group">
+        <label>Supply Range (hexes)</label>
+        <input type="number" name="supplyRange" value="${structure.supplyRange ?? merged.defaultSupplyRange ?? 3}" min="0" max="99" />
+      </div>` : ""}
     </form></div>`;
 
     new Dialog({
       title: `Edit — ${structure.name ?? config.label}`,
       content,
-      resizable: true,
       buttons: {
         autocomplete: {
           icon: '<i class="fas fa-fast-forward"></i>',
@@ -628,6 +629,13 @@ export default class StructureLayer extends PIXI.Container {
               changes.supply = supply;
             }
 
+            if (isOutpost) {
+              const rangeInput = el.querySelector('[name="supplyRange"]');
+              if (rangeInput) {
+                changes.supplyRange = Math.max(parseInt(rangeInput.value) || 0, 0);
+              }
+            }
+
             StructureLayer.updateStructure(structure.id, changes);
             ui.notifications.info("Structure properties updated.");
           }
@@ -635,7 +643,7 @@ export default class StructureLayer extends PIXI.Container {
         cancel: { icon: '<i class="fas fa-times"></i>', label: "Cancel" }
       },
       default: "save"
-    }).render(true);
+    }, { resizable: true }).render(true);
   }
 
   /**
@@ -681,8 +689,9 @@ export default class StructureLayer extends PIXI.Container {
     const catInputs = supplyCats.map(cat => {
       const outpostHas = structure.supply[cat]?.current ?? 0;
       return `<div class="form-group">
-        <label>${supplyLabels[cat]} (outpost: ${outpostHas})</label>
+        <label id="label-${cat}">${supplyLabels[cat]} (outpost: ${outpostHas})</label>
         <input type="number" data-category="${cat}" value="0" min="0" />
+        <span class="hint" id="hint-${cat}"></span>
       </div>`;
     }).join("");
 
@@ -707,7 +716,6 @@ export default class StructureLayer extends PIXI.Container {
     new Dialog({
       title: `Transfer Supply — ${esc(displayName)}`,
       content,
-      resizable: true,
       buttons: {
         transfer: {
           icon: '<i class="fas fa-truck"></i>',
@@ -764,6 +772,52 @@ export default class StructureLayer extends PIXI.Container {
         cancel: { icon: '<i class="fas fa-times"></i>', label: "Cancel" }
       },
       default: "transfer"
+    }, {
+      resizable: true,
+      render: (html) => {
+        const el = html instanceof HTMLElement ? html : html[0] ?? html;
+        const dirSelect = el.querySelector('[name="direction"]');
+        const unitSelect = el.querySelector('[name="unit"]');
+
+        function updateLimits() {
+          const dir = dirSelect.value;
+          const tokenId = unitSelect.value;
+          const targetToken = canvas.tokens.get(tokenId);
+          if (!targetToken?.actor) return;
+          const unitSys = targetToken.actor.system.supply ?? {};
+
+          for (const cat of supplyCats) {
+            const outpostCur = structure.supply[cat]?.current ?? 0;
+            const outpostCap = structure.supply[cat]?.capacity ?? 0;
+            const unitCur = unitSys[cat]?.current ?? 0;
+            const unitCap = unitSys[cat]?.capacity ?? 0;
+            const input = el.querySelector(`[data-category="${cat}"]`);
+            const label = el.querySelector(`#label-${cat}`);
+            const hint = el.querySelector(`#hint-${cat}`);
+            if (!input || !label || !hint) continue;
+
+            if (dir === "toUnit") {
+              const maxTransfer = Math.max(Math.min(outpostCur, unitCap - unitCur), 0);
+              input.max = maxTransfer;
+              label.textContent = `${supplyLabels[cat]} (outpost: ${outpostCur})`;
+              hint.textContent = `unit: ${unitCur}/${unitCap}`;
+            } else {
+              const maxTransfer = Math.max(Math.min(unitCur, outpostCap - outpostCur), 0);
+              input.max = maxTransfer;
+              label.textContent = `${supplyLabels[cat]} (unit: ${unitCur})`;
+              hint.textContent = `outpost: ${outpostCur}/${outpostCap}`;
+            }
+            // Clamp current value to new max
+            const curVal = parseInt(input.value) || 0;
+            const newMax = parseInt(input.max) || 0;
+            if (curVal > newMax) input.value = newMax;
+          }
+        }
+
+        dirSelect.addEventListener("change", updateLimits);
+        unitSelect.addEventListener("change", updateLimits);
+        updateLimits();
+      }
     }).render(true);
   }
 
@@ -847,7 +901,6 @@ export default class StructureLayer extends PIXI.Container {
     new Dialog({
       title: `Attack ${sConfig?.label ?? "Structure"}`,
       content,
-      resizable: true,
       buttons: {
         fire: {
           icon: '<i class="fas fa-crosshairs"></i>',
@@ -864,7 +917,7 @@ export default class StructureLayer extends PIXI.Container {
         cancel: { icon: '<i class="fas fa-times"></i>', label: "Cancel" }
       },
       default: "fire"
-    }).render(true);
+    }, { resizable: true }).render(true);
   }
 
   /**
