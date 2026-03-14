@@ -3028,6 +3028,7 @@ select:focus,
 
 .star-mercs.sm-dialog .sm-supply-grid .form-group {
   display: flex;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 4px;
   margin-bottom: 0;
@@ -3062,6 +3063,7 @@ select:focus,
   border-top: 1px solid var(--sm-border);
   padding: 6px 8px;
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
 }
 
@@ -3075,12 +3077,14 @@ select:focus,
   padding: 5px 10px;
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s;
-  flex: 1 1 0;
+  flex: 1 1 auto;
+  min-width: 100px;
   min-height: 36px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   text-align: center;
+  white-space: nowrap;
 }
 
 .dialog:has(.sm-dialog) .dialog-buttons button:hover {
