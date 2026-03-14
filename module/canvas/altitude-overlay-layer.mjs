@@ -32,6 +32,19 @@ export default class AltitudeOverlayLayer extends PIXI.Container {
       // Landed units show nothing (they're on the ground)
       if (token.actor.getFlag("star-mercs", "landed")) continue;
 
+      // Skip hidden tokens for non-GM users
+      if (token.document?.hidden && !game.user.isGM) continue;
+
+      // Skip unrevealed enemy flying units for non-GM users
+      if (!game.user.isGM) {
+        const assignments = game.settings.get("star-mercs", "teamAssignments") ?? {};
+        const viewerTeam = assignments[game.user.id] ?? "a";
+        const tokenTeam = token.actor?.system?.team ?? "a";
+        if (tokenTeam !== viewerTeam) {
+          if (!token.document?.hasStatusEffect?.("revealed")) continue;
+        }
+      }
+
       const altitude = token.actor.getFlag("star-mercs", "altitude") ?? 0;
 
       const label = new PIXI.Text(`${altitude}`, {

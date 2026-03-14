@@ -1611,7 +1611,11 @@ export default class StarMercsUnitSheet extends ActorSheet {
         pathLayer?.clear();
         confirmDialog = null;
       }
-    }, { top: 60, left: 10, width: 260 });
+    }, {
+      top: Math.max(60, Math.round(window.innerHeight / 2 - 100)),
+      left: Math.max(10, Math.round(window.innerWidth / 2 - 130)),
+      width: 260
+    });
 
     confirmDialog.render(true);
 
