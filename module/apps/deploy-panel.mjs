@@ -108,7 +108,8 @@ export default class DeployPanel extends HandlebarsApplicationMixin(ApplicationV
         strength: actor.system.strength?.value ?? 0,
         specialTraits: specialTraits.length > 0 ? specialTraits.join(", ") : null,
         isPending: !!pending,
-        pendingMode: pending?.mode ?? null
+        pendingMode: pending?.mode ?? null,
+        isDeployed: !!entry.deployed
       });
     }
 
@@ -254,6 +255,12 @@ export default class DeployPanel extends HandlebarsApplicationMixin(ApplicationV
       customName
     });
     await game.settings.set("star-mercs", "deployPool", pool);
+
+    // Assign the actor to the deploy team if it doesn't match
+    if (actor && actor.system.team !== team) {
+      await actor.update({ "system.team": team });
+    }
+
     this.render();
   }
 
@@ -352,6 +359,19 @@ export default class DeployPanel extends HandlebarsApplicationMixin(ApplicationV
     const actor = game.actors.get(actorId);
     if (!actor) return;
 
+    // Deployed entries: GM can recall, no other actions
+    const pool = game.settings.get("star-mercs", "deployPool") ?? { a: [], b: [] };
+    const team = this._viewedTeam ?? "a";
+    const poolEntry = pool[team]?.find(e => e.instanceId === instanceId);
+    if (poolEntry?.deployed) {
+      if (game.user.isGM) {
+        this._showContextMenu(event.clientX, event.clientY, instanceId, actorId, [
+          { label: "Recall Unit", icon: "fas fa-undo", mode: "recall" }
+        ]);
+      }
+      return;
+    }
+
     // Check if this entry already has a pending deploy
     const pendingDeploys = combat?.getFlag("star-mercs", "pendingDeploys") ?? [];
     const isPending = pendingDeploys.some(p => p.instanceId === instanceId);
@@ -419,6 +439,8 @@ export default class DeployPanel extends HandlebarsApplicationMixin(ApplicationV
         menu.remove();
         if (item.mode === "cancel_pending") {
           this._cancelPendingDeploy(instanceId);
+        } else if (item.mode === "recall") {
+          this._recallDeployed(instanceId);
         } else {
           this._startDeploy(instanceId, actorId, item.mode);
         }
@@ -651,11 +673,11 @@ export default class DeployPanel extends HandlebarsApplicationMixin(ApplicationV
     const poolEntry = pool[team]?.find(e => e.instanceId === instanceId);
     const customName = poolEntry?.customName || actor.name;
 
-    // Create token from prototype
+    // Create token from prototype (always use 0.5 hex size)
     const protoToken = actor.prototypeToken;
     const gridSize = canvas.grid.size || 100;
-    const tokenW = (protoToken.width ?? 1) * gridSize;
-    const tokenH = (protoToken.height ?? 1) * gridSize;
+    const tokenW = 0.5 * gridSize;
+    const tokenH = 0.5 * gridSize;
     const tokenPosition = {
       x: hexCenter.x - tokenW / 2,
       y: hexCenter.y - tokenH / 2
@@ -665,6 +687,8 @@ export default class DeployPanel extends HandlebarsApplicationMixin(ApplicationV
       actorId: actor.id,
       actorLink: false,
       name: customName,
+      width: 0.5,
+      height: 0.5,
       x: tokenPosition.x,
       y: tokenPosition.y
     });
@@ -691,8 +715,8 @@ export default class DeployPanel extends HandlebarsApplicationMixin(ApplicationV
         await tokenDoc.actor.update({ name: customName });
       }
 
-      // Remove from pool
-      await this._removeFromPool(instanceId, team);
+      // Mark as deployed in pool (keep entry visible)
+      await this._markDeployed(instanceId, team, tokenDoc.id);
     } else {
       // Non-GM: relay via socket
       game.socket.emit("system.star-mercs", {
@@ -736,18 +760,60 @@ export default class DeployPanel extends HandlebarsApplicationMixin(ApplicationV
       await actor.setFlag("star-mercs", "deployTimer", 0);
       await actor.toggleStatusEffect("packed", { active: true });
     }
+
+    // Clean up airborne for non-Flying units (may have been copied from base actor effects)
+    if (!actor.hasTrait("Flying")) {
+      const airborneEffect = actor.effects.find(e => e.statuses?.has("airborne"));
+      if (airborneEffect) await airborneEffect.delete();
+    }
   }
 
   /**
-   * Remove a pool entry by instanceId (after successful deployment).
+   * Mark a pool entry as deployed (instead of removing it).
    * @param {string} instanceId
    * @param {string} team
+   * @param {string} [tokenId] - The placed token's ID for recall support
    */
-  async _removeFromPool(instanceId, team) {
+  async _markDeployed(instanceId, team, tokenId = null) {
     const pool = foundry.utils.deepClone(game.settings.get("star-mercs", "deployPool") ?? { a: [], b: [] });
     if (!pool[team]) return;
-    pool[team] = pool[team].filter(e => e.instanceId !== instanceId);
+    const entry = pool[team].find(e => e.instanceId === instanceId);
+    if (entry) {
+      entry.deployed = true;
+      entry.tokenId = tokenId;
+    }
     await game.settings.set("star-mercs", "deployPool", pool);
+  }
+
+  /**
+   * Recall a deployed unit: delete the token and combatant, restore to available in pool.
+   * @param {string} instanceId
+   */
+  async _recallDeployed(instanceId) {
+    const pool = foundry.utils.deepClone(game.settings.get("star-mercs", "deployPool") ?? { a: [], b: [] });
+    const team = this._viewedTeam ?? "a";
+    const entry = pool[team]?.find(e => e.instanceId === instanceId);
+    if (!entry?.deployed) return;
+
+    // Delete the token from the scene
+    if (entry.tokenId && canvas.scene) {
+      const tokenDoc = canvas.scene.tokens.get(entry.tokenId);
+      if (tokenDoc) {
+        // Remove combatant first
+        if (game.combat?.started) {
+          const combatant = game.combat.combatants.find(c => c.tokenId === entry.tokenId);
+          if (combatant) await combatant.delete();
+        }
+        await tokenDoc.delete();
+      }
+    }
+
+    // Restore to available
+    entry.deployed = false;
+    entry.tokenId = null;
+    await game.settings.set("star-mercs", "deployPool", pool);
+    this.render();
+    ui.notifications.info(`${entry.customName ?? "Unit"} recalled from deployment.`);
   }
 
   /* ---------------------------------------- */

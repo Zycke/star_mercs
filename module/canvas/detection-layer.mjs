@@ -35,6 +35,17 @@ export default class DetectionLayer extends PIXI.Container {
   static LOS_HIGHLIGHT_COLOR = 0x44FF44;
   static LOS_HIGHLIGHT_ALPHA = 0.12;
 
+  /**
+   * Check if a hex center is within the scene boundaries.
+   * @param {{x: number, y: number}} hexCenter
+   * @returns {boolean}
+   */
+  static _isOnMap(hexCenter) {
+    const d = canvas.dimensions;
+    return hexCenter.x >= d.sceneX && hexCenter.x <= d.sceneX + d.sceneWidth
+        && hexCenter.y >= d.sceneY && hexCenter.y <= d.sceneY + d.sceneHeight;
+  }
+
   /* ---------------------------------------- */
   /*  Public API                              */
   /* ---------------------------------------- */
@@ -145,6 +156,7 @@ export default class DetectionLayer extends PIXI.Container {
           const k = hexKey(n);
           if (visited.has(k)) continue;
           visited.add(k);
+          if (!DetectionLayer._isOnMap(n)) continue;
           nextFrontier.push(n);
           allInRange.push(n);
         }
@@ -209,6 +221,7 @@ export default class DetectionLayer extends PIXI.Container {
           const k = hexKey(n);
           if (visited.has(k)) continue;
           visited.add(k);
+          if (!DetectionLayer._isOnMap(n)) continue;
           if (detection.checkLOS(center, n, token)) {
             losHexes.push(n);
             nextFrontier.push(n);

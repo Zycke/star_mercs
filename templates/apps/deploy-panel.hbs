@@ -8,7 +8,7 @@
 
   <div class="deploy-pool-list" data-team="{{viewedTeam}}">
     {{#each poolEntries}}
-      <div class="deploy-entry {{#if isPending}}pending{{/if}}" data-instance-id="{{instanceId}}" data-actor-id="{{actorId}}">
+      <div class="deploy-entry {{#if isPending}}pending{{/if}}{{#if isDeployed}} deployed{{/if}}" data-instance-id="{{instanceId}}" data-actor-id="{{actorId}}">
         <img src="{{img}}" width="32" height="32"/>
         <div class="deploy-entry-info">
           <span class="deploy-entry-name" title="Double-click to rename">{{name}}</span>
@@ -16,7 +16,9 @@
           {{#if specialTraits}}
             <span class="deploy-entry-traits">{{specialTraits}}</span>
           {{/if}}
-          {{#if isPending}}
+          {{#if isDeployed}}
+            <span class="deploy-entry-deployed"><i class="fas fa-check-circle"></i> Deployed</span>
+          {{else if isPending}}
             <span class="deploy-entry-pending"><i class="fas fa-crosshairs"></i>
               {{#if (eq pendingMode "meteoric_assault")}}Meteoric Assault{{/if}}
               {{#if (eq pendingMode "air_drop")}}Air Drop{{/if}}
@@ -25,7 +27,9 @@
           {{/if}}
         </div>
         {{#if ../canRemove}}
-          <button class="remove-btn" title="Remove from pool"><i class="fas fa-times"></i></button>
+          {{#unless isDeployed}}
+            <button class="remove-btn" title="Remove from pool"><i class="fas fa-times"></i></button>
+          {{/unless}}
         {{/if}}
       </div>
     {{/each}}

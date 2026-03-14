@@ -3326,6 +3326,21 @@ select:focus,
   font-weight: bold;
 }
 
+.deploy-panel .deploy-entry.deployed {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.deploy-panel .deploy-entry.deployed .deploy-entry-name {
+  text-decoration: line-through;
+}
+
+.deploy-panel .deploy-entry-deployed {
+  font-size: 9px;
+  color: #4a6;
+  font-weight: bold;
+}
+
 .deploy-panel .deploy-entry-name {
   cursor: text;
 }

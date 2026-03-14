@@ -381,9 +381,12 @@ Hooks.once("ready", async () => {
           const protoToken = actor.prototypeToken;
           const tokenData = foundry.utils.mergeObject(protoToken.toObject(), {
             actorId: actor.id,
+            width: 0.5,
+            height: 0.5,
             x: data.x,
             y: data.y
           });
+          if (data.customName) tokenData.name = data.customName;
           const created = await scene.createEmbeddedDocuments("Token", [tokenData]);
           const tokenDoc = created[0];
 
@@ -396,11 +399,11 @@ Hooks.once("ready", async () => {
             }]);
           }
 
-          // Apply deploy effects
+          // Apply deploy effects and mark as deployed
           const panel = game.starmercs?.deployPanel;
           if (panel) {
-            await panel._applyDeployEffects(actor, tokenDoc, data.mode);
-            await panel._removeFromPool(data.actorId, data.team);
+            await panel._applyDeployEffects(tokenDoc, data.mode);
+            await panel._markDeployed(data.instanceId, data.team, tokenDoc.id);
           }
           break;
         }
@@ -728,7 +731,8 @@ Hooks.on("updateToken", (tokenDoc, changes, options) => {
 
   // Track movement points spent during tactical phase (skip for GM override moves)
   if (("x" in changes || "y" in changes) && game.combat?.started
-      && game.combat.phase === "tactical" && !options?._starMercsGMOverride) {
+      && game.combat.phase === "tactical" && !options?._starMercsGMOverride
+      && !options?._starMercsAutoMove) {
     const actor = tokenDoc.actor;
     if (actor?.type === "unit") {
       const mpCost = options?._starMercsMPCost ?? 1;
@@ -835,20 +839,21 @@ function syncSupplyStatusEffects(actor) {
  * Sync terrain cover status effects based on the unit's current hex.
  * Cover (+1 to hit) or Heavy Cover (+2 to hit), mutually exclusive.
  * @param {Actor} actor
+ * @param {{x: number, y: number}} [hexCenterOverride] - Optional hex center to use instead of token position
  */
-function syncTerrainCoverEffects(actor) {
+function syncTerrainCoverEffects(actor, hexCenterOverride) {
   if (!actor || actor.type !== "unit") return;
   const token = actor.getActiveTokens()?.[0];
-  if (!token) return;
+  if (!token && !hexCenterOverride) return;
 
   // Airborne units get no terrain cover
-  if (hexUtils.isAirborne(token)) {
+  if (!hexCenterOverride && hexUtils.isAirborne(token)) {
     _syncEffect(actor, "cover", false);
     _syncEffect(actor, "heavy-cover", false);
     return;
   }
 
-  const hexCenter = hexUtils.snapToHexCenter(token.center);
+  const hexCenter = hexCenterOverride ?? hexUtils.snapToHexCenter(token.center);
   const terrainType = hexUtils.getHexTerrain(hexCenter);
   let coverLevel = 0; // 0 = none, 1 = cover, 2 = heavy cover
 
@@ -875,21 +880,22 @@ function syncTerrainCoverEffects(actor) {
  * Sync terrain concealment status effects based on the unit's current hex.
  * Light (-1 sig), Moderate (-2 sig), or Heavy Concealment (-3 sig), mutually exclusive.
  * @param {Actor} actor
+ * @param {{x: number, y: number}} [hexCenterOverride] - Optional hex center to use instead of token position
  */
-function syncTerrainConcealmentEffects(actor) {
+function syncTerrainConcealmentEffects(actor, hexCenterOverride) {
   if (!actor || actor.type !== "unit") return;
   const token = actor.getActiveTokens()?.[0];
-  if (!token) return;
+  if (!token && !hexCenterOverride) return;
 
   // Airborne units get no terrain concealment
-  if (hexUtils.isAirborne(token)) {
+  if (!hexCenterOverride && hexUtils.isAirborne(token)) {
     _syncEffect(actor, "light-concealment", false);
     _syncEffect(actor, "moderate-concealment", false);
     _syncEffect(actor, "heavy-concealment", false);
     return;
   }
 
-  const hexCenter = hexUtils.snapToHexCenter(token.center);
+  const hexCenter = hexCenterOverride ?? hexUtils.snapToHexCenter(token.center);
   const terrainType = hexUtils.getHexTerrain(hexCenter);
   let concealLevel = 0; // 0 = none, 1 = light, 2 = moderate, 3 = heavy
 
@@ -1338,6 +1344,8 @@ Hooks.once("ready", () => {
   game.starmercs.syncActorOwnership = syncActorOwnership;
   game.starmercs.syncAllOwnership = syncAllOwnership;
   game.starmercs.detection = detection;
+  game.starmercs.syncTerrainCover = syncTerrainCoverEffects;
+  game.starmercs.syncTerrainConcealment = syncTerrainConcealmentEffects;
 
   // Sync status effects for all existing units on world load
   for (const actor of game.actors) {
@@ -1348,6 +1356,9 @@ Hooks.once("ready", () => {
     if (actor.hasTrait("Flying")) {
       const shouldBeAirborne = !actor.getFlag("star-mercs", "landed");
       _syncEffect(actor, "airborne", shouldBeAirborne);
+    } else {
+      // Clean up lingering airborne from non-Flying actors
+      _syncEffect(actor, "airborne", false);
     }
   }
 });

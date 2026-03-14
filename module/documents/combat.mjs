@@ -2571,8 +2571,13 @@ export default class StarMercsCombat extends Combat {
         continue;
       }
 
-      // Check each step for overwatch triggers and minefield triggers
+      // Check each step for overwatch triggers, minefield triggers, and terrain effects
       for (const step of path) {
+        // Sync terrain cover/concealment at each hex entered (before overwatch fires)
+        const stepCenter = snapToHexCenter(step);
+        game.starmercs?.syncTerrainCover?.(mover.actor, stepCenter);
+        game.starmercs?.syncTerrainConcealment?.(mover.actor, stepCenter);
+
         const overwatchTriggers = this._checkOverwatchTriggers(canvasToken, step);
         for (const owToken of overwatchTriggers) {
           await this._executeOverwatchFire(owToken, canvasToken);
