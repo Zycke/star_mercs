@@ -128,6 +128,9 @@ export default class StarMercsCombat extends Combat {
       // Apply assault +1 incoming damage flag at the start of tactical phase
       await this._applyAssaultIncomingDamageFlags();
 
+      // Clear damage dealt tracking from previous turn
+      await this.unsetFlag("star-mercs", "damageDealtThisTurn");
+
       await this.update({
         "flags.star-mercs.phase": "tactical",
         "flags.star-mercs.phaseIndex": 3,
@@ -344,6 +347,13 @@ export default class StarMercsCombat extends Combat {
     existing.readiness += readinessLoss;
     existing.hits.push({ source: sourceName, weapon: weaponName, damage: strengthDamage, readinessLoss });
     await tokenDoc.setFlag("star-mercs", "pendingDamage", existing);
+
+    // Track damage dealt by attacker for combat summary
+    if (strengthDamage > 0) {
+      const dealt = foundry.utils.deepClone(this.getFlag("star-mercs", "damageDealtThisTurn") ?? {});
+      dealt[sourceName] = (dealt[sourceName] ?? 0) + strengthDamage;
+      await this.setFlag("star-mercs", "damageDealtThisTurn", dealt);
+    }
   }
 
   /* ---------------------------------------- */
@@ -1251,6 +1261,9 @@ export default class StarMercsCombat extends Combat {
       content: moraleContent,
       speaker: { alias: "Star Mercs" }
     });
+
+    // Refresh combat summary after consolidation
+    game.starmercs?.combatSummary?.render();
   }
 
   /* ---------------------------------------- */
@@ -1945,13 +1958,139 @@ export default class StarMercsCombat extends Combat {
   /* ---------------------------------------- */
 
   /**
+   * Check if a tactical sub-step has any work to do (units to process).
+   * Used by auto-skip to avoid pausing on empty sub-phases.
+   * @param {string} key - The step key from TACTICAL_STEPS.
+   * @returns {boolean} True if the step has work to do.
+   * @private
+   */
+  _hasWorkForStep(key) {
+    switch (key) {
+      case "withdraw_morale":
+        return this.combatants.some(c => {
+          const a = c.actor;
+          return a?.type === "unit" && a.system.currentOrder === "withdraw"
+            && a.system.strength.value > 0;
+        });
+
+      case "artillery":
+        return this.combatants.some(c => {
+          const a = c.actor;
+          if (!a || a.type !== "unit" || a.system.strength.value <= 0) return false;
+          if (a.hasTrait("Flying") && a.getFlag("star-mercs", "landed")) return false;
+          return a.items.some(i => i.type === "weapon" && i.system.artillery && i.system.targetId);
+        });
+
+      case "airstrikes":
+        return this.combatants.some(c => {
+          const a = c.actor;
+          if (!a || a.type !== "unit" || a.system.strength.value <= 0) return false;
+          if (a.hasTrait("Flying") && a.getFlag("star-mercs", "landed")) return false;
+          return a.items.some(i => i.type === "weapon" && i.system.aircraft && i.system.targetId);
+        });
+
+      case "weapons_fire":
+        return this.combatants.some(c => {
+          const a = c.actor;
+          if (!a || a.type !== "unit" || a.system.strength.value <= 0) return false;
+          if (a.hasTrait("Flying") && a.getFlag("star-mercs", "landed")) return false;
+          const order = this._getActorOrder(a);
+          if (order && !order.system.allowsAttack) return false;
+          const curOrder = a.system.currentOrder;
+          if (curOrder === "move" || curOrder === "fly" || curOrder === "overwatch") return false;
+          return a.items.some(i => i.type === "weapon" && i.system.targetId
+            && !i.system.artillery && !i.system.aircraft);
+        });
+
+      case "assault_adjacent":
+      case "assault_move":
+        return this.combatants.some(c => {
+          const a = c.actor;
+          return a?.type === "unit" && a.system.currentOrder === "assault"
+            && a.system.strength.value > 0 && c.token?.getFlag("star-mercs", "assaultTarget");
+        });
+
+      case "movement":
+        return this.combatants.some(c => {
+          const a = c.actor;
+          if (!a || a.type !== "unit" || a.system.strength.value <= 0) return false;
+          const order = a.system.currentOrder;
+          const orderConfig = CONFIG.STARMERCS.orders?.[order];
+          if (!orderConfig?.allowsMovement) return false;
+          if (order === "assault" || order === "withdraw") return false;
+          return !!c.token?.getFlag("star-mercs", "moveDestination");
+        }) || this.combatants.some(c => {
+          const a = c.actor;
+          return a?.type === "unit" && a.system.strength.value > 0
+            && a.system.currentOrder === "change_altitude"
+            && c.token?.getFlag("star-mercs", "altitudeTarget") != null;
+        });
+
+      case "maneuver_fire":
+        return this.combatants.some(c => {
+          const a = c.actor;
+          if (!a || a.type !== "unit" || a.system.strength.value <= 0) return false;
+          const mfOrder = a.system.currentOrder;
+          if (mfOrder !== "move" && mfOrder !== "fly") return false;
+          return a.items.some(i => i.type === "weapon" && !i.system.artillery && !i.system.aircraft);
+        });
+
+      case "meteoric_landing": {
+        const pending = this.getFlag("star-mercs", "pendingDeploys") ?? [];
+        return pending.some(p => p.mode === "meteoric_assault");
+      }
+
+      case "air_drop_landing": {
+        const pending = this.getFlag("star-mercs", "pendingDeploys") ?? [];
+        return pending.some(p => p.mode === "air_drop");
+      }
+
+      default:
+        return true;
+    }
+  }
+
+  /**
    * Dispatch execution to the appropriate tactical sub-step handler.
+   * Auto-skips sub-phases with nothing to do and posts a combined skip message.
    * After execution, posts a "Next Step" chat button or advances to consolidation.
    * @param {number} stepIndex - Index into TACTICAL_STEPS.
    * @private
    */
   async _executeTacticalStep(stepIndex) {
-    const step = StarMercsCombat.TACTICAL_STEPS[stepIndex];
+    const steps = StarMercsCombat.TACTICAL_STEPS;
+
+    // Auto-skip empty sub-phases
+    const skippedLabels = [];
+    while (stepIndex < steps.length && !this._hasWorkForStep(steps[stepIndex].key)) {
+      skippedLabels.push(steps[stepIndex].label);
+      stepIndex++;
+    }
+
+    // Post combined skip message if any were skipped
+    if (skippedLabels.length > 0) {
+      await ChatMessage.create({
+        content: `<div class="star-mercs chat-card tactical-step">
+          <div class="summary-header"><i class="fas fa-forward"></i> Skipped</div>
+          <div class="status-update">${skippedLabels.join(", ")} — nothing to resolve.</div>
+        </div>`,
+        speaker: { alias: "Star Mercs" }
+      });
+    }
+
+    // If all remaining steps were skipped, proceed to consolidation
+    if (stepIndex >= steps.length) {
+      await this._postStepComplete();
+      return;
+    }
+
+    // Update the step index
+    await this.setFlag("star-mercs", "tacticalStep", stepIndex);
+
+    // Refresh combat summary if open
+    game.starmercs?.combatSummary?.render();
+
+    const step = steps[stepIndex];
 
     switch (step.key) {
       case "withdraw_morale":
@@ -1986,8 +2125,11 @@ export default class StarMercsCombat extends Combat {
         break;
     }
 
+    // Refresh combat summary after step execution
+    game.starmercs?.combatSummary?.render();
+
     // Post "Next Step" button if more steps remain
-    if (stepIndex < StarMercsCombat.TACTICAL_STEPS.length - 1) {
+    if (stepIndex < steps.length - 1) {
       await this._postNextStepButton(stepIndex);
     } else {
       await this._postStepComplete();

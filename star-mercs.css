@@ -3445,6 +3445,127 @@ select:focus,
 }
 
 /* ============================================ */
+/*  Combat Summary                              */
+/* ============================================ */
+
+.combat-summary .combat-summary-content {
+  padding: 4px;
+}
+
+.combat-summary .summary-turn-info {
+  text-align: center;
+  font-size: 11px;
+  color: #aaa;
+  padding: 2px 0 4px;
+  border-bottom: 1px solid var(--sm-border, #333);
+  margin-bottom: 4px;
+}
+
+.combat-summary .summary-team-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.combat-summary .summary-team-tab {
+  flex: 1;
+  padding: 3px 8px;
+  border: 1px solid #555;
+  background: #333;
+  color: #ccc;
+  cursor: pointer;
+  text-align: center;
+  font-size: 11px;
+}
+
+.combat-summary .summary-team-tab.active {
+  background: #555;
+  color: white;
+}
+
+.combat-summary .summary-team-header {
+  font-weight: bold;
+  font-size: 11px;
+  color: #8af;
+  padding: 4px 0 2px;
+  border-bottom: 1px solid #444;
+  margin-top: 4px;
+}
+
+.combat-summary .summary-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 10px;
+}
+
+.combat-summary .summary-table thead th {
+  text-align: center;
+  font-size: 9px;
+  color: #999;
+  padding: 2px 3px;
+  border-bottom: 1px solid #444;
+  font-weight: normal;
+  text-transform: uppercase;
+}
+
+.combat-summary .summary-table thead th.col-name {
+  text-align: left;
+}
+
+.combat-summary .summary-unit-row {
+  cursor: pointer;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.combat-summary .summary-unit-row:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.combat-summary .summary-unit-row td {
+  padding: 3px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.combat-summary .summary-unit-row td.col-name {
+  text-align: left;
+  font-weight: bold;
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.combat-summary .summary-unit-row td.col-supply {
+  font-size: 9px;
+  color: #aaa;
+}
+
+.combat-summary .summary-unit-row td.dealt {
+  color: #f84;
+}
+
+.combat-summary .summary-unit-row td.taken {
+  color: #f44;
+}
+
+.combat-summary .summary-unit-row.destroyed {
+  opacity: 0.4;
+  text-decoration: line-through;
+}
+
+.combat-summary .summary-unit-row.has-pending td.taken {
+  color: #fa4;
+  font-style: italic;
+}
+
+.combat-summary .summary-empty {
+  text-align: center;
+  color: #888;
+  font-style: italic;
+  padding: 20px;
+}
+
+/* ============================================ */
 /*  Reference Tables                            */
 /* ============================================ */
 

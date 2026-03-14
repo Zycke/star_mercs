@@ -30,6 +30,7 @@ import TurnControlPanel from "./module/apps/turn-control.mjs";
 import StructureLayer from "./module/canvas/structure-layer.mjs";
 import StructureSettings from "./module/apps/structure-settings.mjs";
 import DeployPanel from "./module/apps/deploy-panel.mjs";
+import CombatSummary from "./module/apps/combat-summary.mjs";
 import ReferenceTables from "./module/apps/reference-tables.mjs";
 
 /* ============================================ */
@@ -1706,6 +1707,25 @@ Hooks.on("getSceneControlButtons", (controls) => {
     }
   };
 
+  const combatSummaryTool = {
+    name: "combatSummary",
+    title: "Combat Summary",
+    icon: "fas fa-chart-bar",
+    visible: true,
+    toggle: true,
+    active: game.starmercs?.combatSummary?.rendered ?? false,
+    onChange: (event, active) => {
+      if (active) {
+        if (!game.starmercs.combatSummary) {
+          game.starmercs.combatSummary = new CombatSummary();
+        }
+        game.starmercs.combatSummary.render(true);
+      } else {
+        game.starmercs.combatSummary?.close();
+      }
+    }
+  };
+
   const referenceTool = {
     name: "referenceTables",
     title: "Quick Reference",
@@ -1746,6 +1766,8 @@ Hooks.on("getSceneControlButtons", (controls) => {
     tokenControls.tools.turnControl = turnControlTool;
     deployPanelTool.order = Object.keys(tokenControls.tools).length;
     tokenControls.tools.deployPanel = deployPanelTool;
+    combatSummaryTool.order = Object.keys(tokenControls.tools).length;
+    tokenControls.tools.combatSummary = combatSummaryTool;
     referenceTool.order = Object.keys(tokenControls.tools).length;
     tokenControls.tools.referenceTables = referenceTool;
   } else {
@@ -1759,6 +1781,7 @@ Hooks.on("getSceneControlButtons", (controls) => {
     tokenControls.tools.push(structureSettingsTool);
     tokenControls.tools.push(turnControlTool);
     tokenControls.tools.push(deployPanelTool);
+    tokenControls.tools.push(combatSummaryTool);
     tokenControls.tools.push(referenceTool);
   }
 });
