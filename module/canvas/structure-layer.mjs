@@ -485,7 +485,8 @@ export default class StructureLayer extends PIXI.Container {
       title: `${displayName} — Inspect`,
       content,
       buttons,
-      default: "close"
+      default: "close",
+      resizable: true
     }).render(true);
   }
 
@@ -503,6 +504,7 @@ export default class StructureLayer extends PIXI.Container {
         <label>Name</label>
         <input type="text" name="name" value="${esc(currentName)}" placeholder="${esc(config?.label ?? "")}" maxlength="24" autofocus />
       </div></form></div>`,
+      resizable: true,
       buttons: {
         save: {
           icon: '<i class="fas fa-check"></i>',
@@ -574,6 +576,7 @@ export default class StructureLayer extends PIXI.Container {
     new Dialog({
       title: `Edit — ${structure.name ?? config.label}`,
       content,
+      resizable: true,
       buttons: {
         autocomplete: {
           icon: '<i class="fas fa-fast-forward"></i>',
@@ -704,6 +707,7 @@ export default class StructureLayer extends PIXI.Container {
     new Dialog({
       title: `Transfer Supply — ${esc(displayName)}`,
       content,
+      resizable: true,
       buttons: {
         transfer: {
           icon: '<i class="fas fa-truck"></i>',
@@ -843,6 +847,7 @@ export default class StructureLayer extends PIXI.Container {
     new Dialog({
       title: `Attack ${sConfig?.label ?? "Structure"}`,
       content,
+      resizable: true,
       buttons: {
         fire: {
           icon: '<i class="fas fa-crosshairs"></i>',
