@@ -470,15 +470,11 @@ export default class StructureLayer extends PIXI.Container {
           ui.notifications.info(`Auto-supply ${newVal ? "enabled" : "disabled"}.`);
         }
       };
-      // Manual transfer — only during Preparation phase
-      const phase = game.combat?.getFlag?.("star-mercs", "phase") ?? null;
-      if (phase === "preparation" || !game.combat?.started) {
-        buttons.transfer = {
-          icon: '<i class="fas fa-exchange-alt"></i>',
-          label: "Transfer Supply",
-          callback: () => this._openOutpostSupplyTransfer(structure)
-        };
-      }
+      buttons.transfer = {
+        icon: '<i class="fas fa-exchange-alt"></i>',
+        label: "Transfer Supply",
+        callback: () => this._openOutpostSupplyTransfer(structure)
+      };
     }
 
     new Dialog({
