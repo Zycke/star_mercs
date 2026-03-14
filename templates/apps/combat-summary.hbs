@@ -1,0 +1,48 @@
+<div class="combat-summary-content">
+  <div class="summary-turn-info">
+    <span>Turn {{turnNumber}} — {{phase}}</span>
+  </div>
+
+  {{#if isGM}}
+    <div class="summary-team-tabs">
+      <button class="summary-team-tab {{#if (eq viewedTeam 'all')}}active{{/if}}" data-team="all">All</button>
+      <button class="summary-team-tab {{#if (eq viewedTeam 'a')}}active{{/if}}" data-team="a">Team A</button>
+      <button class="summary-team-tab {{#if (eq viewedTeam 'b')}}active{{/if}}" data-team="b">Team B</button>
+    </div>
+  {{/if}}
+
+  {{#if hasData}}
+    {{#each teams}}
+      {{#if (gt ../teams.length 1)}}
+        <div class="summary-team-header">{{label}}</div>
+      {{/if}}
+
+      <table class="summary-table">
+        <thead>
+          <tr>
+            <th class="col-name">Unit</th>
+            <th class="col-stat" title="Damage Dealt">Dealt</th>
+            <th class="col-stat" title="Damage Taken">Taken</th>
+            <th class="col-str" title="Strength">STR</th>
+            <th class="col-str" title="Readiness">RDY</th>
+            <th class="col-supply" title="Supplies">Supplies</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{#each units}}
+            <tr class="summary-unit-row {{#if destroyed}}destroyed{{/if}} {{#if hasPending}}has-pending{{/if}}" data-token-id="{{tokenId}}">
+              <td class="col-name" title="{{order}}">{{name}}</td>
+              <td class="col-stat dealt">{{#if damageDealt}}{{damageDealt}}{{else}}—{{/if}}</td>
+              <td class="col-stat taken">{{#if damageTaken}}{{damageTaken}}{{else}}—{{/if}}</td>
+              <td class="col-str">{{str}}/{{strMax}}</td>
+              <td class="col-str">{{rdy}}/{{rdyMax}}</td>
+              <td class="col-supply">{{supplies}}</td>
+            </tr>
+          {{/each}}
+        </tbody>
+      </table>
+    {{/each}}
+  {{else}}
+    <p class="summary-empty">No combat data available.</p>
+  {{/if}}
+</div>
