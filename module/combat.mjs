@@ -50,9 +50,9 @@ export function validateAttack(weapon, target, attacker = null) {
   const isHeavy = target.hasTrait("Heavy");
   const isLanded = isFlying && target.getFlag("star-mercs", "landed");
 
-  // Flying units can only be hit by anti-air (unless they are landed)
-  if (isFlying && !isHovering && !isLanded && attackType !== "antiAir") {
-    return { valid: false, reason: `${target.name} is Flying — only Anti-Air weapons can target it.`, softVsHeavy: false };
+  // Flying units can only be hit by anti-air or hybrid weapons (unless they are landed)
+  if (isFlying && !isHovering && !isLanded && attackType !== "antiAir" && !weapon.system.hybrid) {
+    return { valid: false, reason: `${target.name} is Flying — only Anti-Air or Hybrid weapons can target it.`, softVsHeavy: false };
   }
 
   // Anti-air weapons can only target units with the Flying trait (or Air Assault deployed)
@@ -133,10 +133,10 @@ export function calculateAccuracy(weapon, attacker, target = null) {
     orderAccuracyMod += 1;
   }
 
-  // Area weapon vs Infantry: -1 to threshold (easier to hit)
-  let areaVsInfantryMod = 0;
-  if (weapon.system.area && target?.hasTrait("Infantry")) {
-    areaVsInfantryMod = -1;
+  // Area trait: -1 to threshold (easier to hit) for Soft and Anti-Air weapons
+  let areaMod = 0;
+  if (weapon.system.area && weapon.system.attackType !== "hard") {
+    areaMod = -1;
   }
 
   // Elevation bonus: -1 to threshold (easier to hit) when firing from higher elevation
@@ -193,9 +193,9 @@ export function calculateAccuracy(weapon, attacker, target = null) {
     }
   }
 
-  const effective = Math.max(2, Math.min(10, base - accurateMod + inaccurateMod + readinessMod + ewarMod + disorderedMod + standDownMod + orderAccuracyMod + elevationMod + areaVsInfantryMod + terrainCoverMod + advReconMod + ambushMod + combinedArmsMod));
+  const effective = Math.max(2, Math.min(10, base - accurateMod + inaccurateMod + readinessMod + ewarMod + disorderedMod + standDownMod + orderAccuracyMod + elevationMod + areaMod + terrainCoverMod + advReconMod + ambushMod + combinedArmsMod));
 
-  return { effective, base, readinessMod, ewarMod, accurateMod, inaccurateMod, disorderedMod, standDownMod, orderAccuracyMod, elevationMod, areaVsInfantryMod, terrainCoverMod, advReconMod, ambushMod, combinedArmsMod };
+  return { effective, base, readinessMod, ewarMod, accurateMod, inaccurateMod, disorderedMod, standDownMod, orderAccuracyMod, elevationMod, areaMod, terrainCoverMod, advReconMod, ambushMod, combinedArmsMod };
 }
 
 /**
@@ -301,14 +301,8 @@ export function calculateDamage(weapon, attacker, target, hitType) {
     modifiers.push({ label: "Target standing down (+2)", value: +2 });
   }
 
-  // Area weapon trait: +1 damage vs Infantry
-  if (weapon.system.area && target.hasTrait("Infantry")) {
-    damage += 1;
-    modifiers.push({ label: "Area vs Infantry", value: +1 });
-  }
-
-  // Hard attack vs Infantry: half damage (rounded down)
-  if (weapon.system.attackType === "hard" && target.hasTrait("Infantry")) {
+  // Hard attack vs Infantry: half damage (rounded down) — unless weapon has Area trait
+  if (weapon.system.attackType === "hard" && target.hasTrait("Infantry") && !weapon.system.area) {
     const before = damage;
     damage = Math.floor(damage / 2);
     const diff = damage - before;

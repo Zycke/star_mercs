@@ -55,6 +55,7 @@ export default class WeaponData extends foundry.abstract.TypeDataModel {
       artillery: new BooleanField({ required: false, initial: false }),
       aircraft: new BooleanField({ required: false, initial: false }),
       ordnance: new BooleanField({ required: false, initial: false }),
+      hybrid: new BooleanField({ required: false, initial: false }),
 
       // Description / notes
       description: new StringField({ required: false, initial: "" }),

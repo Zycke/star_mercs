@@ -328,6 +328,7 @@ export default class StarMercsUnitSheet extends ActorSheet {
         if (item.system.aircraft) wTraits.push("Aircraft");
         if (item.system.accurate > 0) wTraits.push(`Acc+${item.system.accurate}`);
         if (item.system.inaccurate > 0) wTraits.push(`Inacc-${item.system.inaccurate}`);
+        if (item.system.hybrid) wTraits.push("Hybrid");
         // Resolve ammo type and current count
         const ammoType = item.system.ammoType || "projectile";
         const ammoLabel = CONFIG.STARMERCS.ammoTypes?.[ammoType] ?? ammoType;
