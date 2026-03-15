@@ -90,8 +90,9 @@ export default class ReferenceTables extends HandlebarsApplicationMixin(Applicat
     return [
       { name: "Accurate[X]", description: "Reduces the accuracy threshold by X (easier to hit)." },
       { name: "Aircraft", description: "Fires during the Airstrikes tactical step. Excluded from Combined Arms penalty." },
-      { name: "Area", description: "+1 damage and -1 to accuracy threshold vs Infantry targets." },
+      { name: "Area", description: "Hard weapons deal full damage to Infantry (no half-damage). Soft/Anti-Air weapons get -1 to accuracy threshold." },
       { name: "Artillery", description: "Fires during the Artillery tactical step. Excluded from Combined Arms penalty." },
+      { name: "Hybrid", description: "Soft/Hard weapon can target both ground and flying units." },
       { name: "Inaccurate[X]", description: "Increases the accuracy threshold by X (harder to hit)." },
       { name: "Indirect", description: "Can fire at targets without line of sight (requires friendly spotter with Comms). Excluded from Combined Arms penalty." },
       { name: "Ordnance", description: "Uses ordnance ammo type. Triggers APS/ZPS interception from defending units." }

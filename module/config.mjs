@@ -319,7 +319,7 @@ STARMERCS.terrain = {
   hill: {
     label: "Hill",
     color: 0x8B7355,
-    pattern: "horizontal",
+    pattern: "contour",
     icon: "fas fa-mountain",
     movementCost: 3,
     waterTerrain: false,
@@ -415,7 +415,7 @@ STARMERCS.terrain = {
   urbanDense: {
     label: "Urban (Dense)",
     color: 0x606060,
-    pattern: "crosshatch",
+    pattern: "buildings",
     icon: "fas fa-city",
     movementCost: 2,
     waterTerrain: false,
@@ -430,7 +430,7 @@ STARMERCS.terrain = {
   urbanLight: {
     label: "Urban (Light)",
     color: 0xBBBBBB,
-    pattern: "diagonal",
+    pattern: "building",
     icon: "fas fa-building",
     movementCost: 2,
     waterTerrain: false,

@@ -99,6 +99,9 @@ export function areAdjacent(token1, token2) {
  */
 export function getAdjacentEnemies(token) {
   if (!token.actor) return [];
+  // Airborne flying units are never engaged
+  if (token.actor.hasTrait("Flying") && !token.actor.getFlag("star-mercs", "landed")) return [];
+
   const myTeam = token.actor.system.team ?? "a";
   const center = snapToHexCenter(token.center);
   const neighborKeys = new Set(getAdjacentHexCenters(center).map(hexKey));
@@ -108,6 +111,8 @@ export function getAdjacentEnemies(token) {
     if (other === token) continue;
     if (!other.actor || other.actor.type !== "unit") continue;
     if (other.actor.system.strength.value <= 0) continue;
+    // Airborne flying enemies don't cause engagement
+    if (other.actor.hasTrait("Flying") && !other.actor.getFlag("star-mercs", "landed")) continue;
     const otherTeam = other.actor.system.team ?? "a";
     if (otherTeam === myTeam) continue;
     const otherKey = hexKey(snapToHexCenter(other.center));
