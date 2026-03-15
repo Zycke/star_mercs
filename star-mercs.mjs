@@ -1437,8 +1437,11 @@ Hooks.on("refreshToken", (token) => {
   const sprites = [];
   for (const sprite of token.effects.children) {
     if (sprite === token.effects.overlay) continue;
-    // Skip the background/counter graphics
-    if (!sprite.texture?.valid) continue;
+    // Hide the background/counter graphics so they don't render as black boxes
+    if (!sprite.texture?.valid) {
+      sprite.visible = false;
+      continue;
+    }
     sprites.push(sprite);
   }
 
