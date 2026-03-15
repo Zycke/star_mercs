@@ -328,6 +328,11 @@ export default class StarMercsUnitSheet extends ActorSheet {
         if (item.system.aircraft) wTraits.push("Aircraft");
         if (item.system.accurate > 0) wTraits.push(`Acc+${item.system.accurate}`);
         if (item.system.inaccurate > 0) wTraits.push(`Inacc-${item.system.inaccurate}`);
+        // Resolve ammo type and current count
+        const ammoType = item.system.ammoType || "projectile";
+        const ammoLabel = CONFIG.STARMERCS.ammoTypes?.[ammoType] ?? ammoType;
+        const ammoCount = this.actor.system.supply?.[ammoType]?.current ?? 0;
+
         const weaponData = {
           _id: item.id,
           img: item.img,
@@ -337,7 +342,9 @@ export default class StarMercsUnitSheet extends ActorSheet {
           traitsLabel: wTraits.length > 0 ? wTraits.join(", ") : "—",
           targetName: null,
           targetId: null,
-          isDefensive: (item.system.attackType === "aps" || item.system.attackType === "zps")
+          isDefensive: (item.system.attackType === "aps" || item.system.attackType === "zps"),
+          ammoLabel,
+          ammoCount
         };
 
         const targetId = item.system.targetId;
@@ -553,16 +560,31 @@ export default class StarMercsUnitSheet extends ActorSheet {
     }
 
     // Detection check: unit must be able to detect the target (visible level)
+    // Indirect weapons: allow targeting if any comms chain member can detect the target
     const det = game.starmercs?.detection;
     if (det) {
       const detLevel = det.getDetectionLevel(myToken, targetToken);
       if (detLevel !== "visible") {
-        ui.notifications.warn(
-          detLevel === "blip"
-            ? `Cannot assign target — ${targetToken.name} is only a sensor blip (not positively identified).`
-            : `Cannot assign target — ${targetToken.name} is beyond detection range.`
-        );
-        return;
+        // For indirect weapons, check if any comms chain member can detect
+        if (item.system.indirect) {
+          const manager = game.starmercs?.commsLinkManager;
+          const chainCanDetect = manager?.canDetectViaChain(myToken.id, targetToken.id) ?? false;
+          if (!chainCanDetect) {
+            ui.notifications.warn(
+              detLevel === "blip"
+                ? `Cannot assign target — ${targetToken.name} is only a sensor blip and no unit in comms chain can identify it.`
+                : `Cannot assign target — ${targetToken.name} is beyond detection range and no unit in comms chain can see it.`
+            );
+            return;
+          }
+        } else {
+          ui.notifications.warn(
+            detLevel === "blip"
+              ? `Cannot assign target — ${targetToken.name} is only a sensor blip (not positively identified).`
+              : `Cannot assign target — ${targetToken.name} is beyond detection range.`
+          );
+          return;
+        }
       }
     }
 

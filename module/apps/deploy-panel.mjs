@@ -710,9 +710,11 @@ export default class DeployPanel extends HandlebarsApplicationMixin(ApplicationV
       // Apply deploy effects
       await this._applyDeployEffects(tokenDoc, mode);
 
-      // Update synthetic actor name to match custom name (unlinked token)
-      if (tokenDoc.actor && customName !== actor.name) {
-        await tokenDoc.actor.update({ name: customName });
+      // Update synthetic actor: set team + custom name (unlinked token)
+      if (tokenDoc.actor) {
+        const synthUpdate = { "system.team": team };
+        if (customName !== actor.name) synthUpdate.name = customName;
+        await tokenDoc.actor.update(synthUpdate);
       }
 
       // Mark as deployed in pool (keep entry visible)

@@ -123,31 +123,40 @@ export default class CombatSummary extends HandlebarsApplicationMixin(Applicatio
         hasPending: pendingStr > 0 || pendingRdy > 0
       };
 
-      // Add supply data (only show relevant types)
-      const supplyParts = [];
-      if (fuel && fuel.capacity > 0) {
-        supplyParts.push(`F:${fuel.current}/${fuel.capacity}`);
-      }
-      if (energy && energy.capacity > 0) {
-        supplyParts.push(`E:${energy.current}/${energy.capacity}`);
-      }
+      // Build per-supply-type data
+      unitData.supplyColumns = {};
+      if (fuel?.capacity > 0) unitData.supplyColumns.fuel = { current: fuel.current, capacity: fuel.capacity };
+      if (energy?.capacity > 0) unitData.supplyColumns.energy = { current: energy.current, capacity: energy.capacity };
       if (ammo) {
-        // Summarize ammo types
         for (const [type, data] of Object.entries(ammo)) {
           if (data.capacity > 0) {
-            const abbrev = type.charAt(0).toUpperCase();
-            supplyParts.push(`${abbrev}:${data.current}/${data.capacity}`);
+            unitData.supplyColumns[type] = { current: data.current, capacity: data.capacity };
           }
         }
       }
-      if (basicSupplies && basicSupplies.capacity > 0) {
-        supplyParts.push(`BS:${basicSupplies.current}/${basicSupplies.capacity}`);
-      }
-      unitData.supplies = supplyParts.join(" ");
+      if (basicSupplies?.capacity > 0) unitData.supplyColumns.basicSupplies = { current: basicSupplies.current, capacity: basicSupplies.capacity };
 
       if (!unitsByTeam[team]) unitsByTeam[team] = [];
       unitsByTeam[team].push(unitData);
     }
+
+    // Collect all supply column keys across all units
+    const supplyColumnLabels = {
+      fuel: "Fuel", energy: "Energy",
+      projectile: "Proj", ordnance: "Ord",
+      basicSupplies: "Sup"
+    };
+    const allSupplyKeys = new Set();
+    for (const team of Object.values(unitsByTeam)) {
+      for (const unit of team) {
+        if (unit.supplyColumns) {
+          for (const key of Object.keys(unit.supplyColumns)) allSupplyKeys.add(key);
+        }
+      }
+    }
+    // Ordered supply columns
+    const supplyKeyOrder = ["fuel", "energy", "projectile", "ordnance", "basicSupplies"];
+    const activeSupplyColumns = supplyKeyOrder.filter(k => allSupplyKeys.has(k));
 
     // Sort each team: destroyed last, then alphabetical
     for (const team of Object.values(unitsByTeam)) {
@@ -176,7 +185,8 @@ export default class CombatSummary extends HandlebarsApplicationMixin(Applicatio
       hasData: teams.length > 0,
       teams,
       turnNumber,
-      phase
+      phase,
+      supplyColumns: activeSupplyColumns.map(k => ({ key: k, label: supplyColumnLabels[k] ?? k }))
     };
   }
 

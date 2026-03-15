@@ -510,11 +510,7 @@ export default class StarMercsCombat extends Combat {
           const hitsDesc = pending.hits?.map(h => `${h.source} (${h.weapon})`).join(", ") ?? "unknown";
           await actor.addLogEntry(`Took -${pending.strength} STR, -${pending.readiness} RDY from: ${hitsDesc}`, "damage");
 
-          sections.push(`<div class="consolidation-section damage">
-            <div class="consolidation-section-header"><i class="fas fa-skull"></i> Damage Applied</div>
-            <div class="summary-damage">-${pending.strength} STR, -${pending.readiness} RDY</div>
-            <div class="status-update">${statusText}</div>
-          </div>`);
+          // Damage applied section removed from chat (visible in combat summary)
 
           await token.unsetFlag("star-mercs", "pendingDamage");
         }
@@ -737,19 +733,13 @@ export default class StarMercsCombat extends Combat {
         const cost = order.system.readinessCost;
         // Block positive readiness gains for airborne units
         if (cost > 0 && actor.isAirborne) {
-          sections.push(`<div class="consolidation-section readiness">
-            <div class="consolidation-section-header"><i class="fas fa-plane"></i> Airborne — Cannot Recover Readiness</div>
-            <div class="status-update">Must land to benefit from ${esc(order.name)} (+${cost} RDY).</div>
-          </div>`);
+          // Airborne readiness block — no chat card (visible in combat summary)
         } else {
           const currentRdy = actor.system.readiness.value;
           const newRdy = Math.max(0, Math.min(actor.system.readiness.max, currentRdy + cost));
           if (newRdy !== currentRdy) {
             await actor.update({ "system.readiness.value": newRdy });
-            const label = cost > 0 ? `+${cost}` : `${cost}`;
-            sections.push(`<div class="consolidation-section readiness">
-              <div class="consolidation-section-header"><i class="fas fa-battery-half"></i> Order Readiness: ${label} (${esc(order.name)})</div>
-            </div>`);
+            // Readiness update removed from chat (visible in combat summary)
           }
         }
       }
@@ -1083,9 +1073,7 @@ export default class StarMercsCombat extends Combat {
           const newRdy = Math.max(0, currentRdy - 1);
           if (newRdy !== currentRdy) {
             await actor.update({ "system.readiness.value": newRdy });
-            sections.push(`<div class="consolidation-section readiness">
-              <div class="consolidation-section-header"><i class="fas fa-dizzy"></i> Disordered Withdrawal: -1 readiness</div>
-            </div>`);
+            // Disordered readiness update removed from chat (visible in combat summary)
           }
         }
       }
@@ -1173,10 +1161,7 @@ export default class StarMercsCombat extends Combat {
       // Apply all supply updates at once
       if (Object.keys(supplyUpdate).length > 0) {
         await actor.update(supplyUpdate);
-        sections.push(`<div class="consolidation-section supply">
-          <div class="consolidation-section-header"><i class="fas fa-box"></i> Supply Consumed</div>
-          <div class="status-update">${consumedParts.join(" | ")}</div>
-        </div>`);
+        // Supply consumed section removed from chat (visible in combat summary)
       }
 
       } // end supply consumption (skipped for cargo aboard transport)
@@ -1978,7 +1963,7 @@ export default class StarMercsCombat extends Combat {
           const a = c.actor;
           if (!a || a.type !== "unit" || a.system.strength.value <= 0) return false;
           if (a.hasTrait("Flying") && a.getFlag("star-mercs", "landed")) return false;
-          return a.items.some(i => i.type === "weapon" && i.system.artillery && i.system.targetId);
+          return a.items.some(i => i.type === "weapon" && i.system.artillery);
         });
 
       case "airstrikes":
@@ -1986,7 +1971,7 @@ export default class StarMercsCombat extends Combat {
           const a = c.actor;
           if (!a || a.type !== "unit" || a.system.strength.value <= 0) return false;
           if (a.hasTrait("Flying") && a.getFlag("star-mercs", "landed")) return false;
-          return a.items.some(i => i.type === "weapon" && i.system.aircraft && i.system.targetId);
+          return a.items.some(i => i.type === "weapon" && i.system.aircraft);
         });
 
       case "weapons_fire":
@@ -1998,7 +1983,7 @@ export default class StarMercsCombat extends Combat {
           if (order && !order.system.allowsAttack) return false;
           const curOrder = a.system.currentOrder;
           if (curOrder === "move" || curOrder === "fly" || curOrder === "overwatch") return false;
-          return a.items.some(i => i.type === "weapon" && i.system.targetId
+          return a.items.some(i => i.type === "weapon"
             && !i.system.artillery && !i.system.aircraft);
         });
 
@@ -2032,6 +2017,7 @@ export default class StarMercsCombat extends Combat {
           if (!a || a.type !== "unit" || a.system.strength.value <= 0) return false;
           const mfOrder = a.system.currentOrder;
           if (mfOrder !== "move" && mfOrder !== "fly") return false;
+          // Check if unit has any non-artillery, non-aircraft weapons (could fire)
           return a.items.some(i => i.type === "weapon" && !i.system.artillery && !i.system.aircraft);
         });
 
@@ -2308,8 +2294,8 @@ export default class StarMercsCombat extends Combat {
       for (const weapon of artilleryWeapons) {
         const targetToken = canvas.tokens.get(weapon.system.targetId);
         if (!targetToken?.actor) continue;
-        await actor.rollAttack(weapon, targetToken.actor);
-        firedCount++;
+        const result = await actor.rollAttack(weapon, targetToken.actor);
+        if (result) firedCount++;
       }
     }
 
@@ -2343,8 +2329,8 @@ export default class StarMercsCombat extends Combat {
       for (const weapon of aircraftWeapons) {
         const targetToken = canvas.tokens.get(weapon.system.targetId);
         if (!targetToken?.actor) continue;
-        await actor.rollAttack(weapon, targetToken.actor);
-        firedCount++;
+        const result = await actor.rollAttack(weapon, targetToken.actor);
+        if (result) firedCount++;
       }
     }
 
@@ -2387,8 +2373,8 @@ export default class StarMercsCombat extends Combat {
       for (const weapon of weapons) {
         const targetToken = canvas.tokens.get(weapon.system.targetId);
         if (!targetToken?.actor) continue;
-        await actor.rollAttack(weapon, targetToken.actor);
-        firedCount++;
+        const result = await actor.rollAttack(weapon, targetToken.actor);
+        if (result) firedCount++;
       }
     }
 

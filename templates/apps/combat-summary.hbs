@@ -25,7 +25,9 @@
             <th class="col-stat" title="Damage Taken">Taken</th>
             <th class="col-str" title="Strength">STR</th>
             <th class="col-str" title="Readiness">RDY</th>
-            <th class="col-supply" title="Supplies">Supplies</th>
+            {{#each ../supplyColumns}}
+              <th class="col-supply" title="{{label}}">{{label}}</th>
+            {{/each}}
           </tr>
         </thead>
         <tbody>
@@ -36,7 +38,15 @@
               <td class="col-stat taken">{{#if damageTaken}}{{damageTaken}}{{else}}—{{/if}}</td>
               <td class="col-str">{{str}}/{{strMax}}</td>
               <td class="col-str">{{rdy}}/{{rdyMax}}</td>
-              <td class="col-supply">{{supplies}}</td>
+              {{#each ../../supplyColumns}}
+                <td class="col-supply">
+                  {{#with (lookup ../supplyColumns this.key)}}
+                    {{this.current}}/{{this.capacity}}
+                  {{else}}
+                    —
+                  {{/with}}
+                </td>
+              {{/each}}
             </tr>
           {{/each}}
         </tbody>
