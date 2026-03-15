@@ -1,5 +1,5 @@
 import StarMercsActor from "./documents/actor.mjs";
-import { checkLOS } from "./detection.mjs";
+import { checkLOS, getDetectionLevel } from "./detection.mjs";
 
 /**
  * Manages communications link chains between units.
@@ -311,6 +311,30 @@ export default class CommsLinkManager {
       if (checkLOS(memberToken.center, targetCanvasToken.center)) {
         return true;
       }
+    }
+    return false;
+  }
+
+  /**
+   * Check if any unit in the comms chain can detect the target at "visible" level.
+   * Used for indirect weapons: firing unit doesn't need personal detection if a
+   * chain member can see the target.
+   * @param {string} firingTokenId
+   * @param {string} targetTokenId
+   * @returns {boolean}
+   */
+  canDetectViaChain(firingTokenId, targetTokenId) {
+    this.refresh();
+    const chain = this.getChainForToken(firingTokenId);
+    const targetCanvasToken = canvas?.tokens?.get(targetTokenId);
+    if (!targetCanvasToken) return false;
+
+    for (const memberId of chain) {
+      if (memberId === firingTokenId) continue; // Skip the firing unit itself
+      const memberToken = canvas?.tokens?.get(memberId);
+      if (!memberToken) continue;
+      const level = getDetectionLevel(memberToken, targetCanvasToken);
+      if (level === "visible") return true;
     }
     return false;
   }

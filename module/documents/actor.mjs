@@ -1477,12 +1477,18 @@ export default class StarMercsActor extends Actor {
     await this.update(sourceUpdate);
     await targetActor.update(targetUpdate);
 
+    // Whisper supply transfer to owning team only
+    const transferTeam = this.system.team ?? "a";
+    const transferWhisper = game.combat?.constructor?.getTeamWhisperIds
+      ? game.combat.constructor.getTeamWhisperIds(transferTeam)
+      : [];
     await ChatMessage.create({
       content: `<div class="star-mercs chat-card supply-transfer">
         <div class="summary-header"><i class="fas fa-truck"></i> <strong>${esc(this.name)}</strong> &rarr; <strong>${esc(targetActor.name)}</strong></div>
         <div class="status-update">${transferredParts.join(" | ")}</div>
       </div>`,
-      speaker: ChatMessage.getSpeaker({ actor: this })
+      speaker: ChatMessage.getSpeaker({ actor: this }),
+      whisper: transferWhisper
     });
 
     return true;

@@ -400,10 +400,15 @@ Hooks.once("ready", async () => {
             }]);
           }
 
-          // Apply deploy effects and mark as deployed
+          // Apply deploy effects, set synthetic actor team, and mark as deployed
           const panel = game.starmercs?.deployPanel;
           if (panel) {
             await panel._applyDeployEffects(tokenDoc, data.mode);
+            if (tokenDoc.actor) {
+              const synthUpdate = { "system.team": data.team };
+              if (data.customName && data.customName !== actor.name) synthUpdate.name = data.customName;
+              await tokenDoc.actor.update(synthUpdate);
+            }
             await panel._markDeployed(data.instanceId, data.team, tokenDoc.id);
           }
           break;
@@ -788,6 +793,7 @@ Hooks.on("updateToken", (tokenDoc, changes, options) => {
 
 /**
  * Toggle a status effect on an actor if its current state doesn't match desired.
+ * Removes ALL duplicate instances to prevent stacking.
  * @param {Actor} actor
  * @param {string} effectId
  * @param {boolean} shouldBeActive
@@ -795,11 +801,24 @@ Hooks.on("updateToken", (tokenDoc, changes, options) => {
 function _syncEffect(actor, effectId, shouldBeActive) {
   const token = actor.getActiveTokens()?.[0]?.document;
   if (!token) return;
-  const hasEffect = token.hasStatusEffect(effectId);
-  if (shouldBeActive && !hasEffect) {
-    actor.toggleStatusEffect(effectId, { active: true });
-  } else if (!shouldBeActive && hasEffect) {
-    actor.toggleStatusEffect(effectId, { active: false });
+
+  // Find all effects with this status ID
+  const matchingEffects = actor.effects.filter(e => e.statuses?.has(effectId));
+
+  if (shouldBeActive) {
+    if (matchingEffects.length === 0) {
+      actor.toggleStatusEffect(effectId, { active: true });
+    } else if (matchingEffects.length > 1) {
+      // Remove duplicates — keep only the first
+      const toDelete = matchingEffects.slice(1).map(e => e.id);
+      actor.deleteEmbeddedDocuments("ActiveEffect", toDelete);
+    }
+  } else {
+    // Remove ALL instances
+    if (matchingEffects.length > 0) {
+      const toDelete = matchingEffects.map(e => e.id);
+      actor.deleteEmbeddedDocuments("ActiveEffect", toDelete);
+    }
   }
 }
 
@@ -1400,7 +1419,8 @@ Hooks.on("createActor", (actor) => {
 /* ============================================ */
 
 /**
- * Set absolute sizes for status effect icons (idempotent).
+ * Set absolute sizes for status effect icons and position them above the token.
+ * Icons are arranged in horizontal rows above the token frame, right-to-left.
  * Uses width/height instead of scale to avoid exponential shrinkage
  * from repeated refreshToken calls.
  */
@@ -1408,19 +1428,46 @@ Hooks.on("refreshToken", (token) => {
   if (!token.effects?.children) return;
 
   const gridSize = canvas.grid?.size || 100;
-  const iconSize = Math.round(gridSize * 0.2);
+  const iconSize = Math.round(gridSize * 0.1);
+  const tokenW = (token.document.width ?? 0.5) * gridSize;
+  const tokenH = (token.document.height ?? 0.5) * gridSize;
+  const padding = 1;
 
+  // Collect non-overlay sprites
+  const sprites = [];
   for (const sprite of token.effects.children) {
     if (sprite === token.effects.overlay) continue;
-    if (sprite.texture?.valid) {
-      sprite.width = iconSize;
-      sprite.height = iconSize;
-    }
+    // Skip the background/counter graphics
+    if (!sprite.texture?.valid) continue;
+    sprites.push(sprite);
   }
-  // Dead overlay: full grid-cell size
+
+  // Position sprites above token, right-to-left, wrapping to additional rows
+  const iconsPerRow = Math.max(1, Math.floor(tokenW / (iconSize + padding)));
+  for (let i = 0; i < sprites.length; i++) {
+    const sprite = sprites[i];
+    sprite.width = iconSize;
+    sprite.height = iconSize;
+
+    const col = i % iconsPerRow;
+    const row = Math.floor(i / iconsPerRow);
+
+    // Position: right-to-left, above token
+    sprite.anchor.set(0, 0);
+    sprite.position.set(
+      tokenW - (col + 1) * (iconSize + padding),
+      -(row + 1) * (iconSize + padding)
+    );
+  }
+
+  // Dead overlay: 50% of grid size
   if (token.effects.overlay?.texture?.valid) {
-    token.effects.overlay.width = gridSize;
-    token.effects.overlay.height = gridSize;
+    const overlaySize = Math.round(gridSize * 0.5);
+    token.effects.overlay.width = overlaySize;
+    token.effects.overlay.height = overlaySize;
+    // Center the overlay on the token
+    token.effects.overlay.anchor.set(0.5, 0.5);
+    token.effects.overlay.position.set(tokenW / 2, tokenH / 2);
   }
 });
 
