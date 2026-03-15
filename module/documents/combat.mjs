@@ -128,7 +128,15 @@ export default class StarMercsCombat extends Combat {
       // Apply assault +1 incoming damage flag at the start of tactical phase
       await this._applyAssaultIncomingDamageFlags();
 
-      // Clear damage dealt tracking from previous turn
+      // Save current turn's damage as "previous turn" for combat summary display
+      const currentDealt = this.getFlag("star-mercs", "damageDealtThisTurn");
+      const currentTaken = this.getFlag("star-mercs", "damageTakenThisTurn");
+      if (currentDealt) await this.setFlag("star-mercs", "damageDealtPrevTurn", currentDealt);
+      else await this.unsetFlag("star-mercs", "damageDealtPrevTurn");
+      if (currentTaken) await this.setFlag("star-mercs", "damageTakenPrevTurn", currentTaken);
+      else await this.unsetFlag("star-mercs", "damageTakenPrevTurn");
+
+      // Clear damage dealt tracking from current turn
       await this.unsetFlag("star-mercs", "damageDealtThisTurn");
 
       await this.update({

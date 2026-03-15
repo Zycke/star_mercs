@@ -94,8 +94,7 @@ export default class ReferenceTables extends HandlebarsApplicationMixin(Applicat
       { name: "Artillery", description: "Fires during the Artillery tactical step. Excluded from Combined Arms penalty." },
       { name: "Hybrid", description: "Soft/Hard weapon can target both ground and flying units." },
       { name: "Inaccurate[X]", description: "Increases the accuracy threshold by X (harder to hit)." },
-      { name: "Indirect", description: "Can fire at targets without line of sight (requires friendly spotter with Comms). Excluded from Combined Arms penalty." },
-      { name: "Ordnance", description: "Uses ordnance ammo type. Triggers APS/ZPS interception from defending units." }
+      { name: "Indirect", description: "Can fire at targets without line of sight (requires friendly spotter with Comms). Excluded from Combined Arms penalty." }
     ];
   }
 

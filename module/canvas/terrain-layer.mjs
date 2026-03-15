@@ -829,18 +829,15 @@ export default class TerrainLayer extends PIXI.Container {
    * @private
    */
   _drawBuildingPattern(g, poly, minX, minY, maxX, maxY, spacing, color, lw, alpha) {
-    const size = 6;
+    // Single building square centered in the hex
+    const cx = (minX + maxX) / 2;
+    const cy = (minY + maxY) / 2;
+    const size = 10;
     const half = size / 2;
     g.lineStyle(lw, color, alpha);
-    for (let x = minX + spacing / 2; x <= maxX; x += spacing) {
-      for (let y = minY + spacing / 2; y <= maxY; y += spacing) {
-        if (this._pointInPolygon(x, y, poly)) {
-          g.beginFill(color, alpha * 0.3);
-          g.drawRect(x - half, y - half, size, size);
-          g.endFill();
-        }
-      }
-    }
+    g.beginFill(color, alpha * 0.4);
+    g.drawRect(cx - half, cy - half, size, size);
+    g.endFill();
   }
 
   /**
@@ -849,29 +846,22 @@ export default class TerrainLayer extends PIXI.Container {
    * @private
    */
   _drawBuildingsPattern(g, poly, minX, minY, maxX, maxY, spacing, color, lw, alpha) {
-    const size = 5;
-    g.lineStyle(lw, color, alpha);
-    // Offsets for a 2x2-ish cluster with a gap
+    // Cluster of 4 building squares centered in the hex
+    const cx = (minX + maxX) / 2;
+    const cy = (minY + maxY) / 2;
+    const size = 7;
+    const gap = 2;
     const offsets = [
-      { dx: -4, dy: -4 },
-      { dx: 3, dy: -4 },
-      { dx: -4, dy: 3 },
-      { dx: 3, dy: 3 }
+      { dx: -(size + gap) / 2, dy: -(size + gap) / 2 },
+      { dx: gap / 2, dy: -(size + gap) / 2 },
+      { dx: -(size + gap) / 2, dy: gap / 2 },
+      { dx: gap / 2, dy: gap / 2 }
     ];
-    for (let x = minX + spacing / 2; x <= maxX; x += spacing) {
-      for (let y = minY + spacing / 2; y <= maxY; y += spacing) {
-        if (this._pointInPolygon(x, y, poly)) {
-          for (const { dx, dy } of offsets) {
-            const rx = x + dx;
-            const ry = y + dy;
-            if (this._pointInPolygon(rx + size / 2, ry + size / 2, poly)) {
-              g.beginFill(color, alpha * 0.3);
-              g.drawRect(rx, ry, size, size);
-              g.endFill();
-            }
-          }
-        }
-      }
+    g.lineStyle(lw, color, alpha);
+    for (const { dx, dy } of offsets) {
+      g.beginFill(color, alpha * 0.4);
+      g.drawRect(cx + dx, cy + dy, size, size);
+      g.endFill();
     }
   }
 
@@ -882,25 +872,21 @@ export default class TerrainLayer extends PIXI.Container {
    */
   _drawContourPattern(g, poly, minX, minY, maxX, maxY, spacing, color, lw, alpha) {
     g.lineStyle(lw, color, alpha);
-    const arcHeight = 6;
-    const arcWidth = 3;
+    const arcWidth = 6;
+    const arcHeight = 3;
     for (let x = minX + spacing / 2; x <= maxX; x += spacing) {
       for (let y = minY + spacing / 2; y <= maxY; y += spacing) {
         if (this._pointInPolygon(x, y, poly)) {
-          // Draw a ")" arc — a short vertical curve opening right
+          // Draw a "∪" arc — horizontal curve opening downward
           const steps = 8;
           let started = false;
           for (let i = 0; i <= steps; i++) {
             const t = (i / steps) * Math.PI;  // 0 to PI
-            const px = x + Math.sin(t) * arcWidth;
-            const py = y - arcHeight / 2 + (i / steps) * arcHeight;
+            const px = x - arcWidth / 2 + (i / steps) * arcWidth;
+            const py = y + Math.sin(t) * arcHeight;
             if (this._pointInPolygon(px, py, poly)) {
-              if (!started) {
-                g.moveTo(px, py);
-                started = true;
-              } else {
-                g.lineTo(px, py);
-              }
+              if (!started) { g.moveTo(px, py); started = true; }
+              else { g.lineTo(px, py); }
             } else {
               started = false;
             }
