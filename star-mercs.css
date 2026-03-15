@@ -432,11 +432,23 @@
 .star-mercs .item-list .item .item-ammo-type,
 .star-mercs .item-list-header .item-ammo-type {
   flex: 0 0 55px;
+  text-align: center;
 }
 
 .star-mercs .item-list .item .item-ammo-count,
 .star-mercs .item-list-header .item-ammo-count {
   flex: 0 0 30px;
+  text-align: center;
+}
+
+.star-mercs .item-list .item .item-traits-col,
+.star-mercs .item-list-header .item-traits-col {
+  text-align: center;
+}
+
+.star-mercs .item-list .item .item-target-col,
+.star-mercs .item-list-header .item-target-col {
+  text-align: center;
 }
 
 .star-mercs .item-list .item .item-controls,

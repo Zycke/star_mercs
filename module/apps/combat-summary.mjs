@@ -59,9 +59,9 @@ export default class CombatSummary extends HandlebarsApplicationMixin(Applicatio
     const turnNumber = combat.round ?? 0;
     const phase = combat.phase ?? "—";
 
-    // Gather damage dealt map and damage taken map from combat flags
-    const damageDealt = combat.getFlag("star-mercs", "damageDealtThisTurn") ?? {};
-    const damageTaken = combat.getFlag("star-mercs", "damageTakenThisTurn") ?? {};
+    // Gather damage dealt/taken from previous turn for display
+    const damageDealt = combat.getFlag("star-mercs", "damageDealtPrevTurn") ?? {};
+    const damageTaken = combat.getFlag("star-mercs", "damageTakenPrevTurn") ?? {};
 
     // Build per-unit summaries
     const unitsByTeam = { a: [], b: [] };
@@ -81,25 +81,17 @@ export default class CombatSummary extends HandlebarsApplicationMixin(Applicatio
       const rdy = actor.system.readiness;
       const supply = actor.system.supply ?? {};
 
-      // Pending damage (not yet applied — visible during tactical phase)
-      const pending = token?.getFlag("star-mercs", "pendingDamage");
-      const pendingStr = pending?.strength ?? 0;
-      const pendingRdy = pending?.readiness ?? 0;
-
-      // Damage dealt (from combat flag, keyed by unit name)
+      // Damage dealt (from previous turn, keyed by unit name)
       const dealt = damageDealt[unitName] ?? 0;
 
-      // Damage taken (from combat flag, keyed by token ID — set after consolidation)
+      // Damage taken (from previous turn, keyed by token ID)
       const taken = token ? (damageTaken[token.id] ?? 0) : 0;
-
-      // Use whichever is available: pending (during tactical) or taken (after consolidation)
-      const damageTakenDisplay = pendingStr > 0 ? pendingStr : taken;
-      const rdyLostDisplay = pendingRdy > 0 ? pendingRdy : 0;
 
       // Supply status
       const fuel = supply.fuel;
       const energy = supply.energy;
-      const ammo = supply.ammo;
+      const projectile = supply.projectile;
+      const ordnance = supply.ordnance;
       const basicSupplies = supply.basicSupplies;
 
       // Determine if destroyed
@@ -118,22 +110,15 @@ export default class CombatSummary extends HandlebarsApplicationMixin(Applicatio
         rdy: rdy.value,
         rdyMax: rdy.max,
         damageDealt: dealt,
-        damageTaken: damageTakenDisplay,
-        rdyLost: rdyLostDisplay,
-        hasPending: pendingStr > 0 || pendingRdy > 0
+        damageTaken: taken
       };
 
       // Build per-supply-type data
       unitData.supplyColumns = {};
       if (fuel?.capacity > 0) unitData.supplyColumns.fuel = { current: fuel.current, capacity: fuel.capacity };
       if (energy?.capacity > 0) unitData.supplyColumns.energy = { current: energy.current, capacity: energy.capacity };
-      if (ammo) {
-        for (const [type, data] of Object.entries(ammo)) {
-          if (data.capacity > 0) {
-            unitData.supplyColumns[type] = { current: data.current, capacity: data.capacity };
-          }
-        }
-      }
+      if (projectile?.capacity > 0) unitData.supplyColumns.projectile = { current: projectile.current, capacity: projectile.capacity };
+      if (ordnance?.capacity > 0) unitData.supplyColumns.ordnance = { current: ordnance.current, capacity: ordnance.capacity };
       if (basicSupplies?.capacity > 0) unitData.supplyColumns.basicSupplies = { current: basicSupplies.current, capacity: basicSupplies.capacity };
 
       if (!unitsByTeam[team]) unitsByTeam[team] = [];
