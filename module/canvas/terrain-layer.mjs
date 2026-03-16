@@ -835,7 +835,7 @@ export default class TerrainLayer extends PIXI.Container {
     const size = 10;
     const half = size / 2;
     g.lineStyle(lw, color, alpha);
-    g.beginFill(color, alpha * 0.4);
+    g.beginFill(color, alpha * 1.2);
     g.drawRect(cx - half, cy - half, size, size);
     g.endFill();
   }
@@ -877,13 +877,13 @@ export default class TerrainLayer extends PIXI.Container {
     for (let x = minX + spacing / 2; x <= maxX; x += spacing) {
       for (let y = minY + spacing / 2; y <= maxY; y += spacing) {
         if (this._pointInPolygon(x, y, poly)) {
-          // Draw a "∪" arc — horizontal curve opening downward
+          // Draw a "∩" arc — horizontal curve opening upward
           const steps = 8;
           let started = false;
           for (let i = 0; i <= steps; i++) {
             const t = (i / steps) * Math.PI;  // 0 to PI
             const px = x - arcWidth / 2 + (i / steps) * arcWidth;
-            const py = y + Math.sin(t) * arcHeight;
+            const py = y - Math.sin(t) * arcHeight;
             if (this._pointInPolygon(px, py, poly)) {
               if (!started) { g.moveTo(px, py); started = true; }
               else { g.lineTo(px, py); }
