@@ -1416,7 +1416,22 @@ export default class StarMercsUnitSheet extends ActorSheet {
       pathLayer?.drawPath(token, waypoints, hoverHex);
     };
 
-    ui.notifications.info("Left-click to add waypoints. Right-click to remove last. Press Escape to cancel.");
+    ui.notifications.info("Click to confirm path. Shift+Click to add waypoints. Right-click to undo. Escape to cancel.");
+
+    // Cursor tooltip showing movement controls
+    const tooltipStyle = new PIXI.TextStyle({
+      fontSize: 11,
+      fill: 0xFFFFFF,
+      stroke: 0x000000,
+      strokeThickness: 3,
+      fontFamily: "Arial"
+    });
+    const tooltipText = new PIXI.Text(
+      "Shift+Click: waypoint | Click: confirm | Right-click: undo | Esc: cancel",
+      tooltipStyle
+    );
+    tooltipText.anchor.set(0.5, 2.5);
+    canvas.interface.addChild(tooltipText);
 
     // Helper: extract canvas position from PIXI event (compatible with v5–v8 / Foundry v12–v13)
     const _getEventPos = (event) => {
@@ -1426,18 +1441,21 @@ export default class StarMercsUnitSheet extends ActorSheet {
       return null;
     };
 
-    // Hover handler: show live preview of path to hovered hex
+    // Hover handler: show live preview of path to hovered hex and reposition tooltip
     const moveHandler = (event) => {
       const pos = _getEventPos(event);
       if (!pos) return;
       const snapped = snapToHexCenter(pos);
       updatePreview(snapped);
+      tooltipText.position.set(pos.x, pos.y);
     };
 
-    // Left-click handler: add waypoint
-    const clickHandler = (event) => {
+    // Left-click handler: shift+click adds waypoint, plain click adds final waypoint and confirms
+    const clickHandler = async (event) => {
       const button = event.button ?? event.data?.button ?? 0;
       if (button !== 0) return;
+
+      const isShift = event.shiftKey ?? event.data?.originalEvent?.shiftKey ?? false;
       const pos = _getEventPos(event);
       if (!pos) return;
       const snapped = snapToHexCenter(pos);
@@ -1465,7 +1483,14 @@ export default class StarMercsUnitSheet extends ActorSheet {
       }
 
       waypoints.push(snapped);
-      updatePreview();
+
+      if (isShift) {
+        // Intermediate waypoint — stay in movement mode
+        updatePreview();
+      } else {
+        // Final waypoint — confirm path immediately
+        await confirmPath();
+      }
     };
 
     // Right-click handler: remove last waypoint
@@ -1478,7 +1503,10 @@ export default class StarMercsUnitSheet extends ActorSheet {
       }
     };
 
-    // ESC handler: cancel
+    // Suppress browser context menu during movement mode
+    const contextMenuSuppressor = (e) => { e.preventDefault(); e.stopPropagation(); };
+
+    // ESC handler: cancel, Enter handler: confirm
     const keyHandler = (event) => {
       if (event.key === "Escape") {
         cleanup();
@@ -1598,54 +1626,16 @@ export default class StarMercsUnitSheet extends ActorSheet {
       canvas.stage.off("pointerdown", clickHandler);
       canvas.stage.off("rightdown", rightClickHandler);
       document.removeEventListener("keydown", keyHandler);
+      document.removeEventListener("contextmenu", contextMenuSuppressor, true);
+      tooltipText.destroy();
       pathLayer?.clear();
-      if (confirmDialog) {
-        confirmDialog.close();
-        confirmDialog = null;
-      }
     };
-
-    // Show a floating "Confirm Path" dialog
-    let confirmDialog = new Dialog({
-      title: "Movement Path",
-      content: "<p>Add waypoints by left-clicking hexes.<br/>Right-click to undo. Enter to confirm.</p>",
-      buttons: {
-        confirm: {
-          icon: '<i class="fas fa-check"></i>',
-          label: "Confirm Path",
-          callback: () => confirmPath()
-        },
-        cancel: {
-          icon: '<i class="fas fa-times"></i>',
-          label: "Cancel",
-          callback: () => {
-            cleanup();
-            ui.notifications.info("Movement destination cancelled.");
-          }
-        }
-      },
-      default: "confirm",
-      close: () => {
-        // If closed via X button, clean up
-        canvas.stage.off("pointermove", moveHandler);
-        canvas.stage.off("pointerdown", clickHandler);
-        canvas.stage.off("rightdown", rightClickHandler);
-        document.removeEventListener("keydown", keyHandler);
-        pathLayer?.clear();
-        confirmDialog = null;
-      }
-    }, {
-      top: Math.max(60, Math.round(window.innerHeight / 2 - 100)),
-      left: Math.max(10, Math.round(window.innerWidth / 2 - 130)),
-      width: 260
-    });
-
-    confirmDialog.render(true);
 
     canvas.stage.on("pointermove", moveHandler);
     canvas.stage.on("pointerdown", clickHandler);
     canvas.stage.on("rightdown", rightClickHandler);
     document.addEventListener("keydown", keyHandler);
+    document.addEventListener("contextmenu", contextMenuSuppressor, true);
   }
 
   /* ---------------------------------------- */
