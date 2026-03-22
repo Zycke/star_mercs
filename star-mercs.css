@@ -3714,3 +3714,44 @@ select:focus,
   content: "\2514\00a0";
   color: #555;
 }
+
+/* ============================================ */
+/*  Token HUD — Orders Dropdown                */
+/* ============================================ */
+
+.star-mercs-orders-dropdown {
+  position: absolute;
+  right: 100%;
+  top: 0;
+  background: var(--sm-bg-dark, #1a1a2e);
+  border: 1px solid var(--sm-border, #3a3a5a);
+  border-radius: 4px;
+  padding: 4px 0;
+  min-width: 180px;
+  z-index: 100;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.orders-dropdown-item {
+  padding: 4px 8px;
+  font-size: 11px;
+  color: #ddd;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.orders-dropdown-item:hover:not(.disabled) {
+  background: var(--sm-accent, #e67e22);
+  color: #fff;
+}
+
+.orders-dropdown-item.active {
+  font-weight: bold;
+  border-left: 3px solid var(--sm-accent, #e67e22);
+}
+
+.orders-dropdown-item.disabled {
+  color: #666;
+  cursor: not-allowed;
+}

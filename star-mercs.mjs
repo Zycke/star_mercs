@@ -1367,6 +1367,240 @@ Hooks.once("ready", () => {
   game.starmercs.syncTerrainCover = syncTerrainCoverEffects;
   game.starmercs.syncTerrainConcealment = syncTerrainConcealmentEffects;
 
+  /**
+   * Start movement selection mode for a given actor.
+   * Callable from anywhere: game.starmercs.startMovementSelection(actor)
+   */
+  game.starmercs.startMovementSelection = function(actor) {
+    const token = actor.getActiveTokens()?.[0];
+    if (!token) {
+      ui.notifications.warn("Place this unit's token on the canvas first.");
+      return;
+    }
+
+    let maxMP = actor.system.movement ?? 0;
+    const orderKey = actor.system.currentOrder;
+    const orderConfig = CONFIG.STARMERCS.orders?.[orderKey];
+    if (orderConfig?.speedMultiplier) maxMP *= orderConfig.speedMultiplier;
+
+    const mpUsed = token.document?.getFlag("star-mercs", "movementUsed") ?? 0;
+    const mpRemaining = maxMP - mpUsed;
+
+    const waypoints = [];
+    const pathLayer = game.starmercs?.movementPathLayer;
+
+    const updatePreview = (hoverHex = null) => {
+      pathLayer?.drawPath(token, waypoints, hoverHex);
+    };
+
+    ui.notifications.info("Click to confirm path. Shift+Click to add waypoints. Right-click to undo. Escape to cancel.");
+
+    const tooltipStyle = new PIXI.TextStyle({
+      fontSize: 11,
+      fill: 0xFFFFFF,
+      stroke: 0x000000,
+      strokeThickness: 3,
+      fontFamily: "Arial"
+    });
+    const tooltipText = new PIXI.Text(
+      "Shift+Click: waypoint | Click: confirm | Right-click: undo | Esc: cancel",
+      tooltipStyle
+    );
+    tooltipText.anchor.set(0.5, 2.5);
+    canvas.interface.addChild(tooltipText);
+
+    const _getEventPos = (event) => {
+      if (typeof event.getLocalPosition === 'function') return event.getLocalPosition(canvas.stage);
+      if (event.data?.getLocalPosition) return event.data.getLocalPosition(canvas.stage);
+      if (event.global) return canvas.stage.toLocal(event.global);
+      return null;
+    };
+
+    const moveHandler = (event) => {
+      const pos = _getEventPos(event);
+      if (!pos) return;
+      const snapped = hexUtils.snapToHexCenter(pos);
+      updatePreview(snapped);
+      tooltipText.position.set(pos.x, pos.y);
+    };
+
+    const clickHandler = async (event) => {
+      const button = event.button ?? event.data?.button ?? 0;
+      if (button !== 0) return;
+
+      const isShift = event.shiftKey ?? event.data?.originalEvent?.shiftKey ?? false;
+      const pos = _getEventPos(event);
+      if (!pos) return;
+      const snapped = hexUtils.snapToHexCenter(pos);
+
+      const testWaypoints = [...waypoints, snapped];
+      let startCenter = hexUtils.snapToHexCenter(token.center);
+      const fullPath = [];
+      for (const wp of testWaypoints) {
+        const segment = hexUtils.computeHexPath(startCenter, wp);
+        fullPath.push(...segment);
+        if (segment.length > 0) startCenter = segment[segment.length - 1];
+      }
+
+      const { totalCost, passable } = hexUtils.calculatePathCost(hexUtils.snapToHexCenter(token.center), fullPath, actor);
+
+      if (!passable) {
+        ui.notifications.warn("Path is blocked. Try a different waypoint.");
+        return;
+      }
+
+      if (totalCost > mpRemaining) {
+        ui.notifications.warn(`Path costs ${totalCost} MP but only ${mpRemaining} MP remaining.`);
+        return;
+      }
+
+      waypoints.push(snapped);
+
+      if (isShift) {
+        updatePreview();
+      } else {
+        await confirmPath();
+      }
+    };
+
+    const rightClickHandler = (event) => {
+      event.preventDefault?.();
+      if (waypoints.length > 0) {
+        waypoints.pop();
+        updatePreview();
+        ui.notifications.info(`Waypoint removed. ${waypoints.length} waypoint(s) remaining.`);
+      }
+    };
+
+    const contextMenuSuppressor = (e) => { e.preventDefault(); e.stopPropagation(); };
+
+    const keyHandler = (event) => {
+      if (event.key === "Escape") {
+        cleanup();
+        ui.notifications.info("Movement destination cancelled.");
+      } else if (event.key === "Enter") {
+        confirmPath();
+      }
+    };
+
+    const confirmPath = async () => {
+      if (waypoints.length === 0) {
+        ui.notifications.warn("No waypoints set. Add at least one waypoint.");
+        return;
+      }
+
+      let startCenter = hexUtils.snapToHexCenter(token.center);
+      const fullPath = [];
+      for (const wp of waypoints) {
+        const segment = hexUtils.computeHexPath(startCenter, wp);
+        fullPath.push(...segment);
+        if (segment.length > 0) startCenter = segment[segment.length - 1];
+      }
+
+      const { totalCost, passable, reason } = hexUtils.calculatePathCost(hexUtils.snapToHexCenter(token.center), fullPath, actor);
+      if (!passable) {
+        ui.notifications.warn(reason ?? "Path is blocked.");
+        return;
+      }
+      if (totalCost > mpRemaining) {
+        ui.notifications.warn(`Path costs ${totalCost} MP but only ${mpRemaining} MP remaining.`);
+        return;
+      }
+
+      const finalDest = waypoints[waypoints.length - 1];
+      await token.document.setFlag("star-mercs", "moveDestination", { x: finalDest.x, y: finalDest.y });
+      if (waypoints.length > 1) {
+        await token.document.setFlag("star-mercs", "moveWaypoints", waypoints.map(wp => ({ x: wp.x, y: wp.y })));
+      } else {
+        await token.document.unsetFlag("star-mercs", "moveWaypoints");
+      }
+
+      game.starmercs?.targetingArrowLayer?.drawArrows();
+      cleanup();
+
+      // Fly order: prompt for target altitude after path is confirmed
+      if (orderKey === "fly") {
+        const currentAlt = actor.getFlag("star-mercs", "altitude") ?? 0;
+        const destHexElev = hexUtils.getHexElevation(hexUtils.snapToHexCenter(finalDest));
+        const flyConsumableType = actor.system.movementConsumable ?? "fuel";
+        const flyConsumableKey = flyConsumableType === "none" ? "fuel" : flyConsumableType;
+        const flyConsumableLabel = flyConsumableKey === "energy" ? "energy" : "fuel";
+        const fuelAvailable = actor.system.supply?.[flyConsumableKey]?.current ?? 0;
+        const fuelPerMP = actor.system.fuelPerMP ?? 0;
+        const moveFuel = totalCost * fuelPerMP;
+        const maxAlt = 5;
+
+        const altOptions = [];
+        for (let alt = destHexElev; alt <= maxAlt; alt++) {
+          const altFuel = Math.abs(alt - currentAlt);
+          const totalFuel = moveFuel + altFuel;
+          const valid = totalFuel <= fuelAvailable;
+          const label = alt === currentAlt ? `${alt} (no change)` : `${alt} (+${altFuel} ${flyConsumableLabel} for altitude)`;
+          altOptions.push(`<option value="${alt}" ${alt === currentAlt ? "selected" : ""} ${!valid ? "disabled" : ""}>${label}${!valid ? ` — insufficient ${flyConsumableLabel}` : ""}</option>`);
+        }
+
+        const altContent = `
+          <form class="fly-altitude-form">
+            <p>Path: ${totalCost} MP (${moveFuel} ${flyConsumableLabel}) | Current Altitude: <strong>${currentAlt}</strong> | ${flyConsumableLabel.charAt(0).toUpperCase() + flyConsumableLabel.slice(1)}: <strong>${fuelAvailable}</strong></p>
+            <div class="form-group">
+              <label>Altitude at Destination</label>
+              <select id="fly-altitude-target">${altOptions.join("")}</select>
+            </div>
+          </form>
+        `;
+
+        new Dialog({
+          title: "Fly — Select Destination Altitude",
+          content: altContent,
+          buttons: {
+            confirm: {
+              icon: '<i class="fas fa-check"></i>',
+              label: "Confirm",
+              callback: async (html) => {
+                const targetAlt = parseInt(html.find("#fly-altitude-target").val());
+                if (isNaN(targetAlt)) return;
+                const altFuel = Math.abs(targetAlt - currentAlt);
+                const totalFuel = moveFuel + altFuel;
+                if (totalFuel > fuelAvailable) {
+                  ui.notifications.warn("Not enough fuel for movement + altitude change.");
+                  return;
+                }
+                await token.document.setFlag("star-mercs", "flyAltitudeTarget", targetAlt);
+                ui.notifications.info(`Fly path confirmed (${totalCost} MP). Altitude: ${currentAlt} → ${targetAlt}.`);
+              }
+            },
+            cancel: {
+              icon: '<i class="fas fa-times"></i>',
+              label: "Keep Current Altitude",
+              callback: async () => {
+                ui.notifications.info(`Fly path confirmed (${totalCost} MP). Altitude unchanged.`);
+              }
+            }
+          },
+          default: "confirm"
+        }).render(true);
+      } else {
+        ui.notifications.info(`Movement path confirmed (${totalCost} MP).`);
+      }
+    };
+
+    const cleanup = () => {
+      canvas.stage.off("pointermove", moveHandler);
+      canvas.stage.off("pointerdown", clickHandler);
+      canvas.stage.off("rightdown", rightClickHandler);
+      document.removeEventListener("keydown", keyHandler);
+      document.removeEventListener("contextmenu", contextMenuSuppressor, true);
+      tooltipText.destroy();
+      pathLayer?.clear();
+    };
+
+    canvas.stage.on("pointermove", moveHandler);
+    canvas.stage.on("pointerdown", clickHandler);
+    canvas.stage.on("rightdown", rightClickHandler);
+    document.addEventListener("keydown", keyHandler);
+    document.addEventListener("contextmenu", contextMenuSuppressor, true);
+  };
+
   // Sync status effects for all existing units on world load
   for (const actor of game.actors) {
     if (actor.type !== "unit") continue;
@@ -1631,6 +1865,138 @@ Hooks.on("renderTokenHUD", (app, html, data) => {
     losBtn.classList.toggle("active", newVal);
   });
   col.appendChild(losBtn);
+
+  // --- Orders Button (right column) ---
+  const rightCol = html.querySelector(".col.right");
+  if (rightCol) {
+    const ordersBtn = document.createElement("div");
+    ordersBtn.classList.add("control-icon");
+    ordersBtn.dataset.action = "star-mercs-orders";
+    ordersBtn.title = "Orders";
+    ordersBtn.innerHTML = '<i class="fas fa-scroll"></i>';
+
+    // Build dropdown
+    const dropdown = document.createElement("div");
+    dropdown.classList.add("star-mercs-orders-dropdown");
+    dropdown.style.display = "none";
+
+    const actor = token.actor;
+    const isOrdersPhase = game.combat?.phase === "orders";
+    const allOrders = CONFIG.STARMERCS.orders ?? {};
+
+    // Replicate order filtering from unit-sheet.mjs getData
+    const sup = actor.system.supply ?? {};
+    const hasNoSupply = (sup.projectile?.current ?? 0) <= 0
+      && (sup.ordnance?.current ?? 0) <= 0
+      && (sup.energy?.current ?? 0) <= 0;
+    const zeroSupplyOrders = ["hold", "move", "withdraw", "entrench", "stand_down", "forced_march", "fly", "change_altitude"];
+
+    const activeToken = actor.getActiveTokens()?.[0];
+    const isBreaking = activeToken?.document?.getFlag("star-mercs", "breaking") ?? false;
+    const isBroken = activeToken?.document?.getFlag("star-mercs", "broken") ?? false;
+    const breakingOrders = ["hold", "withdraw"];
+
+    const hUtils = game.starmercs?.hexUtils;
+    const unitIsEngaged = activeToken && hUtils ? hUtils.isEngaged(activeToken) : false;
+    const engagedBlockedOrders = ["move", "forced_march", "fly"];
+
+    const isFlying = actor.hasTrait("Flying");
+    const isAboardTransport = actor.isAboardTransport();
+    const isDeployTransitioning = actor.isDeployTransitioning;
+
+    let filteredOrders = Object.entries(allOrders)
+      .filter(([key, data]) => {
+        if (isAboardTransport) return false;
+        if ((isBreaking || isBroken) && !breakingOrders.includes(key)) return false;
+        if (unitIsEngaged && engagedBlockedOrders.includes(key)) return false;
+        if (data.requiredTrait && !actor.hasTrait(data.requiredTrait)) return false;
+        if (isFlying && (key === "move" || key === "forced_march")) return false;
+        if (hasNoSupply && !zeroSupplyOrders.includes(key)) return false;
+        return true;
+      });
+
+    // Deploy/Pack lock: mid-transition can only keep Deploy/Pack
+    if (isDeployTransitioning) {
+      filteredOrders = filteredOrders.filter(([key]) => key === "deploy");
+    }
+
+    const currentOrder = actor.system.currentOrder || "";
+
+    for (const [key, data] of filteredOrders) {
+      const item = document.createElement("div");
+      item.classList.add("orders-dropdown-item");
+      if (!isOrdersPhase) item.classList.add("disabled");
+      if (key === currentOrder) item.classList.add("active");
+      item.dataset.orderKey = key;
+
+      const costStr = data.readinessCost > 0 ? `+${data.readinessCost}` : `${data.readinessCost}`;
+      item.textContent = `${data.label}  R:${costStr}`;
+
+      if (isOrdersPhase) {
+        item.addEventListener("click", async (ev) => {
+          ev.stopPropagation();
+
+          const orderKey = item.dataset.orderKey;
+          await actor.update({ "system.currentOrder": orderKey });
+
+          // Log the order
+          const orderConfig = CONFIG.STARMERCS.orders?.[orderKey];
+          if (orderConfig) await actor.addLogEntry(`Order: ${orderConfig.label}`, "order");
+
+          // Clear previous flags
+          const tkDoc = token.document;
+          await tkDoc.unsetFlag("star-mercs", "assaultTarget");
+          await tkDoc.unsetFlag("star-mercs", "moveDestination");
+          await tkDoc.unsetFlag("star-mercs", "altitudeTarget");
+          await tkDoc.unsetFlag("star-mercs", "flyAltitudeTarget");
+          if (orderKey !== "construct") await tkDoc.unsetFlag("star-mercs", "constructionTarget");
+          await tkDoc.unsetFlag("star-mercs", "demolishTarget");
+          game.starmercs?.targetingArrowLayer?.drawArrows();
+
+          // Deploy order: initialize deploy/pack transition
+          if (orderKey === "deploy" && actor.hasTrait("Deploy")) {
+            const currentState = actor.deployState;
+            const turnsNeeded = actor.getTraitValue("Deploy") || 1;
+            if (currentState === "packed" || currentState === "packing") {
+              await actor.setFlag("star-mercs", "deployState", "deploying");
+              await actor.setFlag("star-mercs", "deployTimer", turnsNeeded);
+            } else if (currentState === "deployed" || currentState === "deploying") {
+              await actor.setFlag("star-mercs", "deployState", "packing");
+              await actor.setFlag("star-mercs", "deployTimer", turnsNeeded);
+            }
+          }
+
+          // Close HUD
+          canvas.hud.token.clear();
+
+          // Trigger movement selection if order allows movement
+          if (orderConfig?.allowsMovement) {
+            game.starmercs.startMovementSelection(actor);
+          }
+
+          // Trigger special order prompts via the actor's sheet
+          const sheet = actor.sheet;
+          if (orderKey === "assault") sheet?._promptAssaultTarget?.();
+          if (orderKey === "change_altitude") sheet?._promptAltitudeTarget?.();
+          if (orderKey === "construct") sheet?._promptConstructionTarget?.();
+          if (orderKey === "demolish") sheet?._promptDemolishTarget?.();
+          if (orderKey === "transport") sheet?._promptTransportAction?.();
+          if (orderKey === "air_assault") sheet?._promptAirAssaultTarget?.();
+          if (orderKey === "hot_disembark") sheet?._promptHotDisembarkTarget?.();
+        });
+      }
+
+      dropdown.appendChild(item);
+    }
+
+    ordersBtn.appendChild(dropdown);
+    ordersBtn.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      dropdown.style.display = dropdown.style.display === "none" ? "block" : "none";
+    });
+    rightCol.prepend(ordersBtn);
+  }
 });
 
 /* ============================================ */
