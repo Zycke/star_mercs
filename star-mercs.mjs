@@ -1574,8 +1574,25 @@ Hooks.on("refreshToken", (token) => {
 /*  Token HUD Buttons                          */
 /* ============================================ */
 
-/** Add sensor ring and LOS highlight toggle buttons to the token HUD left column. */
+/** Add sensor ring and LOS highlight toggle buttons to the token HUD left column.
+ *  Also remove HUD elements not used by Star Mercs (elevation, movement type, sort order). */
 Hooks.on("renderTokenHUD", (app, html, data) => {
+  // Remove HUD elements not used by Star Mercs (applies to all tokens)
+  // Elevation input
+  html.querySelector(".elevation")?.remove();
+  html.querySelector('[data-action="elevation"]')?.remove();
+  // Movement type selector (walk/fly/burrow)
+  html.querySelector(".movement-actions")?.remove();
+  html.querySelector('[data-action="movement-type"]')?.remove();
+  // Sort order buttons (send to front/back)
+  for (const sel of [
+    '[data-action="sort-up"]', '[data-action="sort-down"]',
+    '[data-action="z-up"]', '[data-action="z-down"]',
+    ".sort-up", ".sort-down"
+  ]) {
+    html.querySelector(sel)?.remove();
+  }
+
   const token = app.object;
   if (!token?.actor || token.actor.type !== "unit") return;
   if (!token.actor.isOwner) return;
