@@ -260,6 +260,10 @@ export default class DeployPanel extends HandlebarsApplicationMixin(ApplicationV
     if (actor && actor.system.team !== team) {
       await actor.update({ "system.team": team });
     }
+    // Force-sync ownership so the correct team player gets OWNER permission
+    if (game.user.isGM && actor) {
+      await game.starmercs?.syncActorOwnershipForced?.(actor);
+    }
 
     this.render();
   }
@@ -728,6 +732,14 @@ export default class DeployPanel extends HandlebarsApplicationMixin(ApplicationV
         const synthUpdate = { "system.team": team };
         if (customName !== actor.name) synthUpdate.name = customName;
         await tokenDoc.actor.update(synthUpdate);
+      }
+      // Ensure base actor team and ownership match the deploy team
+      const baseActor = game.actors.get(actorId);
+      if (baseActor) {
+        if (baseActor.system.team !== team) {
+          await baseActor.update({ "system.team": team });
+        }
+        await game.starmercs?.syncActorOwnershipForced?.(baseActor);
       }
 
       // Mark as deployed in pool (keep entry visible)

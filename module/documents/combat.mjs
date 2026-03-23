@@ -369,6 +369,34 @@ export default class StarMercsCombat extends Combat {
   /* ---------------------------------------- */
 
   /**
+   * Reliably resolve the token document and actor for a combatant.
+   * Falls back to canvas.scene token search if standard resolution fails.
+   * @param {Combatant} combatant
+   * @returns {{ token: TokenDocument|null, actor: Actor|null }}
+   * @private
+   */
+  _resolveCombatant(combatant) {
+    let token = combatant.token;
+
+    // Fallback: if combat.scene differs from canvas.scene, try canvas.scene
+    if (!token && combatant.tokenId && canvas.scene) {
+      token = canvas.scene.tokens.get(combatant.tokenId);
+      if (token) {
+        console.warn(`Star Mercs | Combatant "${combatant.name}" token resolved via canvas.scene fallback (combat scene mismatch?)`);
+      }
+    }
+
+    // Actor: prefer token's synthetic actor, fall back to base
+    const actor = token?.actor ?? combatant.actor;
+
+    if (!token) {
+      console.warn(`Star Mercs | Combatant "${combatant.name}" (tokenId: ${combatant.tokenId}) has no resolvable token`);
+    }
+
+    return { token, actor };
+  }
+
+  /**
    * Look up the actor's currently assigned order from config.
    * Returns a shape compatible with the previous item-based lookup.
    * @param {StarMercsActor} actor
@@ -1998,25 +2026,25 @@ export default class StarMercsCombat extends Combat {
       case "assault_adjacent":
       case "assault_move":
         return this.combatants.some(c => {
-          const a = c.actor;
+          const { token, actor: a } = this._resolveCombatant(c);
           return a?.type === "unit" && a.system.currentOrder === "assault"
-            && a.system.strength.value > 0 && c.token?.getFlag("star-mercs", "assaultTarget");
+            && a.system.strength.value > 0 && token?.getFlag("star-mercs", "assaultTarget");
         });
 
       case "movement":
         return this.combatants.some(c => {
-          const a = c.actor;
+          const { token, actor: a } = this._resolveCombatant(c);
           if (!a || a.type !== "unit" || a.system.strength.value <= 0) return false;
           const order = a.system.currentOrder;
           const orderConfig = CONFIG.STARMERCS.orders?.[order];
           if (!orderConfig?.allowsMovement) return false;
           if (order === "assault" || order === "withdraw") return false;
-          return !!c.token?.getFlag("star-mercs", "moveDestination");
+          return !!token?.getFlag("star-mercs", "moveDestination");
         }) || this.combatants.some(c => {
-          const a = c.actor;
+          const { token, actor: a } = this._resolveCombatant(c);
           return a?.type === "unit" && a.system.strength.value > 0
             && a.system.currentOrder === "change_altitude"
-            && c.token?.getFlag("star-mercs", "altitudeTarget") != null;
+            && token?.getFlag("star-mercs", "altitudeTarget") != null;
         });
 
       case "maneuver_fire":
@@ -2053,6 +2081,16 @@ export default class StarMercsCombat extends Combat {
    */
   async _executeTacticalStep(stepIndex) {
     const steps = StarMercsCombat.TACTICAL_STEPS;
+
+    // Diagnostic: on first step, log any combatants with unresolvable tokens
+    if (stepIndex === 0) {
+      for (const c of this.combatants) {
+        const { token } = this._resolveCombatant(c);
+        if (!token) {
+          console.warn(`Star Mercs | Tactical phase: combatant "${c.name}" has unresolvable token (tokenId: ${c.tokenId}, combat scene: ${this.scene?.id}, canvas scene: ${canvas.scene?.id})`);
+        }
+      }
+    }
 
     // Auto-skip empty sub-phases
     const skippedLabels = [];
@@ -2550,12 +2588,18 @@ export default class StarMercsCombat extends Combat {
     // 1. Collect all units that need to move
     const movers = [];
     for (const combatant of this.combatants) {
-      const actor = combatant.actor;
+      const { token, actor } = this._resolveCombatant(combatant);
       if (!actor || actor.type !== "unit") continue;
       if (actor.system.strength.value <= 0) continue;
 
-      const token = combatant.token;
-      if (!token) continue;
+      if (!token) {
+        // Log if this unit should have moved but token is unresolvable
+        const order = actor.system.currentOrder;
+        if (CONFIG.STARMERCS.orders?.[order]?.allowsMovement) {
+          console.warn(`Star Mercs | Movement skipped for "${actor.name}": token not found (tokenId: ${combatant.tokenId})`);
+        }
+        continue;
+      }
 
       const order = actor.system.currentOrder;
       const orderConfig = CONFIG.STARMERCS.orders?.[order];
@@ -2572,12 +2616,11 @@ export default class StarMercsCombat extends Combat {
     // Also process Change Altitude orders (no movement, just altitude change)
     let altitudeChanges = 0;
     for (const combatant of this.combatants) {
-      const actor = combatant.actor;
+      const { token, actor } = this._resolveCombatant(combatant);
       if (!actor || actor.type !== "unit") continue;
       if (actor.system.strength.value <= 0) continue;
       if (actor.system.currentOrder !== "change_altitude") continue;
 
-      const token = combatant.token;
       if (!token) continue;
 
       const altTarget = token.getFlag("star-mercs", "altitudeTarget");

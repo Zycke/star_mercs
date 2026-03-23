@@ -409,6 +409,14 @@ Hooks.once("ready", async () => {
               if (data.customName && data.customName !== actor.name) synthUpdate.name = data.customName;
               await tokenDoc.actor.update(synthUpdate);
             }
+            // Ensure base actor ownership matches the deploy team
+            const baseActor = game.actors.get(data.actorId);
+            if (baseActor) {
+              if (baseActor.system.team !== data.team) {
+                await baseActor.update({ "system.team": data.team });
+              }
+              await syncActorOwnershipForced(baseActor);
+            }
             await panel._markDeployed(data.instanceId, data.team, tokenDoc.id);
           }
           break;
@@ -1309,14 +1317,14 @@ Hooks.on("renderChatMessageHTML", (message, html) => {
 /* ============================================ */
 
 /**
- * Sync a single actor's ownership based on team assignments.
+ * Core ownership-sync logic: sets ownership on a unit actor based on team assignments.
  * Same-team players get Owner, opposing team gets None, spectators get Observer.
+ * This variant always runs regardless of the teamAssignmentsEnabled setting.
  * @param {Actor} actor
  */
-async function syncActorOwnership(actor) {
+async function syncActorOwnershipForced(actor) {
   if (!game.user.isGM) return;
   if (!actor || actor.type !== "unit") return;
-  if (!game.settings.get("star-mercs", "teamAssignmentsEnabled")) return;
 
   const assignments = game.settings.get("star-mercs", "teamAssignments") ?? {};
   const actorTeam = actor.system.team ?? "a";
@@ -1348,6 +1356,16 @@ async function syncActorOwnership(actor) {
 }
 
 /**
+ * Gated wrapper: only syncs ownership when teamAssignmentsEnabled is true.
+ * Called by hooks (updateActor, etc.).
+ * @param {Actor} actor
+ */
+async function syncActorOwnership(actor) {
+  if (!game.settings.get("star-mercs", "teamAssignmentsEnabled")) return;
+  return syncActorOwnershipForced(actor);
+}
+
+/**
  * Bulk-sync ownership for all unit actors.
  */
 async function syncAllOwnership() {
@@ -1362,6 +1380,7 @@ async function syncAllOwnership() {
 // Expose sync functions on game.starmercs (set after init)
 Hooks.once("ready", () => {
   game.starmercs.syncActorOwnership = syncActorOwnership;
+  game.starmercs.syncActorOwnershipForced = syncActorOwnershipForced;
   game.starmercs.syncAllOwnership = syncAllOwnership;
   game.starmercs.detection = detection;
   game.starmercs.syncTerrainCover = syncTerrainCoverEffects;
