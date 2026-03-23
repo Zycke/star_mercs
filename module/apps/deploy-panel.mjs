@@ -273,6 +273,19 @@ export default class DeployPanel extends HandlebarsApplicationMixin(ApplicationV
     const team = this._viewedTeam ?? "a";
     if (!pool[team]) return;
 
+    // If the unit is deployed, clean up its token and combatant from the scene
+    const entry = pool[team].find(e => e.instanceId === instanceId);
+    if (entry?.deployed && entry.tokenId && canvas.scene) {
+      const tokenDoc = canvas.scene.tokens.get(entry.tokenId);
+      if (tokenDoc) {
+        if (game.combat?.started) {
+          const combatant = game.combat.combatants.find(c => c.tokenId === entry.tokenId);
+          if (combatant) await combatant.delete();
+        }
+        await tokenDoc.delete();
+      }
+    }
+
     pool[team] = pool[team].filter(e => e.instanceId !== instanceId);
     await game.settings.set("star-mercs", "deployPool", pool);
 
